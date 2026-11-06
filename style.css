@@ -1008,3 +1008,9 @@ body.pfit .pages .page-block { scroll-snap-align: start; scroll-margin-top: 12px
 .fb-page { display: block; font-size: 12px; margin-bottom: 4px; text-align: left; }
 .fb-acts { display: flex; gap: 6px; margin-top: 6px; }
 @media print { .fb-badge { display: none !important; } #v-pog-fb .page-block.fb-on .page { outline: none; } }
+
+/* ---------- 로그인 아래 그림 (국내용 · 사용자): 캐릭터 횡단보도 그림 한 장을 흰 띠 위에 ---------- */
+.login { padding-bottom: 300px; }
+.login-band { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; display: flex; justify-content: center; align-items: flex-end; padding: 14px 16px 30px; box-sizing: border-box; }
+.login-strip { display: block; height: 240px; width: auto; max-width: 100%; object-fit: contain; }
+@media (max-width: 700px) { .login { padding-bottom: 170px; } .login-band { padding: 8px 8px 26px; } .login-strip { height: auto; width: 100%; max-height: 140px; } }
