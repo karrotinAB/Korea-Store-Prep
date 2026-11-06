@@ -1009,8 +1009,14 @@ body.pfit .pages .page-block { scroll-snap-align: start; scroll-margin-top: 12px
 .fb-acts { display: flex; gap: 6px; margin-top: 6px; }
 @media print { .fb-badge { display: none !important; } #v-pog-fb .page-block.fb-on .page { outline: none; } }
 
-/* ---------- 로그인 아래 그림 (국내용 · 사용자): 캐릭터 횡단보도 그림 한 장을 흰 띠 위에 ---------- */
-.login { padding-bottom: 300px; }
-.login-band { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; display: flex; justify-content: center; align-items: flex-end; padding: 14px 16px 30px; box-sizing: border-box; }
-.login-strip { display: block; height: 240px; width: auto; max-width: 100%; object-fit: contain; }
-@media (max-width: 700px) { .login { padding-bottom: 170px; } .login-band { padding: 8px 8px 26px; } .login-strip { height: auto; width: 100%; max-height: 140px; } }
+/* ---------- 국내용: 로그인 아래 그림 없음 (나중에 넣을 수 있음) ---------- */
+.login { padding-bottom: 0; }
+@media (max-width: 700px) { .login { padding-bottom: 0; } }
+
+/* ---------- 상단 메뉴가 화면보다 길 때 (POG 하위 메뉴까지 붙으면) ----------
+   가로 스크롤바가 메뉴 아래에 보이던 것을 숨김. 마우스 휠로 옆으로 밀 수 있고, 지금 화면 메뉴는 보이게 맞춤 (app.js) */
+#nav { scrollbar-width: none; }
+#nav::-webkit-scrollbar { display: none; }
+nav button { padding: 7px 10px; }
+/* 화면이 좁을 때 POG·도면 하위 메뉴가 열리면 회색 메뉴(매장 등록·용어 사전·바코드 등록)는 잠깐 숨김 → 하위 메뉴가 잘리지 않게. 처음 화면 타일로 갈 수 있음 */
+@media (min-width: 701px) and (max-width: 1500px) { body:has(#subnav.on, #subnav-dw.on) #nav .nav-sub { display: none; } }

@@ -250,7 +250,7 @@ function go(v) {
   if (!canSee(v)) v = canSee('home') ? 'home' : canSee('finder') ? 'finder' : 'noaccess';
   state.view = v;
   $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v || (!!b.dataset.group && v.startsWith(b.dataset.group))));
-  if (window.innerWidth <= 700) { const on = [...$$('#nav button.on')].pop(), nav = $('#nav'); if (on && nav) nav.scrollLeft = Math.max(0, on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2); }
+  { const on = [...$$('#nav button.on')].pop(), nav = $('#nav'); if (on && nav && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - nav.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2); } // 메뉴가 화면보다 길면 지금 메뉴가 보이게
   $('#subnav').classList.toggle('on', v.startsWith('pog-') && v !== 'pog-home');
   $('#subnav-dw').classList.toggle('on', v.startsWith('dw-'));
   $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + secOf(v)));
@@ -260,6 +260,8 @@ function go(v) {
   if (v === 'barcodes') { bcCount(); bcList(true); } else bcReport([], '', 0); // 건너뛴 줄 알림은 이 화면을 나가면 사라짐
 }
 $$('#nav button').forEach(b => b.onclick = () => go(b.dataset.view));
+// 메뉴가 화면보다 길 때: 마우스 휠(위아래)로 옆으로 밀기 (스크롤바는 숨김)
+$('#nav').addEventListener('wheel', e => { const n = e.currentTarget; if (n.scrollWidth <= n.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; e.preventDefault(); n.scrollLeft += e.deltaY; }, { passive: false });
 // 휴대폰: A4 페이지(794px)를 화면 폭에 맞게 줄이는 비율 (style.css의 zoom: var(--pz))
 // 상단 메뉴 실제 높이 → CSS --top (휴대폰에서는 메뉴가 두 줄이라 52px보다 큼). 화면 높이 계산에 씀
 { const tb = document.querySelector('.topbar'); const setTop = () => { const hgt = tb && tb.offsetHeight; if (hgt) document.documentElement.style.setProperty('--top', hgt + 'px'); };
