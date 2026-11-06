@@ -1,0 +1,26 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 읽기: 로그인한 사람 / 올리기·지우기: 레벨별, 파일 하나당 10MB까지
+    // (레벨은 Firestore의 roles/{이메일} 문서에서 읽음. 문서가 없으면 none)
+    function level() {
+      let p = /databases/(default)/documents/roles/$(request.auth.token.email.lower());
+      return firestore.exists(p) ? firestore.get(p).data.level : 'none';
+    }
+    function can(levels) {
+      return request.auth != null && request.auth.token.email != null && level() in levels
+        && (request.resource == null || request.resource.size < 10 * 1024 * 1024);
+    }
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+    }
+    // POG 메모 사진: POG팀
+    match /pogs/{rest=**} {
+      allow write: if can(['admin', 'pog']);
+    }
+    // 도면 파일: VMD팀
+    match /drawings/{rest=**} {
+      allow write: if can(['admin', 'vmd']);
+    }
+  }
+}

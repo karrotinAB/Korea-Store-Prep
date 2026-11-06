@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 국내 POG (Korea Store Prep) 보안 규칙
+    // 계정 레벨: roles/{이메일} 문서의 level
+    //   admin(관리자) | pog(POG팀: POG 편집) | vmd(VMD팀: 도면 편집) | md(MD: 피드백 메모) | finder(제품 찾기만 = 매장 계정)
+    //   보기는 직원(admin·pog·vmd·md) 모두. 매장 등록·바코드·용어 사전 고치기·계정은 관리자
+    // 문서가 없는 계정은 'none' = 아무것도 못 봄 (사이트 계정 관리에서 만든 계정만 씀). 'blocked' = 관리자가 접속을 막음
+    function signedIn() { return request.auth != null && request.auth.token.email != null; }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function level() {
+      let p = /databases/$(database)/documents/roles/$(myEmail());
+      return exists(p) ? get(p).data.level : 'none';
+    }
+    function hasLevel(levels) { return signedIn() && level() in levels; }
+    // 내부 직원: 작성 중인 것까지 모두 볼 수 있음. 매장 계정(finder)은 최종본만
+    function staff() { return hasLevel(['admin', 'pog', 'vmd', 'md']); }
+    function anyLevel() { return hasLevel(['admin', 'pog', 'vmd', 'md', 'finder']); } // 레벨을 받은(막히지 않은) 계정
+    function seeFinal(d) { return anyLevel() && d.status == 'final'; }
+
+    match /roles/{email} {
+      allow read: if signedIn() && (email == myEmail() || hasLevel(['admin']));
+      allow write: if hasLevel(['admin'])
+                   && (request.resource == null || (request.resource.data.level in ['admin', 'pog', 'vmd', 'md', 'finder', 'blocked', 'none']
+                       && request.resource.data.get('name', '') is string && request.resource.data.get('name', '').size() <= 20));
+    }
+
+    // POG (매장 하나 · 팀 하나마다 문서 하나): 만들기는 POG팀
+    function pogFinal(pogId) { return seeFinal(get(/databases/$(database)/documents/pogs/$(pogId)).data); }
+    match /pogs/{pogId} {
+      allow read: if staff() || seeFinal(resource.data);
+      allow write: if hasLevel(['admin', 'pog']);
+      match /fixtures/{fxId} {
+        allow read: if staff() || pogFinal(pogId);
+        allow write: if hasLevel(['admin', 'pog']);
+      }
+      // 수정 기록: 고치는 사람이 남기고 직원이 읽음. 고칠 수 없음
+      match /logs/{logId} {
+        allow read: if staff();
+        allow create: if hasLevel(['admin', 'pog']) && request.resource.data.by == myEmail();
+        allow delete: if hasLevel(['admin', 'pog']); // POG를 지울 때 기록도 함께
+      }
+      // 피드백 POG: MD·관리자가 페이지마다 메모. POG팀·관리자는 '반영함'만 바꿈. 쓴 사람은 글을 고치거나 지움
+      match /feedback/{id} {
+        allow read: if staff();
+        allow create: if hasLevel(['admin', 'md']) && request.resource.data.by == myEmail()
+          && request.resource.data.text is string && request.resource.data.text.size() <= 5000;
+        allow update: if (hasLevel(['admin', 'pog'])
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done', 'doneBy', 'doneByName', 'doneAt']))
+                      || (staff() && resource.data.by == myEmail() && request.resource.data.by == myEmail()
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt']));
+        allow delete: if hasLevel(['admin']) || (staff() && resource.data.by == myEmail());
+      }
+    }
+
+    // 도면: 편집은 VMD팀
+    function drawingFinal(id) { return seeFinal(get(/databases/$(database)/documents/drawings/$(id)).data); }
+    match /drawings/{drawingId} {
+      allow read: if staff() || seeFinal(resource.data);
+      allow write: if hasLevel(['admin', 'vmd']);
+      // 수정 기록
+      match /logs/{logId} {
+        allow read: if staff();
+        allow create: if hasLevel(['admin', 'vmd']) && request.resource.data.by == myEmail();
+        allow delete: if hasLevel(['admin', 'vmd']); // 도면을 지울 때 기록도 함께
+      }
+      // 도면 번호 (온라인 도면 🔢, POG 페이지 순서용): 직원 모두 매기고 읽음
+      match /seq/{vId} {
+        allow read, write: if staff();
+      }
+      match /versions/{vId} {
+        allow read: if staff() || drawingFinal(drawingId);
+        allow write: if hasLevel(['admin', 'vmd']);
+      }
+    }
+
+    // 용어 사전 (POG 입력칸 선택지): 직원은 보기, 편집은 관리자
+    match /glossary/{id} {
+      allow read: if staff();
+      allow write: if hasLevel(['admin']);
+      // POG팀: 새 이름 넣기만. make = 제작필요 (ERP 주문 안 되는 제품)
+      allow create: if hasLevel(['pog'])
+        && request.resource.data.keys().hasOnly(['cat', 'ko', 'code', 'make', 'auto', 'createdAt', 'createdBy']);
+      // POG팀: 선반/파이프·집기의 '제작필요' 체크만 바꿀 수 있음
+      allow update: if hasLevel(['pog']) && resource.data.cat in ['선반/파이프', '집기']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['make', 'updatedAt', 'updatedBy']);
+    }
+    // 용어 사전 변경 기록: 만들기만, 고치거나 지울 수 없음
+    match /glossaryLog/{id} {
+      allow read: if staff();
+      allow create: if hasLevel(['admin', 'pog']) && request.resource.data.by == myEmail();
+    }
+    // 매장 등록: 직원은 보기, 등록·수정·삭제는 관리자
+    match /stores/{id} {
+      allow read: if staff();
+      allow write: if hasLevel(['admin']);
+    }
+    // 바코드: 문서 ID = 바코드, code = 제품코드, name = 제품명(선택). 제품 찾기에 쓰므로 레벨을 받은 사람 모두 읽음. 올리기는 관리자
+    match /barcodes/{bc} {
+      allow read: if anyLevel();
+      allow write: if hasLevel(['admin']);
+    }
+    // POG 담당자 목록
+    match /managers/{id} {
+      allow read: if staff();
+      allow write: if hasLevel(['admin', 'pog']);
+    }
+  }
+}

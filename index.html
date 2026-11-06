@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Korea Store Prep</title>
+<link rel="icon" type="image/png" href="img/icon.png?v=2">
+<link rel="apple-touch-icon" href="img/icon-180.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20261106a">
+</head>
+<body>
+
+<!-- 로그인 -->
+<div id="login" class="login hidden">
+  <form id="login-form" class="login-card">
+    <div class="login-brand">ARTBOX <b>국내 매장 오픈 준비</b></div>
+    <input id="login-email" type="email" placeholder="이메일" autocomplete="username" required>
+    <input id="login-pw" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+    <button class="btn primary w100" type="submit">로그인</button>
+    <div id="login-err" class="err"></div>
+    <a href="#" id="login-forgot" class="login-forgot">비밀번호를 잊어버리셨나요?</a>
+  </form>
+  <!-- 아트박스 캐릭터 (img/login/1~4.png, 없는 파일은 안 보임) -->
+  <div class="login-chars" aria-hidden="true">
+    <img class="balloon" src="img/login/c01.png" alt="" style="--h:244;--b:87;--d:0.37s" onerror="this.remove()">
+    <img src="img/login/c02.png" alt="" style="--h:276;--b:-24;--d:0.74s" onerror="this.remove()">
+    <img src="img/login/c03.png" alt="" style="--h:249;--b:-25;--d:1.11s" onerror="this.remove()">
+    <img src="img/login/c04.png" alt="" style="--h:164;--b:-18;--d:1.48s" onerror="this.remove()">
+    <img class="balloon" src="img/login/c05.png" alt="" style="--h:265;--b:-20;--d:1.85s" onerror="this.remove()">
+    <img src="img/login/c06.png" alt="" style="--h:350;--b:-27;--d:2.22s" onerror="this.remove()">
+    <img src="img/login/c07.png" alt="" style="--h:217;--b:-26;--d:0.19s" onerror="this.remove()">
+    <img src="img/login/c08.png" alt="" style="--h:203;--b:-29;--d:0.56s" onerror="this.remove()">
+    <img src="img/login/c09.png" alt="" style="--h:210;--b:-32;--d:0.93s" onerror="this.remove()">
+    <img src="img/login/c10.png" alt="" style="--h:214;--b:-24;--d:1.30s" onerror="this.remove()">
+    <img src="img/login/c11.png" alt="" style="--h:149;--b:-20;--d:1.67s" onerror="this.remove()">
+    <img src="img/login/c12.png" alt="" style="--h:266;--b:-25;--d:2.04s" onerror="this.remove()">
+    <img src="img/login/c13.png" alt="" style="--h:273;--b:-23;--d:0.01s" onerror="this.remove()">
+    <img src="img/login/c14.png" alt="" style="--h:226;--b:-22;--d:0.38s" onerror="this.remove()">
+    <img class="balloon" src="img/login/c15.png" alt="" style="--h:246;--b:84;--d:0.75s" onerror="this.remove()">
+    <img class="edge" src="img/login/c16.png" alt="" style="--h:327;--b:-37;--d:1.52s" onerror="this.remove()">
+  </div>
+  <script>
+    // 풍선 든 캐릭터: 마우스를 대거나 누르면 위로 둥실 떠올랐다가 내려옴 (끝날 때까지 다시 안 뜀)
+    document.querySelectorAll('.login-chars img.balloon').forEach(el => {
+      const fly = () => { if (!el.classList.contains('fly')) el.classList.add('fly'); };
+      el.addEventListener('pointerenter', fly); el.addEventListener('click', fly);
+      el.addEventListener('animationend', e => { if (e.animationName === 'char-fly') el.classList.remove('fly'); });
+    });
+  </script>
+</div>
+
+<div id="app" class="hidden">
+  <header class="topbar">
+    <button class="brand link-brand" data-go="home" title="처음 화면">ARTBOX <b>국내 POG</b></button>
+    <nav id="nav">
+      <button data-view="home">홈</button>
+      <button data-view="drawing" data-group="dw-">1. 도면</button>
+      <button data-view="pog-home" data-group="pog-">2. POG</button>
+      <button data-view="finder">3. 제품 찾기</button>
+      <button data-view="stores" class="nav-sub">매장 등록</button>
+      <button data-view="glossary" class="nav-sub">용어 사전</button>
+      <button data-view="barcodes" class="nav-sub">바코드 등록</button>
+      <span class="subnav" id="subnav-dw">
+        <button data-view="dw-up">도면 업로드</button>
+        <button data-view="dw-online">온라인 도면</button>
+      </span>
+      <span class="subnav" id="subnav">
+        <button data-view="pog-make">POG 만들기</button>
+        <button data-view="pog-online">온라인 POG</button>
+        <button data-view="pog-fb">피드백 POG</button>
+      </span>
+    </nav>
+    <div class="me"><span id="me-email"></span><span id="me-level" class="lvl"></span><button class="link" id="btn-pw" title="내 비밀번호 바꾸기">비밀번호 바꾸기</button><button class="link" data-view="accounts" id="btn-accounts">계정 관리</button><button id="logout" class="link">로그아웃</button></div>
+  </header>
+
+  <!-- 처음 화면 -->
+  <section class="view" id="v-home">
+    <div class="home">
+      <div class="tiles five">
+        <button class="tile" data-go="drawing">
+          <svg viewBox="0 0 48 48"><rect x="7" y="9" width="34" height="30" rx="2"/><path d="M7 22h12M27 9v12M27 29v10"/><rect class="a" x="12" y="27" width="9" height="6"/><rect class="a" x="31" y="14" width="6" height="4"/></svg>
+          <span>도면</span>
+        </button>
+        <button class="tile" data-go="pog-home">
+          <svg viewBox="0 0 48 48"><rect x="9" y="7" width="30" height="34" rx="1"/><path d="M9 19h30M9 31h30"/><rect class="a" x="13" y="12" width="5" height="7"/><rect class="a" x="21" y="10" width="5" height="9"/><rect class="a" x="13" y="24" width="6" height="7"/><rect class="a" x="23" y="25" width="5" height="6"/><rect class="a" x="31" y="23" width="4" height="8"/></svg>
+          <span>POG</span>
+        </button>
+        <button class="tile" data-go="finder">
+          <svg viewBox="0 0 48 48"><path d="M8 15V9h6M34 9h6v6M40 33v6h-6M14 39H8v-6"/><path d="M15 16v16M19 16v16M24 16v16M28 16v16M33 16v16"/><path class="a" d="M10 24h28"/></svg>
+          <span>제품 찾기</span>
+        </button>
+        <button class="tile sub" data-go="stores">
+          <svg viewBox="0 0 48 48"><path d="M8 20 12 9h24l4 11"/><path d="M10 20v19h28V20"/><path d="M8 20c0 3 2.5 5 5.3 5S18.7 23 18.7 20c0 3 2.4 5 5.3 5s5.3-2 5.3-5c0 3 2.4 5 5.3 5S40 23 40 20"/><path class="a" d="M20 39V30h8v9"/></svg>
+          <span>매장 등록</span>
+        </button>
+        <button class="tile sub" data-go="glossary">
+          <svg viewBox="0 0 48 48"><path d="M10 9h22a4 4 0 0 1 4 4v26H14a4 4 0 0 1-4-4z"/><path d="M10 35a4 4 0 0 1 4-4h22"/><path class="a" d="M17 16h12M17 22h8"/></svg>
+          <span>용어 사전</span>
+        </button>
+        <button class="tile sub" data-go="barcodes">
+          <svg viewBox="0 0 48 48"><rect x="7" y="11" width="34" height="26" rx="2"/><path d="M13 17v14M17 17v14M22 17v14M26 17v14M31 17v14M35 17v14"/><path class="a" d="M24 41v-6M20 38l4 4 4-4"/></svg>
+          <span>바코드 등록</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. POG 선택 -->
+  <section class="view" id="v-pog-home">
+    <div class="home">
+      <div class="home-title">POG</div>
+      <div class="tiles three">
+        <button class="tile" data-go="pog-make">
+          <svg viewBox="0 0 48 48"><path d="M13 8h16l7 7v25H13z"/><path d="M29 8v7h7"/><path class="a" d="M19 33l2-6 9-9 4 4-9 9z"/></svg>
+          <span>POG 만들기</span><small>POG팀</small>
+        </button>
+        <button class="tile" data-go="pog-online">
+          <svg viewBox="0 0 48 48"><rect x="6" y="9" width="36" height="24" rx="2"/><path d="M18 40h12M24 33v7"/><path class="a" d="M14 27v-7h5v7M22 27V17h5v10M30 27v-5h5v5"/></svg>
+          <span>온라인 POG</span><small>최종본 보기</small>
+        </button>
+        <button class="tile" data-go="pog-fb">
+          <svg viewBox="0 0 48 48"><rect x="9" y="7" width="24" height="31" rx="1"/><path d="M9 17h24M9 27h24"/><path class="a" d="M27 24h14v11h-6l-4 4v-4h-4z"/></svg>
+          <span>피드백 POG</span><small>MD 메모</small>
+        </button>
+      </div>
+      <button class="link back" data-go="home">← 처음 화면으로</button>
+    </div>
+  </section>
+
+  <!-- 1. 도면 선택 -->
+  <section class="view" id="v-drawing">
+    <div class="home">
+      <div class="home-title">도면</div>
+      <div class="tiles few">
+        <button class="tile" data-go="dw-up">
+          <svg viewBox="0 0 48 48"><rect x="7" y="13" width="34" height="26" rx="2"/><path d="M7 26h10M28 13v9"/><path class="a" d="M24 9v14M18 15l6-6 6 6"/></svg>
+          <span>도면 업로드</span><small>VMD팀</small>
+        </button>
+        <button class="tile" data-go="dw-online">
+          <svg viewBox="0 0 48 48"><rect x="6" y="9" width="36" height="24" rx="2"/><path d="M18 40h12M24 33v7"/><path class="a" d="M12 15h10v5H12zM26 15h10v12H26zM12 23h10v4H12z"/></svg>
+          <span>온라인 도면</span><small>최종본 보기</small>
+        </button>
+      </div>
+      <button class="link back" data-go="home">← 처음 화면으로</button>
+    </div>
+  </section>
+
+  <!-- 1.1~1.2 도면 업로드 · 온라인 도면 (화면 하나를 같이 씀) -->
+  <section class="view" id="v-dw">
+    <div class="split">
+      <aside class="side-list">
+        <div class="side-head" id="dw-mode-title"></div>
+        <input id="dw-search" class="search" placeholder="매장 검색">
+        <div id="dw-list" class="plist"></div>
+      </aside>
+      <main class="editor">
+        <div class="empty-state" id="dw-empty"></div>
+        <div id="dw-body" class="ed-body hidden">
+          <div class="toolbar">
+            <button class="btn small list-toggle" type="button" title="매장 목록 열기/닫기">☰ 목록</button>
+            <div class="tb-title" id="dw-title"></div>
+            <label class="tb-field" id="dw-area-f">평수 <input id="dw-area" type="number" step="0.1" min="0" placeholder="예: 45"></label>
+            <span class="badge" id="dw-ver"></span>
+            <span class="dw-zgrp"><button type="button" class="btn small ghost dw-zbtn" id="dw-zout" title="작게">－</button><button type="button" class="btn small ghost hidden" id="dw-zoom" title="Alt + 마우스 휠(아이패드: 두 손가락)로 크게·작게. 누르면 원래 크기">🔍 100%</button><button type="button" class="btn small ghost dw-zbtn" id="dw-zin" title="크게">＋</button></span>
+            <button type="button" class="btn small hidden" id="dw-seqbtn" title="누르는 순서대로 매대에 1, 2, 3… 번호를 매겨요. POG에서 이 순서로 페이지를 바꿀 수 있어요">🔢 번호 매기기</button>
+            <span class="find-box hidden" id="dw-find-box"><input id="dw-find" type="search" placeholder="🔍 매대·카테고리·제품 찾기" autocomplete="off"><span class="find-n" id="dw-find-n"></span></span>
+            <span class="saving" id="dw-saving"></span>
+            <div class="tb-right">
+              <button class="btn" id="dw-upload" data-edit="drawing">도면 파일 올리기</button>
+              <button class="btn primary" id="dw-export" data-edit="drawing">내보내기</button>
+              <button class="btn" id="dw-reedit" data-edit="drawing" title="내보낸 도면을 다시 고칠 수 있게 '작성 중'으로 되돌려요">✎ 다시 편집</button>
+              <button class="btn small ghost ed-ur" id="dw-undo" title="되돌리기 (Ctrl+Z)" disabled>↶ 되돌리기</button>
+              <button class="btn small ghost ed-ur" id="dw-redo" title="다시 하기 (Ctrl+Y)" disabled>↷</button>
+              <button class="btn" id="dw-print">PDF 저장</button>
+            </div>
+          </div>
+          <div class="ed-main">
+            <div class="dw-stage" id="dw-stage"></div>
+            <aside class="side-edit" id="dw-side"></aside>
+            <button type="button" class="log-btn" id="dw-log" title="이 도면을 누가 언제 무엇으로 고쳤는지. 확대하면 보이는 구역만">🕘 수정 기록</button>
+          </div>
+        </div>
+      </main>
+    </div>
+    <input type="file" id="dw-file" accept=".svg,image/svg+xml" class="hidden">
+  </section>
+
+  <!-- 매장 등록 -->
+  <section class="view" id="v-stores">
+    <div class="gl-wrap st-wrap">
+      <h2>매장 등록</h2>
+      <p class="mut">매장을 먼저 등록하면 VMD실이 '1. 도면 → 도면 업로드'에서 이 매장을 골라 도면을 올려요. (등록·수정은 관리자)
+        <b>매장코드는 POG 사이트의 매장코드와 똑같이</b> 써주세요 (예: 826503). 그래야 POG와 도면이 이어져요.</p>
+      <form id="st-add" class="gl-add st-add" data-edit="stores">
+        <input name="code" placeholder="매장코드" required autocomplete="off">
+        <input name="partner" placeholder="파트너 이름" required autocomplete="off">
+        <input name="branch" placeholder="지점 이름" required autocomplete="off">
+        <label class="st-date">오픈 예상일 <input name="open" type="date"></label>
+        <button class="btn primary">등록</button>
+      </form>
+      <table class="gl-table st-table">
+        <thead><tr><th>매장코드</th><th>파트너 이름</th><th>지점 이름</th><th>오픈 예상일</th><th>도면</th><th>POG</th><th></th></tr></thead>
+        <tbody id="st-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 바코드 등록 (관리자 편집, 직원 보기) -->
+  <section class="view" id="v-barcodes">
+    <div class="gl-wrap st-wrap">
+      <h2>바코드 등록</h2>
+      <p class="mut">제품 찾기에서 바코드를 찍으면 여기 목록으로 <b>제품코드</b>를 찾아 POG 위치를 보여줘요.
+        엑셀 머리글은 <b>제품코드 · 바코드</b> 두 개면 돼요 (제품명은 넣어도 되고 안 넣어도 돼요. 이 화면에서만 보여요). <b>이미 있는 바코드·제품코드는 바꾸지 않고 건너뛰어요.</b></p>
+      <div class="bc-bar">
+        <span id="bc-count" class="mut"></span>
+        <span class="sp"></span>
+        <button class="btn ghost" id="bc-form">빈 양식 받기</button>
+        <button class="btn ghost" id="bc-export">엑셀로 저장</button>
+        <button class="btn primary" id="bc-import" data-edit="barcodes">엑셀 올리기</button>
+        <input type="file" id="bc-file" accept=".xlsx,.xls,.csv" hidden>
+      </div>
+      <form id="bc-add" class="gl-add" data-edit="barcodes">
+        <input name="barcode" placeholder="바코드" required autocomplete="off">
+        <input name="code" placeholder="제품코드" required autocomplete="off">
+        <input name="name" placeholder="제품명 (선택)" autocomplete="off">
+        <button class="btn primary">추가</button>
+      </form>
+      <div id="bc-report" class="bc-report hidden"></div>
+      <input id="bc-search" class="search bc-search" placeholder="바코드 또는 제품코드로 찾기 (Enter) · 비우면 전체 목록" autocomplete="off">
+      <table class="gl-table">
+        <thead><tr><th>바코드</th><th>제품코드</th><th>제품명</th><th></th></tr></thead>
+        <tbody id="bc-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 2.1 POG 제작 -->
+  <section class="view" id="v-pog-make">
+    <div class="split">
+      <aside class="side-list">
+        <button class="btn primary w100" id="btn-import" data-edit="pog-make">+ 새 POG 가져오기</button>
+        <input id="pog-search" class="search" placeholder="매장·팀 검색">
+        <div id="pog-list" class="plist"></div>
+      </aside>
+      <main class="editor">
+        <div class="empty-state" id="editor-empty">왼쪽에서 POG를 선택하거나 새로 가져오세요.<br><span class="mut">POG는 매장마다 팀별로 따로 만들어요. 가져올 때 팀을 골라서 가져오면 빨라요.</span></div>
+        <div id="editor-body" class="ed-body hidden">
+          <div class="toolbar">
+            <button class="btn small list-toggle" type="button" title="POG 목록 열기/닫기">☰ 목록</button>
+            <div class="tb-title" id="ed-title"></div>
+            <span id="ed-mgr-holder" class="hidden mgr-holder" title="대표 POG 담당자"><span id="ed-mgr-box" class="mgr-box"><select id="ed-manager" title="모든 페이지 아래에 들어가요"></select><button class="btn small ghost" id="ed-mgr-add" data-edit="pog-make" type="button">+ 담당자 추가</button></span></span>
+            <span class="badge" id="ed-status"></span>
+            <span class="saving" id="ed-saving"></span>
+            <span class="find-box"><select id="ed-find-mode" class="find-mode" title="무엇으로 찾을지"><option value="page">매대명</option><option value="item">제품</option></select><input id="ed-find" type="search" placeholder="매대명(페이지) 찾기" autocomplete="off"><span class="find-n" id="ed-find-n"></span><button type="button" class="btn small ghost hidden" id="ed-find-prev" title="이전">◀</button><button type="button" class="btn small ghost hidden" id="ed-find-next" title="다음">▶</button></span>
+            <div class="tb-right">
+              <button class="btn" id="ed-counts" data-staff title="선반/파이프·고리·집기 수량 합계 (시트 1: 선반·파이프·제작비품 / 시트 2: 관리부 비품·집기·고리)">선반·고리·집기 수량 엑셀</button>
+              <button class="btn" id="ed-regrab" data-edit="pog-make" title="POG 사이트에서 매대를 다시 가져와요 (대체하기·추가하기)">↻ 다시 가져오기</button>
+              <button class="btn" id="ed-fb" title="MD가 남긴 피드백 보기">💬 피드백</button>
+              <button class="btn" id="ed-pdf">PDF 저장</button>
+              <button class="btn small ghost ed-ur" id="ed-undo" data-edit="pog-make" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button>
+              <button class="btn small ghost ed-ur" id="ed-redo" data-edit="pog-make" title="다시 하기 (Ctrl+Y)" aria-label="다시 하기" disabled>↷</button>
+              <button class="btn primary" id="ed-final" data-edit="pog-make">최종 POG 내보내기</button>
+              <button class="btn ghost danger" id="ed-delete" data-edit="pog-make">삭제</button>
+            </div>
+          </div>
+          <div class="ed-main">
+            <div class="thumbs" id="ed-thumbs" title="Shift+클릭 = 여러 장 이어서 고르기, Ctrl+클릭 = 한 장씩 고르기. 고른 장은 함께 끌거나 ▲▼로 옮겨요"></div>
+            <div class="pages" id="ed-pages"></div>
+            <aside class="side-edit" id="ed-side"></aside>
+            <button type="button" class="log-btn top-btn" id="ed-top" title="표지로 가기">↑ 표지</button><button type="button" class="log-btn" id="ed-log" title="이 페이지를 누가 언제 무엇으로 고쳤는지">🕘 이 페이지 수정 기록</button>
+          </div>
+        </div>
+      </main>
+    </div>
+  </section>
+
+  <!-- 2.3 피드백 POG (MD가 페이지마다 메모) -->
+  <section class="view" id="v-pog-fb">
+    <div class="split">
+      <aside class="side-list">
+        <div class="side-title">피드백 POG</div>
+        <input id="fb-search" class="search" placeholder="매장·팀 검색">
+        <div id="fb-list" class="plist"></div>
+      </aside>
+      <main class="editor">
+        <div class="empty-state" id="fb-empty">피드백을 남길 POG를 고르세요.<br><span class="mut">페이지를 누르고 오른쪽에서 메모를 남기면 POG팀이 보고 '반영함'으로 표시해요.</span></div>
+        <div id="fb-body" class="ed-body hidden">
+          <div class="toolbar">
+            <button class="btn small list-toggle" type="button" title="POG 목록 열기/닫기">☰ 목록</button>
+            <div class="tb-title" id="fb-title"></div>
+            <span class="badge" id="fb-count"></span>
+            <div class="tb-right"><button class="btn" id="fb-pdf">PDF 저장</button></div>
+          </div>
+          <div class="ed-main">
+            <div class="thumbs" id="fb-thumbs"></div>
+            <div class="pages" id="fb-pages"></div>
+            <aside class="side-edit fb-side" id="fb-side"></aside>
+          </div>
+        </div>
+      </main>
+    </div>
+  </section>
+
+  <!-- 2.2 온라인 POG -->
+  <section class="view" id="v-pog-online">
+    <div class="split">
+      <aside class="side-list">
+        <div class="side-title">최종 POG</div>
+        <input id="on-search" class="search" placeholder="매장·팀 검색">
+        <div id="on-list" class="plist"></div>
+      </aside>
+      <main class="editor">
+        <div class="empty-state" id="viewer-empty">최종 POG를 선택하세요. 제품을 누르면 정보가 떠요.</div>
+        <div id="viewer-body" class="ed-body hidden">
+          <div class="toolbar">
+            <button class="btn small list-toggle" type="button" title="POG 목록 열기/닫기">☰ 목록</button>
+            <div class="tb-title" id="vw-title"></div>
+            <span class="find-box"><input id="vw-find" type="search" placeholder="🔍 제품·매대·카테고리 찾기" autocomplete="off"><span class="find-n" id="vw-find-n"></span><button type="button" class="btn small ghost" id="vw-find-prev" title="이전">◀</button><button type="button" class="btn small ghost" id="vw-find-next" title="다음">▶</button></span>
+            <div class="tb-right"><button class="btn" id="vw-counts" data-staff>선반·고리·집기 수량 엑셀</button><button class="btn hidden" id="vw-nobc" data-admin title="이 POG 제품 중 바코드 등록이 안 된 제품만 (바코드 업로드 양식)">바코드 없는 제품 엑셀</button><button class="btn" id="vw-pdf">PDF 저장</button></div>
+          </div>
+          <div class="ed-main">
+            <div class="thumbs" id="vw-thumbs"></div>
+            <div class="pages" id="vw-pages"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </section>
+
+  <!-- 3. 용어 사전 -->
+  <section class="view" id="v-glossary">
+    <div class="gl-wrap">
+      <h2>용어 사전</h2>
+      <p class="mut">여기 등록한 이름은 POG 만들기 입력칸(매대 타입·고리타입·선반/파이프·이외집기)의 선택지로 쓰여요. 검색해서 찾은 이름도 칸을 고치면 바로 저장돼요.</p>
+      <div class="gl-search">
+        <input id="gl-q" class="search" placeholder="저장된 이름 검색 (전체 분류에서 찾아요)" autocomplete="off">
+        <button class="btn ghost small hidden" id="gl-q-clear" type="button">지우기</button>
+      </div>
+      <div class="gl-tools">
+        <div class="gl-tools-r">
+          <button class="btn small" id="gl-log" type="button" data-staff title="누가 언제 어떤 단어를 넣고 고치고 지웠는지">🕘 변경 기록</button>
+          <button class="btn small" id="gl-export" type="button">⬇ 엑셀로 내보내기</button>
+          <button class="btn small" id="gl-import" type="button" data-edit="glossary">⬆ 엑셀 올리기</button>
+          <input type="file" id="gl-file" accept=".xlsx,.xls,.csv" class="hidden">
+        </div>
+      </div>
+      <p class="gl-lang-help" data-edit="glossary">엑셀로 한꺼번에 넣기: <b>엑셀로 내보내기</b> → 맨 아래에 줄을 추가 (ID 칸은 비우고 분류·이름 쓰기) → <b>엑셀 올리기</b>.</p>
+      <div class="gl-tabs" id="gl-tabs"></div>
+      <form id="gl-add" class="gl-add" data-edit="glossary-add">
+        <select name="cat" id="gl-add-cat"></select>
+        <input name="code" placeholder="제품코드" autocomplete="off" class="gl-code-in hidden">
+        <input name="ko" placeholder="이름" required autocomplete="off">
+        <button class="btn primary">추가</button>
+      </form>
+      <div id="gl-hint" class="gl-hint"></div>
+      <div id="gl-info" class="gl-info"></div>
+      <table class="gl-table">
+        <thead id="gl-head"></thead>
+        <tbody id="gl-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. 제품 찾기 -->
+  <section class="view" id="v-finder">
+    <div class="fd">
+      <div class="fd-top">
+        <button type="button" class="btn ghost fd-back hidden" id="fd-back">‹ <span id="fd-back-t">매장</span></button>
+        <div class="fd-title" id="fd-title">매장 선택</div>
+      </div>
+      <!-- 1단계: 매장 고르기 -->
+      <div id="fd-step1" class="fd-step">
+        <p class="mut fd-tip" id="fd-pick-tip">제품을 찾을 매장을 골라주세요.</p>
+        <div id="fd-stores" class="fd-stores"></div>
+      </div>
+      <!-- 2단계: 바코드 찍기 -->
+      <div id="fd-step2" class="fd-step hidden">
+        <div class="fd-scan">
+          <label class="btn primary fd-cam" for="fd-photo"><span class="fd-cam-i">📷</span> <span id="fd-cam-t">바코드 찍기</span></label>
+          <input type="file" id="fd-photo" class="fd-file" accept="image/*" capture="environment">
+          <form id="fd-form" class="fd-form">
+            <input id="fd-q" inputmode="numeric" placeholder="바코드 또는 제품코드" autocomplete="off" enterkeyhint="search">
+            <button class="btn" id="fd-go">찾기</button>
+          </form>
+          <p class="mut fd-tip" id="fd-tip">바코드가 화면에 크게, 흔들리지 않게 찍어주세요.</p>
+        </div>
+        <div id="fd-result"></div>
+      </div>
+    </div>
+  </section>
+  <!-- 권한 없음 / 접속 막힘 -->
+  <section class="view" id="v-noaccess">
+    <div class="soon"><h2>볼 수 있는 화면이 없어요</h2><p id="na-msg"></p><button class="btn" onclick="document.getElementById('logout').click()">로그아웃</button></div>
+  </section>
+  <!-- 계정 관리 (관리자만) -->
+  <section class="view" id="v-accounts">
+    <div class="gl-wrap">
+      <h2>계정 관리</h2>
+      <p class="mut">이메일과 레벨을 넣고 <b>계정 만들기</b>를 누르면 로그인 계정이 바로 생겨요. <b>처음 비밀번호는 123456</b>이에요 (각자 오른쪽 위 '비밀번호 바꾸기'로 바꿔요. 관리자에게는 비밀번호가 안 보여요).<br>
+        비밀번호를 잊으면 로그인 화면의 '비밀번호를 잊어버리셨나요?' 또는 아래 목록의 '비밀번호 재설정 메일'로 새로 정해요.<br>
+        여기서 레벨을 받지 않은 계정은 아무 화면도 볼 수 없어요.</p>
+      <ul class="lv-help">
+        <li><b>관리자</b> · 모든 메뉴 편집 + 계정 관리</li>
+        <li><b>POG팀</b> · POG 만들기 편집, 피드백 '반영함' 표시 (나머지는 보기)</li>
+        <li><b>VMD팀</b> · 도면 편집 (나머지는 보기)</li>
+        <li><b>MD</b> · 피드백 POG에 메모 남기기 (나머지는 보기)</li>
+        <li><b>제품 찾기만</b> · 3. 제품 찾기만 (매장 계정, 최종 POG만)</li>
+        <li><b>삭제 (접속 막기)</b> · 로그인해도 아무것도 못 봐요. 레벨을 다시 고르면 다시 쓸 수 있어요</li>
+      </ul>
+      <form id="acc-add" class="gl-add">
+        <input name="email" type="email" placeholder="이메일" required autocomplete="off">
+        <input name="name" class="acc-add-name" maxlength="20" placeholder="이름 (선택)" autocomplete="off">
+        <select name="level" id="acc-add-level"></select>
+        <button class="btn primary">계정 만들기</button>
+      </form>
+      <div class="acc-tools">
+        <input id="acc-search" class="search" placeholder="🔍 이메일·이름·부서로 찾기" autocomplete="off">
+        <span id="acc-count" class="mut"></span>
+      </div>
+      <div id="acc-filter" class="acc-filter"></div>
+      <table class="gl-table acc-table">
+        <thead><tr><th>이메일</th><th>이름</th><th>레벨</th><th></th></tr></thead>
+        <tbody id="acc-body"></tbody>
+      </table>
+      <h3 class="mgr-h">POG 담당자 목록</h3>
+      <p class="mut">POG 만들기 위쪽 'POG 담당자' 드롭다운에 나오는 이름이에요. 칸에서 바로 고치고 Enter를 누르면 저장돼요. 이미 그 이름이 들어간 POG도 같이 바꿀지 물어봐요.</p>
+      <table class="gl-table mgr-table"><thead><tr><th>이름</th><th></th></tr></thead><tbody id="mgr-body"></tbody></table>
+    </div>
+  </section>
+</div>
+
+<datalist id="dl-fixtureType"></datalist>
+<datalist id="dl-extras"></datalist>
+<div id="modal-root"></div>
+<div id="toast"></div>
+<div class="copyright" aria-label="저작권">© 2026 Karrot in AB</div>
+
+<!-- 파일을 고치면 ?v= 숫자도 바꿀 것 (브라우저가 예전 파일을 쓰지 않도록) -->
+<script type="module" src="app.js?v=20261106a"></script>
+</body>
+</html>
