@@ -4400,7 +4400,8 @@ function setGlCat(c) {
   if (CATS.includes(c)) $('#gl-add-cat').value = c;
   syncAddCode();
 }
-const syncAddCode = () => $('#gl-add').code.classList.toggle('hidden', !CODE_CATS.includes($('#gl-add-cat').value));
+// 추가 칸: 고리타입·집기는 제품코드, 선반/파이프·집기는 '제작필요' 체크 (등록할 때부터 · 사용자)
+const syncAddCode = () => { const c = $('#gl-add-cat').value; $('#gl-add').code.classList.toggle('hidden', !CODE_CATS.includes(c)); $('#gl-add .gl-make-in').classList.toggle('hidden', !MAKE_CATS.includes(c)); };
 
 function renderGlossary() {
   const body = $('#gl-body');
@@ -4490,7 +4491,7 @@ $('#gl-q-clear').onclick = () => { $('#gl-q').value = ''; renderGlossary(); $('#
 $('#gl-body').addEventListener('focusout', () => setTimeout(() => { if (glDirty) renderGlossary(); }, 50));
 $('#gl-add').addEventListener('submit', async e => {
   e.preventDefault();
-  const f = e.target, cat = f.cat.value, ko = f.ko.value.trim(), code = CODE_CATS.includes(cat) ? f.code.value.trim() : '';
+  const f = e.target, cat = f.cat.value, ko = f.ko.value.trim(), code = CODE_CATS.includes(cat) ? f.code.value.trim() : '', make = MAKE_CATS.includes(cat) && f.make.checked;
   if (!ko) return;
   const same = state.glossary.filter(g => norm(g.ko) === norm(ko));
   if (same.some(g => g.cat === cat)) {
@@ -4498,10 +4499,10 @@ $('#gl-add').addEventListener('submit', async e => {
     $('#gl-q').value = ko; renderGlossary(); return;
   }
   if (same.length && !confirm(`'${same.map(g => g.cat).join(', ')}' 분류에 같은 이름이 있어요. '${cat}'에도 추가할까요?`)) return;
-  const r = await addDoc(collection(db, 'glossary'), { cat, ko, ...(code ? { code } : {}), createdAt: serverTimestamp(), createdBy: me() });
-  glLog({ id: r.id, cat, ko }, 'add', [{ f: 'ko', from: '', to: ko }]);
-  toast('추가했어요');
-  f.ko.value = ''; f.code.value = ''; f.ko.focus(); renderGlHint();
+  const r = await addDoc(collection(db, 'glossary'), { cat, ko, ...(code ? { code } : {}), ...(make ? { make: true } : {}), createdAt: serverTimestamp(), createdBy: me() });
+  glLog({ id: r.id, cat, ko }, 'add', [{ f: 'ko', from: '', to: ko }, ...(make ? [{ f: 'make', from: '', to: '○' }] : [])]);
+  toast(make ? '추가했어요 (제작필요)' : '추가했어요');
+  f.ko.value = ''; f.code.value = ''; f.make.checked = false; f.ko.focus(); renderGlHint();
 });
 setGlCat(state.glCat);
 renderGlossary();
