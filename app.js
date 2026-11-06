@@ -1007,8 +1007,8 @@ function renderSp(block) {
     // 지금 값이 사전 이름과 띄어쓰기만 다르면 그 칸은 지금 값 그대로 보여줌
     const curAlias = x.name && !dict.includes(x.name) && !only.includes(x.name) ? [opt(x.name)] : [];
     const sel = h('select', { class: 'f sp-sel', disabled: !ed }, h('option', { value: '' }, ''), ...curAlias,
-      h('optgroup', { label: '용어 사전' }, ...dict.map(opt)),
-      only.length ? h('optgroup', { label: '이 POG에서 직접 쓴 이름 (사전에 없음)' }, ...only.map(opt)) : null,
+      h('optgroup', { label: '집기·고리·매대 등록' }, ...dict.map(opt)),
+      only.length ? h('optgroup', { label: '이 POG에서 직접 쓴 이름 (등록 안 됨)' }, ...only.map(opt)) : null,
       ed ? h('option', { value: CUSTOM }, '+ 직접 입력…') : null);
     sel.value = x.name || '';
     const qty = h('input', { class: 'f ex-qty', type: 'number', min: 0, placeholder: '0', disabled: !ed });
@@ -1037,14 +1037,14 @@ async function addFxGlossary(cat, name) {
   name = (name || '').trim();
   const n = norm(name); if (!n || (cat === '선반/파이프' && SP_DEFAULT.some(x => norm(x) === n)) || glossaryOf(cat).some(g => norm(g.ko) === n)) return;
   const key = cat + '|' + n; if (fxAsked.has(key)) return; fxAsked.add(key);
-  const erp = await askYesNo('ERP 주문이 되는 제품입니까?', `'${name}' (${cat === '집기' ? '이외집기' : '선반/파이프'})은(는) 용어 사전에 없는 새 이름이에요.\n아니오를 누르면 용어 사전에 '제작필요'로 표시돼요.`);
+  const erp = await askYesNo('ERP 주문이 되는 제품입니까?', `'${name}' (${cat === '집기' ? '이외집기' : '선반/파이프'})은(는) 집기·고리·매대 등록에 없는 새 이름이에요.\n아니오를 누르면 집기·고리·매대 등록에 '제작필요'로 표시돼요.`);
   if (erp === null) { fxAsked.delete(key); return null; } // X·바깥 누름 = 취소 (사전에도, 페이지에도 저장 안 함)
   const make = erp === false;
   const id = (cat === '집기' ? 'ex_' : 'sp_') + name.replace(/[\/.#$\[\]]/g, '_');
   try {
     await setDoc(doc(db, 'glossary', id), { cat, ko: name, auto: true, ...(make ? { make: true } : {}), createdAt: serverTimestamp(), createdBy: me() }, { merge: true });
     glLog({ id, cat, ko: name }, 'auto', make ? [{ f: 'make', from: '', to: '○' }] : []);
-    toast(`'${name}'을 용어 사전 '${cat}'에도 넣었어요` + (make ? ' (제작필요)' : ''));
+    toast(`'${name}'을 집기·고리·매대 등록 '${cat}'에도 넣었어요` + (make ? ' (제작필요)' : ''));
   } catch (e) { fxAsked.delete(key); console.warn('사전에 넣지 못했어요 (보안 규칙)', e.code || e); }
 }
 function renderExtras(block) {
@@ -1947,7 +1947,7 @@ function hookPicker(pog, ed) {
       cb.onchange = () => { cb.checked ? picked.add(x) : picked.delete(x); apply(); };
       return h('label', { class: 'hk-item' }, cb, h('span', {}, x), used.has(x) ? h('small', { class: 'mut' }, '사용 중') : null);
     }));
-    if (!all.length) list.append(h('p', { class: 'se-help' }, "용어 사전 '고리타입' 탭에 고리가 아직 없어요."));
+    if (!all.length) list.append(h('p', { class: 'se-help' }, "집기·고리·매대 등록 '고리타입' 탭에 고리가 아직 없어요."));
   };
   q.oninput = draw; draw();
   return h('section', { class: 'se-sec' }, h('h4', {}, '이 POG에서 쓸 고리 ', count),
@@ -2397,7 +2397,7 @@ async function exportCounts(pog, fixtures) {
     if (!sum.size) { toast('입력된 선반/파이프·고리·집기가 없어요'); return; }
     const all = [...sum.values()].sort((a, b) => KORD[a.kind] - KORD[b.kind] || a.name.localeCompare(b.name, 'ko'));
     const pageTxt = r => [...r.pages].map(([p, q]) => `${p}쪽(${q})`).join(', ');
-    const noCodeTxt = r => CODE_CATS.includes(CAT[r.kind]) ? '(사전에 코드 없음)' : '';
+    const noCodeTxt = r => CODE_CATS.includes(CAT[r.kind]) ? '(등록된 코드 없음)' : '';
     const sheet = (list, withCode) => { // 시트 1(제작비품)은 제품코드 열 없음 (사용자)
       const cut = row => withCode ? row : row.filter((_, i) => i !== 1);
       const head = cut(['구분', '제품코드', '이름', '합계 수량', '들어간 페이지 (수량)']);
@@ -2411,7 +2411,7 @@ async function exportCounts(pog, fixtures) {
     X.utils.book_append_sheet(wb, sheet(all.filter(r => !r.make), true), '관리부 비품·집기·고리');
     X.writeFile(wb, `선반고리집기수량_${pogTitle(pog)}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`.replace(/[\\/:*?"<>|]/g, ''));
     const noCode = all.filter(r => !r.make && !r.code && CODE_CATS.includes(CAT[r.kind])).length;
-    toast('엑셀을 저장했어요' + (noCode ? ` · 사전에 제품코드가 없는 것 ${noCode}개` : ''));
+    toast('엑셀을 저장했어요' + (noCode ? ` · 집기·고리·매대 등록에 제품코드가 없는 것 ${noCode}개` : ''));
   } catch (e) { toast(e.message); }
 }
 $('#ed-counts').onclick = () => exportCounts(state.currentPog, [...state.fixtures.values()]);
@@ -4417,7 +4417,7 @@ function renderGlossary() {
 
   const rows = q ? glSearch(q) : glossaryOf(state.glCat);
   $('#gl-info').textContent = q ? `'${q}' 검색 결과 ${rows.length}개 · 전체 분류에서 찾았어요`
-    : !CATS.includes(state.glCat) ? `예전 분류예요. 필요한 단어는 검색해서 분류를 바꾸고, 나머지는 지워주세요.` : '';
+    : !CATS.includes(state.glCat) ? `예전 분류예요. 필요한 이름은 검색해서 분류를 바꾸고, 나머지는 지워주세요.` : '';
   const showCode = q ? rows.some(g => CODE_CATS.includes(g.cat)) : CODE_CATS.includes(state.glCat);
   const showMake = q ? rows.some(g => MAKE_CATS.includes(g.cat)) : MAKE_CATS.includes(state.glCat);
   $('#gl-head').innerHTML = '';
@@ -4425,7 +4425,7 @@ function renderGlossary() {
 
   body.innerHTML = '';
   if (!rows.length) body.append(h('tr', {}, h('td', { colspan: 2 + (q ? 1 : 0) + (showCode ? 1 : 0) + (showMake ? 1 : 0), class: 'mut pad' },
-    q ? '저장된 단어가 없어요. 위 칸에서 바로 추가할 수 있어요.' : '등록된 단어가 없어요.')));
+    q ? '저장된 이름이 없어요. 위 칸에서 바로 추가할 수 있어요.' : '등록된 이름이 없어요.')));
   const ed = canEdit('glossary'); // 관리자만 편집, 나머지는 보기
   rows.forEach(g => {
     const inp = (f) => {
@@ -4462,7 +4462,7 @@ function renderGlossary() {
     }
     body.append(h('tr', {}, codeCell, catCell, h('td', {}, inp('ko')), makeCell,
       h('td', { class: 'tc' }, h('span', {}, // ⓘ 이 단어 기록은 직원 모두, 삭제는 관리자만
-        h('button', { class: 'gl-i', type: 'button', title: g.updatedBy ? `마지막 수정: ${nameOf(g.updatedBy)} · ${fmtDate(g.updatedAt)}` : '이 단어 변경 기록 보기', onclick: () => showGlLog(g) }, 'ⓘ'),
+        h('button', { class: 'gl-i', type: 'button', title: g.updatedBy ? `마지막 수정: ${nameOf(g.updatedBy)} · ${fmtDate(g.updatedAt)}` : '이 이름 변경 기록 보기', onclick: () => showGlLog(g) }, 'ⓘ'),
         ed ? h('button', { class: 'btn ghost danger small', onclick: async () => {
           if (!confirm(`'${g.ko}'를 삭제할까요?`)) return;
           await deleteDoc(doc(db, 'glossary', g.id));
@@ -4494,10 +4494,10 @@ $('#gl-add').addEventListener('submit', async e => {
   if (!ko) return;
   const same = state.glossary.filter(g => norm(g.ko) === norm(ko));
   if (same.some(g => g.cat === cat)) {
-    toast(`'${cat}'에 이미 있는 단어예요. 아래에서 수정하세요`);
+    toast(`'${cat}'에 이미 있는 이름이에요. 아래에서 수정하세요`);
     $('#gl-q').value = ko; renderGlossary(); return;
   }
-  if (same.length && !confirm(`'${same.map(g => g.cat).join(', ')}' 분류에 같은 단어가 있어요. '${cat}'에도 추가할까요?`)) return;
+  if (same.length && !confirm(`'${same.map(g => g.cat).join(', ')}' 분류에 같은 이름이 있어요. '${cat}'에도 추가할까요?`)) return;
   const r = await addDoc(collection(db, 'glossary'), { cat, ko, ...(code ? { code } : {}), createdAt: serverTimestamp(), createdBy: me() });
   glLog({ id: r.id, cat, ko }, 'add', [{ f: 'ko', from: '', to: ko }]);
   toast('추가했어요');
@@ -4511,8 +4511,8 @@ const ACTION = { add: '추가', edit: '수정', delete: '삭제', import: '엑�
 const fmtTime = ts => { const d = ts?.toDate?.(); return d ? `${fmtDate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : ''; };
 async function showGlLog(g) {
   const box = h('div', { class: 'log-box' }, h('div', { class: 'mut pad' }, '불러오는 중…'));
-  const q = h('input', { class: 'search w100', placeholder: '단어·편집자 이메일로 찾기' });
-  modal(h('div', {}, h('h3', {}, g ? `'${g.ko}' 변경 기록` : '용어 사전 변경 기록'), g ? null : q, box), { wide: true });
+  const q = h('input', { class: 'search w100', placeholder: '이름·편집자 이메일로 찾기' });
+  modal(h('div', {}, h('h3', {}, g ? `'${g.ko}' 변경 기록` : '집기·고리·매대 등록 변경 기록'), g ? null : q, box), { wide: true });
   try {
     const snap = await getDocs(g ? query(collection(db, 'glossaryLog'), where('gid', '==', g.id))
       : query(collection(db, 'glossaryLog'), orderBy('at', 'desc'), limit(500)));
@@ -4523,7 +4523,7 @@ async function showGlLog(g) {
       box.innerHTML = '';
       if (!rows.length) { box.append(h('div', { class: 'mut pad' }, '기록이 없어요. (기록은 이 기능이 생긴 뒤부터 남아요)')); return; }
       box.append(h('table', { class: 'log-tbl' },
-        h('tr', {}, h('th', {}, '날짜'), h('th', {}, '편집자'), h('th', {}, ''), g ? null : h('th', {}, '단어'), h('th', {}, '내용')),
+        h('tr', {}, h('th', {}, '날짜'), h('th', {}, '편집자'), h('th', {}, ''), g ? null : h('th', {}, '이름'), h('th', {}, '내용')),
         ...rows.map(l => h('tr', {},
           h('td', {}, fmtTime(l.at)), h('td', {}, nameOf(l.by, l.byName)), h('td', {}, ACTION[l.action] || l.action),
           g ? null : h('td', {}, `[${l.cat}] ${l.ko}`),
@@ -4556,8 +4556,8 @@ $('#gl-export').onclick = async () => {
       ...rows.map(g => [g.id, g.cat, g.code || '', MAKE_CATS.includes(g.cat) ? (g.make ? 'O' : 'X') : '', g.ko || ''])];
     const ws = X.utils.aoa_to_sheet(aoa);
     ws['!cols'] = [{ wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 9 }, { wch: 30 }];
-    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, '용어사전');
-    X.writeFile(wb, `용어사전_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`);
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, '집기고리매대');
+    X.writeFile(wb, `집기고리매대_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`);
   } catch (e) { toast(e.message); }
 };
 $('#gl-import').onclick = () => $('#gl-file').click();
@@ -4588,7 +4588,7 @@ function planGlossaryImport(aoa) {
     const line = ri + 2, id = v(ci.id), ko = v(ci.ko), cat = v(ci.cat), code = v(ci.code), make = yesNo(v(ci.make));
     if (!id && !ko) return; // 빈 줄
     let g = id ? byId.get(id) : null;
-    if (id && !g) { plan.warns.push(`${line}번째 줄: ID '${id}'인 단어가 없어요 (삭제된 단어일 수 있어요)`); return; }
+    if (id && !g) { plan.warns.push(`${line}번째 줄: ID '${id}'인 이름이 없어요 (삭제된 이름일 수 있어요)`); return; }
     if (!g && cat && !CATS.includes(cat)) { plan.warns.push(`${line}번째 줄: 분류 '${cat}'을(를) 알 수 없어요 (${CATS.join(', ')} 중 하나)`); return; }
     if (!g) g = state.glossary.find(x => x.cat === cat && norm(x.ko) === norm(ko)); // ID가 없으면 분류+한국어로 찾기
     if (g) {
@@ -4601,7 +4601,7 @@ function planGlossaryImport(aoa) {
       if (make !== null && MAKE_CATS.includes(ch.cat || g.cat) && make !== !!g.make) ch.make = make;
       if (Object.keys(ch).length) plan.updates.push({ g, ch });
     } else {
-      if (!cat) { plan.warns.push(`${line}번째 줄: 새 단어 '${ko}'에 분류가 없어요`); return; }
+      if (!cat) { plan.warns.push(`${line}번째 줄: 새 이름 '${ko}'에 분류가 없어요`); return; }
       if (plan.adds.some(a => a.cat === cat && norm(a.ko) === norm(ko))) return;
       plan.adds.push({ cat, ko, ...(code ? { code } : {}), ...(make && MAKE_CATS.includes(cat) ? { make: true } : {}) });
     }
@@ -4614,8 +4614,8 @@ function showImportPreview(plan) {
   const close = modal(h('div', {},
     h('h3', {}, '엑셀 올리기 미리보기'),
     h('ul', { class: 'imp-sum' },
-      h('li', {}, `바뀌는 단어: ${plan.updates.length}개`),
-      h('li', {}, `새로 추가하는 단어: ${plan.adds.length}개`),
+      h('li', {}, `바뀌는 이름: ${plan.updates.length}개`),
+      h('li', {}, `새로 추가하는 이름: ${plan.adds.length}개`),
       plan.warns.length ? h('li', {}, `건너뛰는 줄: ${plan.warns.length}개`) : null),
     plan.warns.length ? h('ul', { class: 'imp-warn' }, ...plan.warns.slice(0, 50).map(w => h('li', {}, w))) : null,
     h('p', { class: 'mut' }, nothing ? '바뀌는 내용이 없어요.' : '엑셀의 빈 칸은 지금 값을 그대로 둬요 (지우지 않아요).'),
