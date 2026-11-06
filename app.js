@@ -2671,13 +2671,14 @@ async function applyRegrab(pog, plan) {
 $('#ed-regrab').onclick = () => openRegrab(null);
 
 /* ---------- 매장 등록 ----------
-   stores/{id}: code(매장코드 = POG 사이트 매장코드), partner, branch, openDate. 도면은 drawings/{같은 id} */
-const storeName = st => st ? `${st.partner || ''} ${st.branch || ''}`.trim() : '';
+   stores/{id}: code(지점코드 = POG 사이트 매장코드), branch(지점명), openDate(오픈 예정일). 도면은 drawings/{같은 id}
+   (국내용: 파트너 이름 칸은 없앰 · 사용자. 예전에 넣은 partner는 지점명이 비었을 때만 씀) */
+const storeName = st => st ? (st.branch || st.partner || '').trim() : '';
 const storeForPog = pog => pog && (state.stores.find(x => x.id === pog.storeId) || state.stores.find(x => String(x.code).trim() === String(pog.storeCode || '').trim()));
 // 도면 문서에 매장 정보 (매장 계정은 매장 목록을 못 읽어서 이름도 같이 둠)
-const dwStoreInfo = st => ({ storeCode: st?.code || '', storeName: storeName(st), partner: st?.partner || '', branch: st?.branch || '' });
+const dwStoreInfo = st => ({ storeCode: st?.code || '', storeName: storeName(st), branch: storeName(st) });
 // 제품 찾기 매장 이름: '업체 (매장명)' (사용자)
-const partnerBranch = (partner, branch) => partner && branch ? `${partner} (${branch})` : partner || branch || '';
+const partnerBranch = (partner, branch) => branch || partner || ''; // 국내용: 지점명만
 // 매장 삭제: 이 매장의 POG(매장코드가 같거나 이어진 것)·도면을 모두 지움. '매장 삭제하겠습니다'를 똑같이 써야 지워짐
 const STORE_DEL_WORD = '매장 삭제하겠습니다';
 function deleteStoreAll(st) {
@@ -2711,13 +2712,13 @@ function renderStores() {
   const body = $('#st-body'); if (!body) return;
   const ed = canEdit('stores');
   body.innerHTML = '';
-  if (!state.stores.length) { body.append(h('tr', {}, h('td', { colspan: 7, class: 'mut pad' }, '등록된 매장이 없어요.'))); return; }
+  if (!state.stores.length) { body.append(h('tr', {}, h('td', { colspan: 6, class: 'mut pad' }, '등록된 매장이 없어요.'))); return; }
   for (const st of state.stores) {
     const inp = (f, type = 'text') => {
       const el = h('input', { type, value: st[f] || '', disabled: !ed });
       el.addEventListener('change', async () => {
         const v = el.value.trim();
-        if (f === 'code' && state.stores.some(x => x.id !== st.id && String(x.code) === v)) { toast('이미 있는 매장코드예요'); el.value = st.code; return; }
+        if (f === 'code' && state.stores.some(x => x.id !== st.id && String(x.code) === v)) { toast('이미 있는 지점코드예요'); el.value = st.code; return; }
         await updateDoc(doc(db, 'stores', st.id), { [f]: v, updatedAt: serverTimestamp(), updatedBy: me() }); toast('수정했어요');
       });
       return el;
@@ -2725,7 +2726,7 @@ function renderStores() {
     const d = state.dwMap.get(st.id);
     const fin = d && dwFinalNo(d);
     const pogs = state.pogs.filter(p => String(p.storeCode) === String(st.code));
-    body.append(h('tr', {}, h('td', {}, inp('code')), h('td', {}, inp('partner')), h('td', {}, inp('branch')), h('td', {}, inp('openDate', 'date')),
+    body.append(h('tr', {}, h('td', {}, inp('code')), h('td', {}, inp('branch')), h('td', {}, inp('openDate', 'date')),
       h('td', { class: 'st-dw' }, d?.latestNo ? `ver.${d.latestNo}${fin ? ` · ★ver.${fin}` : ''}${d.area ? ` · ${d.area}평` : ''}` : '없음'),
       h('td', { class: 'st-dw' }, pogs.length ? `${pogs.length}개${pogs.some(p => p.status === 'final') ? ' (최종 있음)' : ''}` : '없음'),
       // 매장 삭제는 관리자만 (규칙도 같음). 이 매장의 POG·도면도 함께 지움 (deleteStoreAll)
@@ -2734,11 +2735,11 @@ function renderStores() {
 }
 $('#st-add').addEventListener('submit', async e => {
   e.preventDefault();
-  const f = e.target, code = f.code.value.trim(), partner = f.partner.value.trim(), branch = f.branch.value.trim(), openDate = f.open.value;
-  if (!code || !partner || !branch) return;
-  if (state.stores.some(x => String(x.code) === code)) { toast('이미 등록된 매장코드예요'); return; }
+  const f = e.target, code = f.code.value.trim(), branch = f.branch.value.trim(), openDate = f.open.value;
+  if (!code || !branch) return;
+  if (state.stores.some(x => String(x.code) === code)) { toast('이미 등록된 지점코드예요'); return; }
   try {
-    await addDoc(collection(db, 'stores'), { code, partner, branch, openDate, createdAt: serverTimestamp(), createdBy: me() });
+    await addDoc(collection(db, 'stores'), { code, branch, openDate, createdAt: serverTimestamp(), createdBy: me() });
     toast('매장을 등록했어요'); f.reset(); f.code.focus();
   } catch (err) { toast('등록 실패: ' + err.message); }
 });
@@ -2763,7 +2764,7 @@ function setDwMode(m) {
 }
 $('#dw-search').addEventListener('input', renderDwList);
 // 매장 계정은 매장 목록을 못 읽음 → 도면 문서의 매장 정보로 목록을 만듦
-const dwStores = () => isStaff() ? state.stores : [...state.dwMap.values()].map(d => ({ id: d.id, code: d.storeCode || '', partner: d.storeName || '', branch: '' }));
+const dwStores = () => isStaff() ? state.stores : [...state.dwMap.values()].map(d => ({ id: d.id, code: d.storeCode || '', branch: d.storeName || '' }));
 function dwListRows() {
   const q = $('#dw-search').value.trim().toLowerCase();
   return dwStores().filter(st => {

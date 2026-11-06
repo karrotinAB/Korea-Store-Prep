@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261106d">
+<link rel="stylesheet" href="style.css?v=20261106e">
 </head>
 <body>
 
@@ -166,16 +166,15 @@
     <div class="gl-wrap st-wrap">
       <h2>매장 등록</h2>
       <p class="mut">매장을 먼저 등록하면 VMD실이 '1. 도면 → 도면 업로드'에서 이 매장을 골라 도면을 올려요. (등록·수정은 관리자)
-        <b>매장코드는 POG 사이트의 매장코드와 똑같이</b> 써주세요 (예: 826503). 그래야 POG와 도면이 이어져요.</p>
+        <b>지점코드는 POG 사이트의 매장코드와 똑같이</b> 써주세요 (예: 826503). 그래야 POG와 도면이 이어져요.</p>
       <form id="st-add" class="gl-add st-add" data-edit="stores">
-        <input name="code" placeholder="매장코드" required autocomplete="off">
-        <input name="partner" placeholder="파트너 이름" required autocomplete="off">
-        <input name="branch" placeholder="지점 이름" required autocomplete="off">
-        <label class="st-date">오픈 예상일 <input name="open" type="date"></label>
+        <input name="code" placeholder="지점코드" required autocomplete="off">
+        <input name="branch" placeholder="지점명" required autocomplete="off">
+        <label class="st-date">오픈 예정일 <input name="open" type="date"></label>
         <button class="btn primary">등록</button>
       </form>
       <table class="gl-table st-table">
-        <thead><tr><th>매장코드</th><th>파트너 이름</th><th>지점 이름</th><th>오픈 예상일</th><th>도면</th><th>POG</th><th></th></tr></thead>
+        <thead><tr><th>지점코드</th><th>지점명</th><th>오픈 예정일</th><th>도면</th><th>POG</th><th></th></tr></thead>
         <tbody id="st-body"></tbody>
       </table>
     </div>
@@ -412,6 +411,6 @@
 <div class="copyright" aria-label="저작권">© 2026 Karrot in AB</div>
 
 <!-- 파일을 고치면 ?v= 숫자도 바꿀 것 (브라우저가 예전 파일을 쓰지 않도록) -->
-<script type="module" src="app.js?v=20261106d"></script>
+<script type="module" src="app.js?v=20261106e"></script>
 </body>
 </html>

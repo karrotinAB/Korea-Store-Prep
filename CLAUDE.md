@@ -57,3 +57,8 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 - 빌드 도구 없음 (HTML + CSS + 바닐라 JS 모듈). Firebase SDK 10.12.2 gstatic CDN.
 - **`app.js`·`style.css`를 고치면 `index.html`의 `?v=`를 둘 다 바꿀 것.**
 - PC는 `html { zoom: .8 }` → 끄는 기능은 `ZM()`/`ZP()`로 나눌 것. 화면 높이는 `var(--vh)`·`var(--top)`.
+
+## 7. 매장 등록 (사용자)
+- 칸은 **지점코드 · 지점명 · 오픈 예정일**만 (파트너 이름 칸은 없앰). 문서 필드는 `code`·`branch`·`openDate` 그대로.
+- 지점코드 = POG 사이트 매장코드 (POG `storeCode`와 같아야 POG·도면이 이어짐).
+- 화면에 보이는 매장 이름 = 지점명(`storeName`). 예전 데이터에 `partner`만 있으면 그것.
