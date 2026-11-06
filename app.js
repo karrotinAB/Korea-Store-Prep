@@ -10,12 +10,12 @@ import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } fr
 // ★ 국내용 Firebase 프로젝트 설정값 (README 1단계). Firebase 콘솔 → 프로젝트 설정 → 내 앱(웹)의 firebaseConfig를 그대로 붙여넣기
 //   Global Opening Prep와 데이터(POG·도면·매장)가 섞이지 않도록 새 프로젝트를 쓰세요
 const firebaseConfig = {
-  apiKey: "여기에-apiKey",
-  authDomain: "여기에-프로젝트ID.firebaseapp.com",
-  projectId: "여기에-프로젝트ID",
-  storageBucket: "여기에-프로젝트ID.firebasestorage.app",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyB-NK3AqrszXFBpFe5Nk9CB6cdtr4S5y7g",
+  authDomain: "korea-store-prep.firebaseapp.com",
+  projectId: "korea-store-prep",
+  storageBucket: "korea-store-prep.firebasestorage.app",
+  messagingSenderId: "1091211185066",
+  appId: "1:1091211185066:web:978bec6c5b5cd513fa39d3"
 };
 const FB_READY = !firebaseConfig.apiKey.startsWith('여기에');
 
