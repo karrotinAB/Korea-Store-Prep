@@ -1009,9 +1009,19 @@ body.pfit .pages .page-block { scroll-snap-align: start; scroll-margin-top: 12px
 .fb-acts { display: flex; gap: 6px; margin-top: 6px; }
 @media print { .fb-badge { display: none !important; } #v-pog-fb .page-block.fb-on .page { outline: none; } }
 
-/* ---------- 국내용: 로그인 아래 그림 없음 (나중에 넣을 수 있음) ---------- */
+/* ---------- 국내용: 로그인 그림 (UFO 'STAFF ONLY'는 카드 위, 판다는 카드 오른쪽) ---------- */
 .login { padding-bottom: 0; }
-@media (max-width: 700px) { .login { padding-bottom: 0; } }
+.login-wrap { position: relative; margin-top: 150px; }
+.login-wrap .login-card { position: relative; z-index: 1; }
+.login-ufo { position: absolute; left: 50%; bottom: 100%; height: 165px; margin-left: -75px; margin-bottom: -6px; pointer-events: none; animation: char-bob 2.4s ease-in-out infinite; }
+.login-pandas { position: absolute; left: 100%; bottom: 0; height: 300px; margin-left: -18px; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .login-ufo { animation: none; } }
+@media (max-width: 700px) {
+  .login { padding-bottom: 0; }
+  .login-wrap { margin-top: 120px; margin-bottom: 150px; }
+  .login-ufo { height: 125px; margin-left: -57px; }
+  .login-pandas { left: auto; right: -6px; bottom: auto; top: 100%; height: 150px; margin: -14px 0 0; z-index: 2; }
+}
 
 /* ---------- 상단 메뉴가 화면보다 길 때 (POG 하위 메뉴까지 붙으면) ----------
    가로 스크롤바가 메뉴 아래에 보이던 것을 숨김. 마우스 휠로 옆으로 밀 수 있고, 지금 화면 메뉴는 보이게 맞춤 (app.js) */
