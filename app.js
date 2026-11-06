@@ -167,6 +167,12 @@ $('#login-form').addEventListener('submit', async e => {
   catch { $('#login-err').textContent = '로그인 실패: 이메일 또는 비밀번호를 확인해주세요.'; }
 });
 $('#logout').onclick = () => signOut(auth);
+// 로그인 화면 우주선: 누르면 둥실
+const ufo = $('.login-ufo');
+if (ufo) {
+  ufo.onclick = () => { ufo.classList.remove('fly'); void ufo.offsetWidth; ufo.classList.add('fly'); };
+  ufo.onanimationend = e => { if (e.animationName === 'ufo-fly') ufo.classList.remove('fly'); };
+}
 auth.languageCode = 'ko'; // 비밀번호 재설정 메일을 한국어로
 $('#login-forgot').onclick = async e => {
   e.preventDefault();
