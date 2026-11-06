@@ -2180,13 +2180,14 @@ $('#btn-import').onclick = openImport;
 function openImport() {
   const base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
   const bm = `javascript:(function(){var s=document.createElement('script');s.charset='utf-8';s.src='${base}pog-grab.js?v='+Date.now();document.body.appendChild(s);})();`;
-  const link = h('a', { class: 'bm-link', href: bm, onclick: e => { e.preventDefault(); toast('이 버튼을 북마크바로 끌어다 놓으세요'); } }, '📥 POG 가져오기');
+  const link = h('a', { class: 'bm-link', href: bm, onclick: e => { e.preventDefault(); toast('이 버튼을 북마크바로 끌어다 놓으세요'); } }, '🐥 POG 가져오기 (국내)'); // 북마크 이름 = 이 글자. Global Opening Prep 북마크(📥 POG 가져오기)와 헷갈리지 않게 (사용자)
   const ta = h('textarea', { class: 'import-ta', placeholder: '여기에 붙여넣기 (Ctrl+V)' });
   const go = h('button', { class: 'btn primary' }, '가져오기');
   const close = modal(h('div', {},
     h('h3', {}, '새 POG 가져오기'),
     h('ol', { class: 'steps' },
-      h('li', {}, '처음 한 번만: 아래 버튼을 브라우저 북마크바로 끌어다 놓으세요. ', link),
+      h('li', {}, '처음 한 번만: 아래 버튼을 브라우저 북마크바로 끌어다 놓으세요. ', link,
+        h('div', { class: 'mut' }, 'Global Opening Prep의 북마크(📥 POG 가져오기)와는 다른 북마크예요. 국내 POG는 꼭 🐥 (국내) 북마크로 가져와 주세요.')),
       h('li', {}, 'POG 사이트에서 매장의 매대 목록 화면을 열고 북마크를 누르세요. 아무것도 체크 안 했으면 팀 고르기 창이 떠요 → 가져올 팀을 고르세요 (팀마다 POG가 따로 생겨요). 매대를 체크했으면 체크한 매대만 가져와요. (매대 보기 화면에서 누르면 그 매대 하나만)'),
       h('li', {}, '다 모이면 뜨는 창에서 \'복사하기\'를 누르고, 아래 칸에 붙여넣으세요.')),
     ta,
@@ -2473,7 +2474,7 @@ function grabPaste(mode, target) {
   const close = modal(h('div', {},
     h('h3', {}, mode === 'replace' ? `대체하기 · '${displayName(target)}'` : '매대 추가하기'),
     h('ol', { class: 'steps' },
-      h('li', {}, 'POG 사이트에서 매대 보기 화면(여러 개면 매대 목록에서 체크)을 열고 북마크(📥 POG 가져오기)를 누르세요.'),
+      h('li', {}, 'POG 사이트에서 매대 보기 화면(여러 개면 매대 목록에서 체크)을 열고 북마크(🐥 POG 가져오기 (국내))를 누르세요.'),
       h('li', {}, "'복사하기'를 누르고 아래 칸에 붙여넣으세요.")),
     ta, h('p', { class: 'mut' }, '매대 밖에 빼둔 제품은 가져오지 않아요.'),
     h('div', { class: 'modal-act' }, go)));
@@ -2573,8 +2574,8 @@ function openRegrabAuto(hintFx) {
     h('h3', {}, 'POG 사이트에서 다시 가져오기'),
     h('p', { class: 'mut' }, '이미 입력한 매대명·매대 타입·고리·이외집기·메모·사진·메모 상자는 그대로 두고, 제품과 집기만 최신으로 바꿔요.'),
     h('ol', { class: 'steps' },
-      h('li', {}, hintFx ? `POG 사이트에서 '${hintFx.mdName}' 매대 보기 화면을 열고 북마크(📥 POG 가져오기)를 누르세요.`
-        : 'POG 사이트에서 고친 매대의 보기 화면을 열고 북마크(📥 POG 가져오기)를 누르세요. 여러 개면 매대 목록에서 체크하고 누르세요.'),
+      h('li', {}, hintFx ? `POG 사이트에서 '${hintFx.mdName}' 매대 보기 화면을 열고 북마크(🐥 POG 가져오기 (국내))를 누르세요.`
+        : 'POG 사이트에서 고친 매대의 보기 화면을 열고 북마크(🐥 POG 가져오기 (국내))를 누르세요. 여러 개면 매대 목록에서 체크하고 누르세요.'),
       h('li', {}, "'복사하기'를 누르고 아래 칸에 붙여넣으세요.")),
     ta, h('p', { class: 'mut' }, '매대 밖에 빼둔 제품은 가져오지 않아요.'),
     h('div', { class: 'modal-act' }, go)));

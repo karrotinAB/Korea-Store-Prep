@@ -3,6 +3,8 @@
 (async () => {
   if (window.__pogGrabOn) return;
   window.__pogGrabOn = true;
+  // 이 스크립트를 불러온 사이트 주소 (국내 POG 사이트의 아이콘을 창 제목에 보여주려고)
+  const SITE = ((document.currentScript && document.currentScript.src) || [...document.scripts].map(s => s.src).reverse().find(u => /pog-grab\.js/.test(u)) || '').replace(/[#?].*$/, '').replace(/[^/]*$/, '');
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   /* ---------- 진행 창 ---------- */
@@ -11,7 +13,8 @@
   box.innerHTML = `<style>
 #__pog_grab{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2147483647;display:flex;align-items:center;justify-content:center;font:14px/1.5 'Malgun Gothic',sans-serif;color:#222}
 #__pog_grab .c{background:#fff;border-radius:12px;padding:22px 24px;width:600px;max-width:92vw;max-height:86vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)}
-#__pog_grab h3{margin:0 0 8px;font-size:17px}
+#__pog_grab h3{margin:0 0 8px;font-size:17px;display:flex;align-items:center;gap:8px}
+#__pog_grab h3 img{width:30px;height:30px}
 #__pog_grab .bar{height:8px;background:#eee;border-radius:4px;overflow:hidden;margin:10px 0}
 #__pog_grab .bar i{display:block;height:100%;width:0;background:#f7931e;transition:width .2s}
 #__pog_grab button{border:0;border-radius:6px;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;margin-right:6px}
@@ -24,8 +27,9 @@
 #__pog_grab .teams label{display:flex;gap:6px;align-items:center;border:1px solid #ddd;border-radius:8px;padding:7px 9px;cursor:pointer}
 #__pog_grab .teams label.on{border-color:#f7931e;background:#fff6ec}
 #__pog_grab .teams small{color:#888;margin-left:auto}
-</style><div class="c"><h3>POG 데이터 가져오기</h3><div class="msg">준비 중…</div><div class="bar"><i></i></div><div class="out"></div><div class="act" style="margin-top:14px"></div></div>`;
+</style><div class="c"><h3><img alt=""><span>POG 데이터 가져오기 (국내)</span></h3><div class="msg">준비 중…</div><div class="bar"><i></i></div><div class="out"></div><div class="act" style="margin-top:14px"></div></div>`;
   document.body.appendChild(box);
+  { const ic = box.querySelector('h3 img'); if (SITE) { ic.src = SITE + 'img/icon.png'; ic.onerror = () => ic.remove(); } else ic.remove(); }
   const $msg = box.querySelector('.msg'), $bar = box.querySelector('.bar i'), $out = box.querySelector('.out'), $act = box.querySelector('.act');
   const close = () => { box.remove(); window.__pogGrabOn = false; };
   const setActs = (...btns) => { $act.innerHTML = ''; btns.forEach(([t, cls, fn]) => { const b = document.createElement('button'); b.textContent = t; b.className = cls; b.onclick = fn; $act.appendChild(b); }); };
@@ -260,7 +264,7 @@
     for (const r of rows) { const t = r.teamName || '(팀 없음)'; let g = teams.find(x => x.t === t); if (!g) teams.push(g = { t, rows: [], items: 0 }); g.rows.push(r); g.items += r.itemCount || 0; }
     if (teams.length < 2) return Promise.resolve(rows);
     return new Promise(res => {
-      box.querySelector('h3').textContent = 'POG 데이터 가져오기 · 팀 고르기';
+      box.querySelector('h3 span').textContent = 'POG 데이터 가져오기 (국내) · 팀 고르기';
       $msg.innerHTML = '가져올 팀을 골라주세요. 팀마다 POG가 따로 만들어져요. <span style="color:#888">(여러 팀을 고르면 팀마다 POG가 하나씩 생겨요)</span>';
       $bar.parentElement.style.display = 'none';
       $out.innerHTML = '<div class="teams">' + teams.map((g, i) => `<label><input type="checkbox" data-i="${i}"> <b>${esc(g.t)}</b><small>매대 ${g.rows.length}</small></label>`).join('') + '</div>';
@@ -270,7 +274,7 @@
       setActs(['고른 팀 가져오기', 'p', () => {
         const pick = boxes.filter(b => b.checked).flatMap(b => teams[+b.dataset.i].rows);
         if (!pick.length) return;
-        $out.innerHTML = ''; $bar.parentElement.style.display = ''; box.querySelector('h3').textContent = 'POG 데이터 가져오기';
+        $out.innerHTML = ''; $bar.parentElement.style.display = ''; box.querySelector('h3 span').textContent = 'POG 데이터 가져오기 (국내)';
         res(pick);
       }], ['전체 가져오기 (오래 걸려요)', 'g', () => { $out.innerHTML = ''; $bar.parentElement.style.display = ''; res(rows); }], ['취소', 'g', () => res(null)]);
       const goBtn = $act.querySelector('button'); sync();
