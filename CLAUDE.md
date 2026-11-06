@@ -56,6 +56,7 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 - 화면 문구·대화는 **한국어**, 쉽게. 사용자는 개발자가 아님.
 - 빌드 도구 없음 (HTML + CSS + 바닐라 JS 모듈). Firebase SDK 10.12.2 gstatic CDN.
 - **`app.js`·`style.css`를 고치면 `index.html`의 `?v=`를 둘 다 바꿀 것.**
+- **작업이 끝나면 작업 브랜치에 올린 뒤 바로 기본 브랜치(`claude/magical-turing-fm2xe8`, 이 저장소에는 `main`이 없음)에도 합쳐서 올릴 것** (사용자). PR은 만들지 않음.
 - PC는 `html { zoom: .8 }` → 끄는 기능은 `ZM()`/`ZP()`로 나눌 것. 화면 높이는 `var(--vh)`·`var(--top)`.
 
 ## 7. 매장 등록 (사용자)
