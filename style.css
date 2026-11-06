@@ -1012,6 +1012,8 @@ body.pfit .pages .page-block { scroll-snap-align: start; scroll-margin-top: 12px
 /* ---------- 국내용: 로그인 그림 (UFO 'STAFF ONLY'는 카드 위, 판다는 카드 오른쪽) ---------- */
 .login { padding-bottom: 0; background: #fff; }
 .login-wrap .login-card { border: 1px solid var(--line); box-shadow: 0 10px 40px rgba(0,0,0,.08); }  /* 흰 바탕에서도 카드 테두리가 보이게 */
+.login-card .btn.primary { background: #e53935; border-color: #e53935; color: #fff; }  /* 로그인 버튼: 빨강 */
+.login-card .btn.primary:hover { background: #c62828; border-color: #c62828; }
 .login-wrap { position: relative; margin-top: 180px; }
 .login-wrap .login-card { position: relative; z-index: 1; }
 .login-ufo { position: absolute; left: 50%; bottom: 100%; height: 165px; margin-left: -252px; margin-bottom: 92px; cursor: pointer; -webkit-user-drag: none; user-select: none; animation: char-bob 2.4s ease-in-out infinite; }  /* 카드 왼쪽 위에 떠 있음 */
