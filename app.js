@@ -660,41 +660,19 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
 const isJuljul = p => /juljul/i.test(p?.bg?.img || '');
 const jjFixed = new WeakSet(); // 판을 줄로 바꾼 매대 (저장할 때 panels도 같이 저장)
 function jjNorm(fx) {
-  if (!fx) return fx;
-  const hasPanel = (fx.panels || []).some(isJuljul);
-  if (!hasPanel && !jjMerge(fx.props || [], true)) return fx;
+  if (!fx || !(fx.panels || []).some(isJuljul)) return fx;
   const have = new Set((fx.props || []).map(o => String(o.id)));
   const strips = [];
-  for (const p of (fx.panels || []).filter(isJuljul)) {
+  for (const p of fx.panels.filter(isJuljul)) {
     const sw = Math.max(6, Math.min(20, p.w * 0.15));
     [['L', p.x], ['R', p.x + p.w - sw]].forEach(([k, x]) => {
       const id = `jj-${p.id || p.x + '_' + p.y}-${k}`;
       if (!have.has(id)) strips.push({ id, kind: '줄줄', jj: 1, color: '#a7a7a7', x, y: p.y, w: sw, h: p.h });
     });
   }
-  const out = { ...fx, props: jjMerge([...(fx.props || []), ...strips]), panels: (fx.panels || []).filter(p => !isJuljul(p)) };
+  const out = { ...fx, props: [...(fx.props || []), ...strips], panels: fx.panels.filter(p => !isJuljul(p)) };
   jjFixed.add(out);
   return out;
-}
-// 위아래로 이어진 줄(위 칸·아래 칸)은 한 줄로 합침 → 하나만 골라도 같이 움직임 (사용자). 위쪽 줄의 id를 씀 (묶음에 넣어 둔 것 그대로)
-// check = true면 합칠 게 있는지만 알려줌
-function jjMerge(props, check = false) {
-  const js = props.filter(o => o.jj).sort((a, b) => a.x - b.x || a.y - b.y), gone = new Set(), grown = new Map();
-  for (let i = 0; i < js.length; i++) {
-    if (gone.has(js[i])) continue;
-    let cur = { ...js[i] };
-    for (let j = i + 1; j < js.length; j++) {
-      const n = js[j];
-      if (gone.has(n) || Math.abs(n.x - cur.x) > 2 || Math.abs(n.w - cur.w) > 2) continue;
-      const gap = n.y - (cur.y + cur.h);
-      if (gap > 40 || n.y + n.h <= cur.y + cur.h) continue;
-      if (check) return true;
-      cur.h = n.y + n.h - cur.y; gone.add(n);
-    }
-    if (cur.h !== js[i].h) grown.set(js[i], cur);
-  }
-  if (check) return false;
-  return props.filter(o => !gone.has(o)).map(o => grown.get(o) || o);
 }
 // 줄을 바꾼 매대를 저장할 때: 판(panels)도 줄로 바꾼 상태로 저장 (옮겨 간 줄이 다시 생기지 않게)
 const jjSave = (pogId, fx, ug) => { if (jjFixed.has(fx)) { saveFx(pogId, fx.id, 'props', fx.props || [], ug); saveFx(pogId, fx.id, 'panels', fx.panels || [], ug); jjFixed.delete(fx); } };
