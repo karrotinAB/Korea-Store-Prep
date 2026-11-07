@@ -577,7 +577,7 @@ setInterval(() => { if (document.visibilityState === 'visible') retryBroken(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') retryBroken(); });
 window.addEventListener('online', () => retryBroken(document, true));
 function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
-  fx = withBlocks(fx);
+  fx = withBlocks(jjNorm(fx));
   const items = fx.items || [], hasBlocks = !!fx._blocks;
   const wrap = h('div', { class: 'cv' + (hasBlocks ? ' has-blk' : ''), style: `width:${W}px;height:${H}px` });
   // 가로 범위 = 매대(선반·파이프·넓은 판) 폭 + 제품이 삐져나온 만큼만. 여러 칸에 걸친 긴 집기는 이 범위에서 자른다
@@ -622,7 +622,7 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
   }
   // 매대 뒤 회색 바탕: 선반·파이프·배경판의 가로 범위 × 전체 높이 (붙인 매대는 매대마다 따로). 줄줄 매대는 판을 깔지 않음 (줄만 그림)
   const groups = new Map();
-  if (!hasBlocks) for (const o of [...props, ...panels.filter(p => p.w >= 40 && !isJuljul(p))]) { const g = o._g || 0; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(o); }
+  if (!hasBlocks) for (const o of [...props.filter(p => !p.jj), ...panels.filter(p => p.w >= 40)]) { const g = o._g || 0; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(o); }
   for (const [g, frame] of groups) {
     const c = core(frame), fx0 = Math.min(...c.map(o => o.x)), fx1 = Math.max(...c.map(o => o.x + o.w));
     const back = h('div', { class: 'cv-back', style: `left:${fx0 - x0 + pad}px;top:${pad}px;width:${fx1 - fx0}px;height:${y1 - y0}px` });
@@ -631,7 +631,6 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
     inner.append(back);
   }
   for (const p of panels) {
-    if (isJuljul(p)) { juljulStrips(p, x0, y0, pad).forEach(el => layer(p).append(el)); continue; }
     // 배경판은 POG 사이트 색과 상관없이 연한 회색 (진하게 칠하면 선반·파이프와 구분이 안 됨 · 사용자). 무늬(타공판)가 있으면 그 간격대로 구멍
     const pe = h('div', { class: 'cv-panel', style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${p.h}px` });
     if (p.bg) holesOn(pe, bgPitch(p.bg), 0, 0, p.bg);
@@ -639,8 +638,9 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
   }
   for (const p of props) {
     const color = p.color && !/rgba\(0, 0, 0, 0\)|transparent/.test(p.color) ? p.color : '#7d7d7d';
-    layer(p).append(h('div', { class: 'cv-prop', 'data-pid': p.id, title: p.kind || '',
-      style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${Math.max(p.h || 0, 4)}px;background:${color}` }));
+    const jr = Math.max(1, p.w * 0.12); // 줄줄 매대 줄: 가운데 구멍
+    layer(p).append(h('div', { class: 'cv-prop' + (p.jj ? ' cv-strip' : ''), 'data-pid': p.id, title: p.kind || '',
+      style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${Math.max(p.h || 0, 4)}px;background:${color}` + (p.jj ? `;background-image:radial-gradient(circle, #6f6f6f ${jr}px, transparent ${jr + 0.5}px);background-size:${p.w}px ${p.w * 1.5}px;background-position:center` : '') }));
   }
   for (const it of items) {
     const el = h('div', { class: 'cv-item' + (onItem ? ' click' : ''), 'data-code': it.code, 'data-id': it.id, title: `[${it.code}] ${it.name}`,
@@ -655,13 +655,27 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
 }
 
 /* 줄줄 매대 (POG 사이트 매대 타입 C · 배경 그림 juljulbg…): 몸통 칸(140px = 280mm) 양쪽 끝에 세로 줄(20px)이 하나씩 있고 제품은 줄에 걸림 (사용자)
-   넓은 회색 판 대신 POG 사이트처럼 양쪽 줄만 그림. 줄 그림은 다른 사이트 것이라 직접 그림 (회색 줄 + 구멍) */
+   넓은 회색 판 대신 POG 사이트처럼 양쪽 줄만 그림. 줄은 선반·파이프처럼 집기(props, kind '줄줄', jj)로 바꿔서
+   매대 나누기 때 골라서 묶음과 같이 옮길 수 있음 (사용자). 줄 그림은 다른 사이트 것이라 직접 그림 (회색 줄 + 구멍) */
 const isJuljul = p => /juljul/i.test(p?.bg?.img || '');
-function juljulStrips(p, x0, y0, pad) {
-  const sw = Math.max(6, Math.min(20, p.w * 0.15)), top = p.y - y0 + pad, r = Math.max(1, sw * 0.12);
-  return [p.x, p.x + p.w - sw].map(x => h('div', { class: 'cv-strip',
-    style: `left:${x - x0 + pad}px;top:${top}px;width:${sw}px;height:${p.h}px;background-image:radial-gradient(circle, #6f6f6f ${r}px, transparent ${r + 0.5}px);background-size:${sw}px ${sw * 1.5}px` }));
+const jjFixed = new WeakSet(); // 판을 줄로 바꾼 매대 (저장할 때 panels도 같이 저장)
+function jjNorm(fx) {
+  if (!fx || !(fx.panels || []).some(isJuljul)) return fx;
+  const have = new Set((fx.props || []).map(o => String(o.id)));
+  const strips = [];
+  for (const p of fx.panels.filter(isJuljul)) {
+    const sw = Math.max(6, Math.min(20, p.w * 0.15));
+    [['L', p.x], ['R', p.x + p.w - sw]].forEach(([k, x]) => {
+      const id = `jj-${p.id || p.x + '_' + p.y}-${k}`;
+      if (!have.has(id)) strips.push({ id, kind: '줄줄', jj: 1, color: '#a7a7a7', x, y: p.y, w: sw, h: p.h });
+    });
+  }
+  const out = { ...fx, props: [...(fx.props || []), ...strips], panels: fx.panels.filter(p => !isJuljul(p)) };
+  jjFixed.add(out);
+  return out;
 }
+// 줄을 바꾼 매대를 저장할 때: 판(panels)도 줄로 바꾼 상태로 저장 (옮겨 간 줄이 다시 생기지 않게)
+const jjSave = (pogId, fx, ug) => { if (jjFixed.has(fx)) { saveFx(pogId, fx.id, 'props', fx.props || [], ug); saveFx(pogId, fx.id, 'panels', fx.panels || [], ug); jjFixed.delete(fx); } };
 
 /* 타공판 구멍: POG 사이트의 배경 무늬(타공판 그림) 크기를 구멍 간격으로 씀. 그림을 그대로 쓰지 않고 구멍을 직접 그림 (다른 사이트 그림이 막혀도 보이게)
    무늬를 못 읽은 예전 데이터는 매대명·매대 타입에 '타공'이 있으면 기본 간격으로 그림 */
@@ -1544,7 +1558,7 @@ function openPog(id) {
   state.unsubFx = onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => {
     const ids = new Set();
     state.fxRaw = new Map(s.docs.map(d => [d.id, d.data()])); // 되돌리기용 서버 원본
-    s.docs.forEach(d => { ids.add(d.id); state.fixtures.set(d.id, { id: d.id, ...d.data() }); });
+    s.docs.forEach(d => { ids.add(d.id); state.fixtures.set(d.id, jjNorm({ id: d.id, ...d.data() })); }); // 줄줄 매대: 판 → 줄 집기
     [...state.fixtures.keys()].forEach(k => { if (!ids.has(k)) state.fixtures.delete(k); });
     renderEditorPages();
   });
@@ -1679,8 +1693,8 @@ function splitSection(pog, fx, block) {
   if (state.split?.id === fx.id) {
     const n = state.split.items.size;
     return sec('매대 나누기', h('p', { class: 'se-help' }, HAS_TOUCH
-        ? '손가락으로 제품 위를 쓱 긁으면 지나간 제품이 골라져요 (여러 번 긁으면 더해져요). 잘못 고른 제품·넣을 선반은 톡 눌러서 빼거나 넣어요. 고른 제품과 선반·파이프가 한 묶음이 되고, 나머지는 그대로 남아요.'
-        : '제품 위에서 시작해 끌면 지나간 제품이 골라지고(긁기), 빈 곳에서 시작해 끌면 네모로 골라요. 여러 번 하면 더해져요. 톡 누르면 그 제품·선반을 빼거나 넣어요. 고른 제품과 선반·파이프가 한 묶음이 되고, 나머지는 그대로 남아요.'),
+        ? '손가락으로 제품 위를 쓱 긁으면 지나간 제품이 골라져요 (여러 번 긁으면 더해져요). 잘못 고른 제품·넣을 선반·줄은 톡 눌러서 빼거나 넣어요. 고른 제품과 선반·파이프·줄(줄줄 매대)이 한 묶음이 되고, 나머지는 그대로 남아요.'
+        : '제품 위에서 시작해 끌면 지나간 제품이 골라지고(긁기), 빈 곳에서 시작해 끌면 네모로 골라요. 여러 번 하면 더해져요. 톡 누르면 그 제품·선반을 빼거나 넣어요. 고른 제품과 선반·파이프·줄(줄줄 매대)이 한 묶음이 되고, 나머지는 그대로 남아요.'),
       h('div', { class: 'se-btns' }, btn(`✂ 고른 ${n}개를 묶음으로 나누기`, () => makeBlock(pog.id, fx, block), 'primary'), btn('다시 고르기', () => { state.split.items.clear(); state.split.props.clear(); paintSplit(block); renderSidePanel(); }, 'ghost'), btn('취소', () => { state.split = null; paintSplit(block); renderSidePanel(); }, 'ghost')));
   }
   return sec('매대 나누기', h('p', { class: 'se-help' }, '제품 일부를 떼어 따로 묶음으로 만들어요. 묶음은 회색 바탕을 따로 칠하고, ✥를 끌어 옮기거나 Ctrl+X → 다른 페이지에서 Ctrl+V로 옮길 수 있어요.'),
@@ -1774,6 +1788,7 @@ function splitPointer(e, block) {
 }
 function saveBlocks(pogId, fx, list, unbake, keepSel = null) {
   const ug = undoGroup();
+  jjSave(pogId, fx, ug);
   if (unbake && (unbake.dx || unbake.dy || (unbake.s && unbake.s !== 1))) { // 묶음 풀기: 옮긴 자리·크기 그대로 두기
     const ids = new Set((unbake.items || []).map(String)), pids = new Set((unbake.props || []).map(String)), T = withBlocks(fx);
     const bake = (list, tl, set) => list.map((o, i) => { if (!set.has(String(o.id))) return o; const { _b, ...t } = tl[i]; return t; });
@@ -1886,6 +1901,7 @@ function pasteBlock(pogId, to) {
   const zFrom = { ...(from.itemZ || {}) }, zTo = { ...(to.itemZ || {}) };
   tI.forEach((o, i) => { if (zFrom[o.id] != null) { zTo[nI[i].id] = zFrom[o.id]; delete zFrom[o.id]; } });
   const ug = undoGroup();
+  jjSave(pogId, from, ug); jjSave(pogId, to, ug);
   const fI = (from.items || []).filter(o => !ids.has(String(o.id))), fP = (from.props || []).filter(o => !pids.has(String(o.id)));
   const fB = (from.blocks || []).filter(x => x.id !== b.id);
   saveFx(pogId, from.id, 'items', fI, ug); saveFx(pogId, from.id, 'props', fP, ug); saveFx(pogId, from.id, 'blocks', fB, ug); saveFx(pogId, from.id, 'itemZ', zFrom, ug);
