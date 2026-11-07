@@ -1804,6 +1804,9 @@ function saveBlocks(pogId, fx, list, unbake, keepSel = null) {
 function rebuildPage(id, selBlock) { const el = state.pageEls.get(id); if (el) el._itemSig = null; renderEditorPages(); const nb = state.pageEls.get(id); if (nb && selBlock !== undefined) { nb._selBlock = selBlock; paintBlockSel(nb); } }
 function makeBlock(pogId, fx, block) {
   const s = state.split; if (!s?.items.size) { toast('먼저 매대 그림 위를 끌어서 제품을 골라 주세요'); return; }
+  // 줄줄 매대: 고른 제품이 걸린 줄(위 칸·아래 칸)은 따로 안 눌러도 같이 묶음으로 (사용자)
+  const picked = (fx.items || []).filter(o => s.items.has(String(o.id)));
+  (fx.props || []).filter(p => p.jj && picked.some(o => o.x < p.x + p.w && o.x + o.w > p.x && o.y < p.y + p.h && o.y + o.h > p.y)).forEach(p => s.props.add(String(p.id)));
   const ids = [...s.items], pids = [...s.props];
   // 다른 묶음에 있던 것은 그 묶음에서 빼서 새 묶음으로 (옮겨 둔 위치는 그대로)
   let bl = (fx.blocks || []).map(b => ({ ...b, items: (b.items || []).filter(i => !s.items.has(String(i))), props: (b.props || []).filter(i => !s.props.has(String(i))) }));
