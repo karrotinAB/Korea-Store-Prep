@@ -299,6 +299,7 @@ nav button.on { background: rgba(255,255,255,.24); opacity: 1; font-weight: 700;
 .cv-in { position: absolute; top: 0; transform-origin: 0 0; }
 .cv-back { position: absolute; background: #e3e3e3; }
 .cv-panel { position: absolute; background: #d6d6d6; }
+.cv-strip { position: absolute; background-color: #a7a7a7; background-position: center; }  /* 줄줄 매대의 세로 줄 */
 .cv-prop { position: absolute; }
 .cv-item { position: absolute; overflow: hidden; }
 .cv-item img { width: 100%; height: 100%; object-fit: fill; display: block; }

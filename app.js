@@ -620,9 +620,9 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
         h('span', { class: 'cv-blk-r', 'data-b': b.id, title: '끌어서 크기 조절' })));
     }
   }
-  // 매대 뒤 회색 바탕: 선반·파이프·배경판의 가로 범위 × 전체 높이 (붙인 매대는 매대마다 따로)
+  // 매대 뒤 회색 바탕: 선반·파이프·배경판의 가로 범위 × 전체 높이 (붙인 매대는 매대마다 따로). 줄줄 매대는 판을 깔지 않음 (줄만 그림)
   const groups = new Map();
-  if (!hasBlocks) for (const o of [...props, ...panels.filter(p => p.w >= 40)]) { const g = o._g || 0; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(o); }
+  if (!hasBlocks) for (const o of [...props, ...panels.filter(p => p.w >= 40 && !isJuljul(p))]) { const g = o._g || 0; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(o); }
   for (const [g, frame] of groups) {
     const c = core(frame), fx0 = Math.min(...c.map(o => o.x)), fx1 = Math.max(...c.map(o => o.x + o.w));
     const back = h('div', { class: 'cv-back', style: `left:${fx0 - x0 + pad}px;top:${pad}px;width:${fx1 - fx0}px;height:${y1 - y0}px` });
@@ -631,6 +631,7 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
     inner.append(back);
   }
   for (const p of panels) {
+    if (isJuljul(p)) { juljulStrips(p, x0, y0, pad).forEach(el => layer(p).append(el)); continue; }
     // 배경판은 POG 사이트 색과 상관없이 연한 회색 (진하게 칠하면 선반·파이프와 구분이 안 됨 · 사용자). 무늬(타공판)가 있으면 그 간격대로 구멍
     const pe = h('div', { class: 'cv-panel', style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${p.h}px` });
     if (p.bg) holesOn(pe, bgPitch(p.bg), 0, 0, p.bg);
@@ -651,6 +652,15 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false } = {}) {
   }
   wrap.append(inner);
   return wrap;
+}
+
+/* 줄줄 매대 (POG 사이트 매대 타입 C · 배경 그림 juljulbg…): 몸통 칸(140px = 280mm) 양쪽 끝에 세로 줄(20px)이 하나씩 있고 제품은 줄에 걸림 (사용자)
+   넓은 회색 판 대신 POG 사이트처럼 양쪽 줄만 그림. 줄 그림은 다른 사이트 것이라 직접 그림 (회색 줄 + 구멍) */
+const isJuljul = p => /juljul/i.test(p?.bg?.img || '');
+function juljulStrips(p, x0, y0, pad) {
+  const sw = Math.max(6, Math.min(20, p.w * 0.15)), top = p.y - y0 + pad, r = Math.max(1, sw * 0.12);
+  return [p.x, p.x + p.w - sw].map(x => h('div', { class: 'cv-strip',
+    style: `left:${x - x0 + pad}px;top:${top}px;width:${sw}px;height:${p.h}px;background-image:radial-gradient(circle, #6f6f6f ${r}px, transparent ${r + 0.5}px);background-size:${sw}px ${sw * 1.5}px` }));
 }
 
 /* 타공판 구멍: POG 사이트의 배경 무늬(타공판 그림) 크기를 구멍 간격으로 씀. 그림을 그대로 쓰지 않고 구멍을 직접 그림 (다른 사이트 그림이 막혀도 보이게)
