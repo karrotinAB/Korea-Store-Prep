@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261111f';
+const APP_VER = '20261112a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1563,7 +1563,6 @@ function openPog(id) {
     s.docs.forEach(d => { ids.add(d.id); state.fixtures.set(d.id, jjNorm({ id: d.id, ...d.data() })); }); // 줄줄 매대: 판 → 줄 집기
     [...state.fixtures.keys()].forEach(k => { if (!ids.has(k)) state.fixtures.delete(k); });
     renderEditorPages();
-    syncPogBarcodes(id);
   });
 }
 function applyPogDoc() {
@@ -2107,6 +2106,7 @@ $('#ed-final').onclick = async () => {
   await updateDoc(doc(db, 'pogs', p.id), { status: 'final', finalizedAt: serverTimestamp(), finalizedBy: state.user.email, updatedAt: serverTimestamp() });
   addLog(['pogs', p.id], { fx: '__cover', area: 'make', act: '최종 POG 내보내기' });
   toast('최종 POG로 내보냈어요');
+  autoBarcodes({ fixtures: [...state.fixtures.values()] }); // 최종 POG 제품의 POG 사이트 바코드 → 바코드 등록 (새것만)
 };
 $('#ed-delete').onclick = async () => {
   const p = state.currentPog; if (!p) return;
@@ -2290,7 +2290,7 @@ function pagesFromGrab(f, i) {
 }
 
 // 국내는 매장 하나에 팀마다 POG가 따로 (POG 사이트 팀명 기준). 붙여넣은 데이터에 팀이 여러 개면 팀마다 POG를 하나씩 만듦
-/* POG 사이트에서 같이 가져온 제품바코드를 바코드 등록에 자동으로 넣기 (사용자). 이미 있는 바코드는 그대로 두고 새것만 넣음 (POG팀도 새로 넣기만 가능 · 규칙) */
+/* POG 사이트에서 같이 가져온 제품바코드를 바코드 등록에 자동으로 넣기 (사용자). 최종 POG 내보내기 때만 (사용자: 가져오기·열기 때는 안 넣음). 이미 있는 바코드는 그대로 두고 새것만 넣음 (POG팀도 새로 넣기만 가능 · 규칙) */
 async function autoBarcodes(data, { quiet = false } = {}) { // 돌려줌: { found: POG 바코드 수, added: 새로 넣은 수 } (실패면 null)
   const map = new Map();
   for (const f of data.fixtures || []) for (const it of f.items || []) {
@@ -2315,26 +2315,19 @@ async function autoBarcodes(data, { quiet = false } = {}) { // 돌려줌: { foun
     return { found: bcs.length, added: add.length };
   } catch (e) { if (!quiet) toast('바코드 등록에 자동으로 넣지 못했어요: ' + (e.code || e.message)); return null; }
 }
-// POG를 열 때도 (POG팀·관리자): 그 POG 제품의 POG 사이트 바코드 중 바코드 등록에 없는 것을 넣음. 한 번 연 POG는 다시 안 봄 (사용자: 자동 연동)
-const bcSynced = new Set();
-function syncPogBarcodes(pogId) {
-  if (bcSynced.has(pogId) || !(canEdit('pog-make') || canEdit('barcodes'))) return;
-  bcSynced.add(pogId);
-  setTimeout(() => { if (state.currentPog?.id === pogId) autoBarcodes({ fixtures: [...state.fixtures.values()] }, { quiet: true }); }, 3000);
-}
 // 바코드 등록 화면 (관리자): 모든 POG를 훑어서 한꺼번에
 async function syncAllPogBarcodes() {
   const btn = $('#bc-frompog'), t0 = btn.textContent; btn.disabled = true;
   try {
-    const fixtures = [];
-    for (let i = 0; i < state.pogs.length; i++) {
-      btn.textContent = `POG 읽는 중… ${i + 1} / ${state.pogs.length}`;
-      const s2 = await getDocs(collection(db, 'pogs', state.pogs[i].id, 'fixtures'));
+    const fixtures = [], ps = state.pogs.filter(p => p.status === 'final'); // 최종 POG만
+    for (let i = 0; i < ps.length; i++) {
+      btn.textContent = `POG 읽는 중… ${i + 1} / ${ps.length}`;
+      const s2 = await getDocs(collection(db, 'pogs', ps[i].id, 'fixtures'));
       s2.docs.forEach(d => fixtures.push({ items: d.data().items || [] }));
     }
     btn.textContent = '바코드 넣는 중…';
     const r = await autoBarcodes({ fixtures });
-    if (r) alert(r.found ? `POG ${state.pogs.length}개에서 POG 사이트 바코드 ${r.found.toLocaleString()}개를 찾았어요.\n새로 넣은 것: ${r.added.toLocaleString()}개 (나머지는 이미 등록돼 있어요)` : `POG ${state.pogs.length}개에 POG 사이트 바코드가 없어요.\n바코드 기능 전에 가져온 POG는 POG 사이트에서 ↻ 다시 가져오기를 해야 바코드가 들어와요.`);
+    if (r) alert(r.found ? `최종 POG ${ps.length}개에서 POG 사이트 바코드 ${r.found.toLocaleString()}개를 찾았어요.\n새로 넣은 것: ${r.added.toLocaleString()}개 (나머지는 이미 등록돼 있어요)` : `최종 POG ${ps.length}개에 POG 사이트 바코드가 없어요.\n바코드 기능 전에 가져온 POG는 POG 사이트에서 ↻ 다시 가져오기를 해야 바코드가 들어와요.`);
     bcCount();
   } catch (e) { alert('POG를 읽지 못했어요: ' + (e.code || e.message)); }
   finally { btn.textContent = t0; btn.disabled = false; }
@@ -2346,7 +2339,6 @@ async function doImport(text) {
   if (!data || data.source !== 'pog.artbox.kr' || !Array.isArray(data.fixtures) || !data.fixtures.length) {
     toast('POG 데이터가 아니에요'); return false;
   }
-  autoBarcodes(data);
   const empty = f => !(f.items || []).length && !(f.props || []).length && !(f.panels || []).length;
   const skipped = data.fixtures.filter(empty);
   // 팀마다 매대 줄 나누기 (POG 사이트 목록 순서 그대로)
@@ -2613,7 +2605,6 @@ function grabPaste(mode, target) {
     let data;
     try { data = JSON.parse(ta.value.trim()); } catch { toast('붙여넣은 내용이 올바르지 않아요'); return; }
     if (!data || data.source !== 'pog.artbox.kr' || !Array.isArray(data.fixtures) || !data.fixtures.length) { toast('POG 데이터가 아니에요'); return; }
-    autoBarcodes(data);
     const cands = [];
     data.fixtures.forEach((f, i) => {
       if (!(f.items || []).length && !(f.props || []).length && !(f.panels || []).length) return;
@@ -2715,7 +2706,6 @@ function openRegrabAuto(hintFx) {
     let data;
     try { data = JSON.parse(ta.value.trim()); } catch { toast('붙여넣은 내용이 올바르지 않아요'); return; }
     if (!data || data.source !== 'pog.artbox.kr' || !Array.isArray(data.fixtures) || !data.fixtures.length) { toast('POG 데이터가 아니에요'); return; }
-    autoBarcodes(data);
     close(); showRegrabPreview(pog, planRegrab(pog, data));
   };
 }
