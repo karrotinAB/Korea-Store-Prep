@@ -2091,7 +2091,6 @@ function mgrSelect(fx, pog) {
   const sel = h('select', { class: 'pf-mgr-sel no-print', title: '이 페이지 POG 담당자' });
   sel.addEventListener('change', async () => {
     let v = sel.value;
-    if (v === '__new') { v = await addManager(); if (!v) { fillMgrSelect(sel, fx, state.currentPog || pog); return; } }
     fx.manager = v; saveFx(pog.id, fx.id, 'manager', v);
     const blk = sel.closest('.page-block'), sp = blk && $('.pf-mgr', blk); if (sp) sp.textContent = v || state.currentPog?.manager || '';
     fillMgrSelect(sel, fx, state.currentPog || pog);
@@ -2102,34 +2101,22 @@ function mgrSelect(fx, pog) {
 function fillMgrSelect(sel, fx, pog) {
   if (sel === document.activeElement) return;
   const names = [...new Set([...state.managers.map(m => m.name), fx.manager].filter(Boolean))];
-  sel.replaceChildren(h('option', { value: '' }, pog.manager ? `${pog.manager} (전체)` : '(전체 담당자)'), ...names.map(n => h('option', { value: n }, n)), h('option', { value: '__new' }, '+ 새 담당자 추가'));
+  sel.replaceChildren(h('option', { value: '' }, pog.manager ? `${pog.manager} (전체)` : '(전체 담당자)'), ...names.map(n => h('option', { value: n }, n))); // 담당자 추가는 관리자만 (계정 관리 화면 · 사용자)
   sel.value = fx.manager || '';
 }
-async function addManager() {
-  const name = (prompt('새 POG 담당자 이름') || '').trim();
-  if (!name) return '';
-  if (!state.managers.some(m => m.name === name)) await addDoc(collection(db, 'managers'), { name, createdAt: serverTimestamp() });
-  toast(`담당자 '${name}'을(를) 추가했어요`);
-  return name;
-}
-$('#ed-mgr-add').onclick = () => addManager();
 function refreshManagerSelect() {
   const sel = $('#ed-manager'); if (!sel) return;
   const cur = state.currentPog?.manager || '';
   const names = state.managers.map(m => m.name);
   if (cur && !names.includes(cur)) names.push(cur);
   sel.innerHTML = '';
-  sel.append(h('option', { value: '' }, '선택'), ...names.map(n => h('option', { value: n }, n)), h('option', { value: '__new' }, '+ 새 담당자 추가'));
+  sel.append(h('option', { value: '' }, '선택'), ...names.map(n => h('option', { value: n }, n)));
   sel.value = cur;
   state.pageEls?.forEach((blk, id) => { const ms = $('.pf-mgr-sel', blk), fx = state.fixtures.get(id); if (ms && fx && state.currentPog) fillMgrSelect(ms, fx, state.currentPog); });
 }
 $('#ed-manager').addEventListener('change', async e => {
   const p = state.currentPog; if (!p) return;
-  let v = e.target.value;
-  if (v === '__new') {
-    v = await addManager();
-    if (!v) { e.target.value = p.manager || ''; return; }
-  }
+  const v = e.target.value;
   track(p.id, '__pog', ['manager']);
   p.manager = v;
   await updateDoc(doc(db, 'pogs', p.id), { manager: v, updatedAt: serverTimestamp() });
@@ -4798,6 +4785,15 @@ function accName(r) {
   });
   return inp;
 }
+// POG 담당자 추가: 관리자만, 계정 관리 화면에서 (사용자). POG 만들기에서는 고르기만
+$('#mgr-add').addEventListener('submit', async e => {
+  e.preventDefault();
+  const inp = e.target.name, name = inp.value.trim().slice(0, 20);
+  if (!name) return;
+  if (state.managers.some(m => m.name === name)) { alert('같은 이름의 담당자가 이미 있어요.'); return; }
+  try { await addDoc(collection(db, 'managers'), { name, createdAt: serverTimestamp() }); inp.value = ''; toast(`담당자 '${name}'을(를) 추가했어요`); }
+  catch (er) { toast('추가하지 못했어요: ' + (er.code || er.message)); }
+});
 // POG 담당자 목록 (계정 관리 화면, 관리자): 이름 고치기·지우기 (사용자). 고치면 그 이름을 쓰는 POG·페이지도 같이 바꿀 수 있음
 function renderMgrAdmin() {
   const body = $('#mgr-body'); if (!body) return;
@@ -4810,7 +4806,7 @@ function renderMgrAdmin() {
       if (!confirm(`담당자 '${m.name}'을(를) 목록에서 지울까요?\n이미 이 이름이 들어간 POG는 그대로 남아요.`)) return;
       try { await deleteDoc(doc(db, 'managers', m.id)); toast('지웠어요'); } catch (e) { toast('지우지 못했어요: ' + (e.code || e.message)); }
     } }, '삭제')));
-  }) : [h('tr', {}, h('td', { colspan: 2, class: 'mut pad' }, '등록된 담당자가 없어요. POG 만들기 위쪽 \'+ 담당자 추가\'로 넣어요.'))]));
+  }) : [h('tr', {}, h('td', { colspan: 2, class: 'mut pad' }, '등록된 담당자가 없어요. 위 칸에 이름을 넣고 추가하세요.'))]));
 }
 async function renameManager(m, inp) {
   const old = m.name || '', name = inp.value.trim().slice(0, 20);

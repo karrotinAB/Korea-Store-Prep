@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261109c">
+<link rel="stylesheet" href="style.css?v=20261109d">
 </head>
 <body>
 
@@ -227,7 +227,7 @@
           <div class="toolbar">
             <button class="btn small list-toggle" type="button" title="POG 목록 열기/닫기">☰ 목록</button>
             <div class="tb-title" id="ed-title"></div>
-            <span id="ed-mgr-holder" class="hidden mgr-holder" title="대표 POG 담당자"><span id="ed-mgr-box" class="mgr-box"><select id="ed-manager" title="모든 페이지 아래에 들어가요"></select><button class="btn small ghost" id="ed-mgr-add" data-edit="pog-make" type="button">+ 담당자 추가</button></span></span>
+            <span id="ed-mgr-holder" class="hidden mgr-holder" title="대표 POG 담당자"><span id="ed-mgr-box" class="mgr-box"><select id="ed-manager" title="모든 페이지 아래에 들어가요 · 담당자 추가는 관리자가 계정 관리에서"></select></span></span>
             <span class="badge" id="ed-status"></span>
             <span class="saving" id="ed-saving"></span>
             <span class="find-box"><select id="ed-find-mode" class="find-mode" title="무엇으로 찾을지"><option value="page">매대명</option><option value="item">제품</option></select><input id="ed-find" type="search" placeholder="매대명(페이지) 찾기" autocomplete="off"><span class="find-n" id="ed-find-n"></span><button type="button" class="btn small ghost hidden" id="ed-find-prev" title="이전">◀</button><button type="button" class="btn small ghost hidden" id="ed-find-next" title="다음">▶</button></span>
@@ -404,7 +404,8 @@
         <tbody id="acc-body"></tbody>
       </table>
       <h3 class="mgr-h">POG 담당자 목록</h3>
-      <p class="mut">POG 만들기 위쪽 'POG 담당자' 드롭다운에 나오는 이름이에요. 칸에서 바로 고치고 Enter를 누르면 저장돼요. 이미 그 이름이 들어간 POG도 같이 바꿀지 물어봐요.</p>
+      <p class="mut">POG 만들기 위쪽 'POG 담당자' 드롭다운에 나오는 이름이에요. <b>담당자 추가는 여기서만</b> 할 수 있고, POG 만들기에서는 이 목록에서 고르기만 해요.<br>칸에서 바로 고치고 Enter를 누르면 저장돼요. 이미 그 이름이 들어간 POG도 같이 바꿀지 물어봐요.</p>
+      <form id="mgr-add" class="gl-add"><input name="name" maxlength="20" placeholder="새 담당자 이름" required autocomplete="off"><button class="btn primary">추가</button></form>
       <table class="gl-table mgr-table"><thead><tr><th>이름</th><th></th></tr></thead><tbody id="mgr-body"></tbody></table>
     </div>
   </section>
@@ -417,6 +418,6 @@
 <div class="copyright" aria-label="저작권">© 2026 Karrot in AB</div>
 
 <!-- 파일을 고치면 ?v= 숫자도 바꿀 것 (브라우저가 예전 파일을 쓰지 않도록) -->
-<script type="module" src="app.js?v=20261109c"></script>
+<script type="module" src="app.js?v=20261109d"></script>
 </body>
 </html>
