@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261111b';
+const APP_VER = '20261111c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3475,6 +3475,13 @@ function autoSeqByPos(v) {
   dw.seqDraft = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)).map(g => g.id);
   paintSeq();
   toast(`도면 순서로 ${dw.seqDraft.length}개를 매겼어요. 안 맞는 매대는 눌러서 번호를 바꾸고 💾 저장하세요`);
+}
+async function saveSeq(v) {
+  const order = [...(dw.seqDraft || [])];
+  try {
+    await setDoc(doc(db, 'drawings', dw.id, 'seq', v.id), { order, vId: v.id, updatedAt: serverTimestamp(), updatedBy: me() });
+    dw.seq = order; paintSeq(); toast(`번호 ${order.length}개를 저장했어요`);
+  } catch (e) { alert('번호를 저장하지 못했어요: ' + (e.code || e.message)); }
 }
 // 저장 안 한 번호가 있으면 물어봄 (번호 매기기를 끌 때)
 async function leaveSeq() {
