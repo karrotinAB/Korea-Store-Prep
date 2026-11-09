@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261111d';
+const APP_VER = '20261111e';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1564,6 +1564,7 @@ function openPog(id) {
     s.docs.forEach(d => { ids.add(d.id); state.fixtures.set(d.id, jjNorm({ id: d.id, ...d.data() })); }); // 줄줄 매대: 판 → 줄 집기
     [...state.fixtures.keys()].forEach(k => { if (!ids.has(k)) state.fixtures.delete(k); });
     renderEditorPages();
+    syncPogBarcodes(id);
   });
 }
 function applyPogDoc() {
@@ -2324,13 +2325,13 @@ function pagesFromGrab(f, i) {
 
 // 국내는 매장 하나에 팀마다 POG가 따로 (POG 사이트 팀명 기준). 붙여넣은 데이터에 팀이 여러 개면 팀마다 POG를 하나씩 만듦
 /* POG 사이트에서 같이 가져온 제품바코드를 바코드 등록에 자동으로 넣기 (사용자). 이미 있는 바코드는 그대로 두고 새것만 넣음 (POG팀도 새로 넣기만 가능 · 규칙) */
-async function autoBarcodes(data) {
+async function autoBarcodes(data, { quiet = false } = {}) { // 돌려줌: { found: POG 바코드 수, added: 새로 넣은 수 } (실패면 null)
   const map = new Map();
   for (const f of data.fixtures || []) for (const it of f.items || []) {
     const bc = String(it.barcode || '').trim(), code = code8(String(it.code || '').trim());
     if (/^\d{6,14}$/.test(bc) && code && !map.has(bc)) map.set(bc, { code, name: String(it.name || '').slice(0, 100) });
   }
-  if (!map.size) return;
+  if (!map.size) return { found: 0, added: 0 };
   try {
     const bcs = [...map.keys()], have = new Set();
     for (let i = 0; i < bcs.length; i += 30) {
@@ -2338,15 +2339,41 @@ async function autoBarcodes(data) {
       snap.docs.forEach(d => have.add(d.id));
     }
     const add = bcs.filter(b => !have.has(b));
-    if (!add.length) return;
+    if (!add.length) return { found: bcs.length, added: 0 };
     for (let i = 0; i < add.length; i += 400) {
       const b = writeBatch(db);
       add.slice(i, i + 400).forEach(bc => { const r = map.get(bc); b.set(doc(db, 'barcodes', bc), { code: r.code, ...(r.name ? { name: r.name } : {}), auto: true, updatedAt: serverTimestamp(), updatedBy: me() }); });
       await b.commit();
     }
     toast(`POG 사이트 바코드 ${add.length}개를 바코드 등록에 넣었어요`);
-  } catch (e) { toast('바코드 등록에 자동으로 넣지 못했어요: ' + (e.code || e.message)); }
+    return { found: bcs.length, added: add.length };
+  } catch (e) { if (!quiet) toast('바코드 등록에 자동으로 넣지 못했어요: ' + (e.code || e.message)); return null; }
 }
+// POG를 열 때도 (POG팀·관리자): 그 POG 제품의 POG 사이트 바코드 중 바코드 등록에 없는 것을 넣음. 한 번 연 POG는 다시 안 봄 (사용자: 자동 연동)
+const bcSynced = new Set();
+function syncPogBarcodes(pogId) {
+  if (bcSynced.has(pogId) || !(canEdit('pog-make') || canEdit('barcodes'))) return;
+  bcSynced.add(pogId);
+  setTimeout(() => { if (state.currentPog?.id === pogId) autoBarcodes({ fixtures: [...state.fixtures.values()] }, { quiet: true }); }, 3000);
+}
+// 바코드 등록 화면 (관리자): 모든 POG를 훑어서 한꺼번에
+async function syncAllPogBarcodes() {
+  const btn = $('#bc-frompog'), t0 = btn.textContent; btn.disabled = true;
+  try {
+    const fixtures = [];
+    for (let i = 0; i < state.pogs.length; i++) {
+      btn.textContent = `POG 읽는 중… ${i + 1} / ${state.pogs.length}`;
+      const s2 = await getDocs(collection(db, 'pogs', state.pogs[i].id, 'fixtures'));
+      s2.docs.forEach(d => fixtures.push({ items: d.data().items || [] }));
+    }
+    btn.textContent = '바코드 넣는 중…';
+    const r = await autoBarcodes({ fixtures });
+    if (r) alert(r.found ? `POG ${state.pogs.length}개에서 POG 사이트 바코드 ${r.found.toLocaleString()}개를 찾았어요.\n새로 넣은 것: ${r.added.toLocaleString()}개 (나머지는 이미 등록돼 있어요)` : `POG ${state.pogs.length}개에 POG 사이트 바코드가 없어요.\n바코드 기능 전에 가져온 POG는 POG 사이트에서 ↻ 다시 가져오기를 해야 바코드가 들어와요.`);
+    bcCount();
+  } catch (e) { alert('POG를 읽지 못했어요: ' + (e.code || e.message)); }
+  finally { btn.textContent = t0; btn.disabled = false; }
+}
+$('#bc-frompog').onclick = syncAllPogBarcodes;
 async function doImport(text) {
   let data;
   try { data = JSON.parse(text.trim()); } catch { toast('붙여넣은 내용이 올바르지 않아요'); return false; }
