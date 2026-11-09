@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261110c';
+const APP_VER = '20261111a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3777,17 +3777,30 @@ async function readSeq(storeId, vId) {
 // 이름 비슷한 정도 0~1: 낱말('/'·쉼표·괄호·띄어쓰기로 나눔)이 겹치는 정도 + 글자 두 개씩 겹치는 정도. POG 원래 이름 끝의 '_2_2600_1000'·'(1/4)'는 뺌
 const nameWords = s => String(s || '').replace(/\(\d+\/\d+\)/g, '').replace(/_[\d_A-Za-z]*$/, '').split(/[\/,·()\[\]\s&+]+/).map(w => w.replace(/[^가-힣A-Za-z0-9]/g, '')).filter(w => w.length > 0);
 const bigrams = s => { const t = s.replace(/[^가-힣A-Za-z0-9]/g, ''), out = new Set(); for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2)); return out; };
+function wordSim(pw, gw) {
+  if (!pw.length || !gw.length) return 0;
+  const inter = gw.filter(w => pw.some(p => p === w || (p.length > 1 && w.length > 1 && (p.includes(w) || w.includes(p))))).length;
+  const word = inter / Math.max(gw.length, pw.length);
+  const A = bigrams(pw.join('')), B = bigrams(gw.join('')), both = [...A].filter(x => B.has(x)).length;
+  const dice = A.size + B.size ? 2 * both / (A.size + B.size) : 0;
+  return word * 0.65 + dice * 0.35 + (pw.join('') === gw.join('') ? 0.3 : 0);
+}
+// 페이지 제품들의 품목군 (POG 사이트 분류 '아동문구(아동스티커)_95_140_10' → '아동문구', '아동스티커'), 많이 들어간 순서로 [{ w: 낱말들, share: 비율 }]
+function itemGroups(fx) {
+  const cnt = new Map(), items = fx.items || [];
+  for (const it of items) {
+    const g = String(it.group || it.data?.groupname || '').replace(/(_[\d.]+){3}$/, '').trim();
+    if (g) cnt.set(g, (cnt.get(g) || 0) + 1);
+  }
+  return [...cnt].sort((a, b) => b[1] - a[1]).map(([g, n]) => ({ w: nameWords(g), share: n / items.length }));
+}
+// 이름 비슷한 정도: 매대명(헤더·POG 원래 이름)과 품목군 이름(사용자) 중 높은 쪽. 품목군은 그 품목군 제품이 많을수록 점수가 큼
 function nameScore(fx, ko) {
   const gw = nameWords(ko); if (!gw.length) return 0;
   let best = 0;
-  for (const src of [fx.headerName, fx.mdName]) {
-    const pw = nameWords(src); if (!pw.length) continue;
-    const inter = gw.filter(w => pw.some(p => p === w || (p.length > 1 && w.length > 1 && (p.includes(w) || w.includes(p))))).length;
-    const word = inter / Math.max(gw.length, pw.length);
-    const A = bigrams(pw.join('')), B = bigrams(gw.join('')), both = [...A].filter(x => B.has(x)).length;
-    const dice = A.size + B.size ? 2 * both / (A.size + B.size) : 0;
-    best = Math.max(best, word * 0.65 + dice * 0.35 + (pw.join('') === gw.join('') ? 0.3 : 0));
-  }
+  for (const src of [fx.headerName, fx.mdName]) best = Math.max(best, wordSim(nameWords(src), gw));
+  const grps = itemGroups(fx);
+  for (const g of grps.slice(0, 5)) best = Math.max(best, wordSim(g.w, gw) * (0.75 + 0.25 * Math.min(1, g.share * 2)));
   return best;
 }
 // 페이지 → 도면 번호 (같은 버전이면 gid, 아니면 같은 한글 이름의 칸)
@@ -3831,15 +3844,15 @@ async function openPogDwLink(pog) {
     const pages = [...state.edComposed.values()].filter(f => f.kind !== 'free' && !f.drawingRef);
     if (!pages.length) { toast('연결 안 된 페이지가 없어요'); return; }
     const used = new Map(); [...state.edComposed.values()].forEach(f => { const r = f.drawingRef; if (r?.vId === v.id) used.set(r.gid, 1); });
-    const rows = pages.map(f => {
+    // 점수가 높은 짝부터 정함 (매대명 + 품목군). 이미 쓴 도면 매대는 조금 깎음 (같은 매대를 칸마다 나눈 페이지는 같은 매대로 갈 수 있게 막지는 않음)
+    const all = pages.map(f => ({ f, sc: (v.groups || []).map(g => ({ g, s: nameScore(f, g.ko) })).sort((a, b) => b.s - a.s) }));
+    const pick = new Map();
+    for (const r of [...all].sort((a, b) => (b.sc[0]?.s || 0) - (a.sc[0]?.s || 0))) {
       let best = null;
-      for (const g of v.groups || []) {
-        const s = nameScore(f, g.ko) - (used.get(g.id) ? 0.15 : 0);
-        if (!best || s > best.s) best = { g, s };
-      }
-      if (best && best.s >= 0.34) used.set(best.g.id, 1); else best = null;
-      return { f, best };
-    });
+      for (const c of r.sc.slice(0, 8)) { const s = c.s - (used.get(c.g.id) ? 0.15 : 0); if (!best || s > best.s) best = { g: c.g, s }; }
+      if (best && best.s >= 0.34) { used.set(best.g.id, 1); pick.set(r.f.id, best); }
+    }
+    const rows = pages.map(f => ({ f, best: pick.get(f.id) || null }));
     const hit = rows.filter(r => r.best);
     const checks = new Map();
     const list = h('div', { class: 'pdl-list' }, ...rows.map(r => {
@@ -3849,14 +3862,17 @@ async function openPogDwLink(pog) {
         h('span', { class: 'pdl-ref' }, r.best ? `→ 📐 ${r.best.g.ko}` : '비슷한 매대 없음'),
         h('span', { class: 'pdl-score' }, r.best ? `${Math.round(Math.min(1, r.best.s) * 100)}%` : ''));
     }));
+    const over = h('input', { type: 'checkbox' });
     const close2 = modal(h('div', { class: 'pdl' }, h('h3', {}, '자동 추측 연결'),
+      h('p', { class: 'se-help' }, '매대명과 페이지 제품의 품목군 이름을 도면 매대 이름과 비교해서, 가장 비슷한 매대를 골랐어요. 연결하면 페이지 매대명에 도면 매대 이름이 들어가요.'),
+      h('label', { class: 'pdl-over' }, over, ' 이미 적어 둔 매대명도 도면 매대 이름으로 바꾸기'),
       h('p', { class: 'mut' }, `연결 안 된 페이지 ${pages.length}장 중 ${hit.length}장에 비슷한 이름의 도면 매대를 찾았어요. 맞는 것만 체크된 채로 두고 '연결하기'를 누르세요. 틀린 건 나중에 '다시 연결'로 바꿀 수 있어요.`),
       list, h('div', { class: 'modal-act' }, h('button', { class: 'btn primary', onclick: () => {
         const ug = undoGroup(); let n = 0;
         for (const r of hit) {
           if (!checks.get(r.f.id)?.checked) continue;
           const g = r.best.g, ref = { storeId: st0.id, vId: v.id, vNo: v.no, gid: g.id, ko: g.ko };
-          if (!r.f.headerName) { saveFx(pog.id, r.f.id, 'headerName', g.ko, ug); r.f.headerName = g.ko; const inp = state.pageEls.get(r.f.id)?.querySelector('[data-f="headerName"]'); if (inp) inp.value = g.ko; }
+          if (!r.f.headerName || over.checked) { saveFx(pog.id, r.f.id, 'headerName', g.ko, ug); r.f.headerName = g.ko; const inp = state.pageEls.get(r.f.id)?.querySelector('[data-f="headerName"]'); if (inp) inp.value = g.ko; }
           saveFx(pog.id, r.f.id, 'drawingRef', ref, ug); r.f.drawingRef = ref; n++;
         }
         close2(); toast(`${n}장을 연결했어요 (Ctrl+Z로 되돌릴 수 있어요)`); setTimeout(paint, 700);
