@@ -2497,7 +2497,8 @@ async function exportProducts(pog, fixtures) {
     });
     if (!body.length) { toast('이 POG에 제품이 없어요'); return; }
     // 바코드 (바코드 등록에서 제품코드로 찾음, 한 제품에 여러 개면 쉼표로) → 제품코드 앞 열 (사용자)
-    const codes = [...new Set(body.map(r => r[5]).filter(Boolean))], bcOf = new Map();
+    const codes = [...new Set(body.map(r => r[5]).filter(Boolean))], bcOf = new Map(), siteBc = new Map(); // siteBc = POG 사이트에서 같이 가져온 바코드 (먼저 씀)
+    pages.forEach(pg => (pg._parts || [pg]).forEach(f => (f.items || []).forEach(it => { if (it.barcode) siteBc.set(code8(String(it.code || '').trim()), String(it.barcode)); })));
     toast('바코드 찾는 중…');
     try {
       for (let i = 0; i < codes.length; i += 30) { // 한 번에 30개씩 (Firestore 'in' 한도)
@@ -2505,7 +2506,7 @@ async function exportProducts(pog, fixtures) {
         snap.docs.forEach(d => { const c = String(d.data().code); bcOf.set(c, [...(bcOf.get(c) || []), d.id]); });
       }
     } catch { toast('바코드를 읽지 못해서 바코드 칸은 비워 둘게요'); }
-    body.forEach(r => r.splice(5, 0, (bcOf.get(r[5]) || []).sort().join(', ')));
+    body.forEach(r => r.splice(5, 0, siteBc.get(r[5]) || (bcOf.get(r[5]) || []).sort().join(', ')));
     const head = ['순번', '페이지', '매대명', '단', '순서', '바코드', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
     const info = [
       ['매장', `${pog.storeName || ''} (${pog.storeCode || ''})`],
