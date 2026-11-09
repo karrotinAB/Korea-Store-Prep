@@ -1071,3 +1071,13 @@ nav button { padding: 7px 10px; }
   #app > .view { margin-left: var(--side); }
 }
 @media print { #app > .view { margin-left: 0 !important; } }
+
+/* 안쪽 화면에서는 왼쪽 메뉴 숨김 (사용자). '☰ 메뉴'로 잠깐 열림 (화면 위에 겹쳐서) */
+.nav-toggle { display: none; background: rgba(255,255,255,.2); border: 0; color: #fff; font: inherit; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px; cursor: pointer; margin-right: -6px; }
+.nav-toggle:hover { background: rgba(255,255,255,.32); }
+@media (min-width: 701px) {
+  body.nav-hide .nav-toggle { display: inline-block; }
+  body.nav-hide #nav { display: none; }
+  body.nav-hide.nav-peek #nav { display: flex; box-shadow: 6px 0 24px rgba(0,0,0,.16); z-index: 60; }
+  body.nav-hide #app > .view { margin-left: 0; }
+}

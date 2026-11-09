@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261112e';
+const APP_VER = '20261112f';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -264,6 +264,9 @@ function go(v) {
   const gPog = v.startsWith('pog-');
   $('#subnav').classList.toggle('on', gPog);
   $('#nav').classList.toggle('grp-pog', gPog && !$('#subnav').classList.contains('hidden'));
+  // PC 왼쪽 메뉴: 처음 화면·POG 고르기에서만 보이고, 안쪽 화면(도면·POG 만들기 등)에 들어가면 숨김 → 위쪽 '☰ 메뉴'로 잠깐 열기 (사용자)
+  document.body.classList.toggle('nav-hide', !['home', 'pog-home', 'noaccess'].includes(v));
+  document.body.classList.remove('nav-peek');
   $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + secOf(v)));
   if (v.startsWith('dw-')) setDwMode({ 'dw-up': 'up', 'dw-online': 'on' }[v]);
   window.scrollTo(0, 0);
@@ -272,6 +275,8 @@ function go(v) {
 }
 $$('#nav button').forEach(b => b.onclick = () => go(b.dataset.view));
 // 메뉴가 화면보다 길 때: 마우스 휠(위아래)로 옆으로 밀기 (스크롤바는 숨김)
+$('#nav-toggle').onclick = e => { e.stopPropagation(); document.body.classList.toggle('nav-peek'); };
+document.addEventListener('click', e => { if (document.body.classList.contains('nav-peek') && !e.target.closest('#nav, #nav-toggle')) document.body.classList.remove('nav-peek'); });
 $('#nav').addEventListener('wheel', e => { const n = e.currentTarget; if (n.scrollWidth <= n.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; e.preventDefault(); n.scrollLeft += e.deltaY; }, { passive: false });
 // 휴대폰: A4 페이지(794px)를 화면 폭에 맞게 줄이는 비율 (style.css의 zoom: var(--pz))
 // 상단 메뉴 실제 높이 → CSS --top (휴대폰에서는 메뉴가 두 줄이라 52px보다 큼). 화면 높이 계산에 씀
