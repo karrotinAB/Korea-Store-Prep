@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261111e';
+const APP_VER = '20261111f';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1437,9 +1437,8 @@ document.addEventListener('keydown', e => {
 
 function fillHookSelect(sel, v) {
   if (sel === document.activeElement) return;
-  // POG 만들기: 표지에서 고른 '이 POG에서 쓸 고리'만 (아무것도 안 골랐으면 전부)
-  const pick = sel.closest('#ed-pages') ? state.currentPog?.hooks : null;
-  const opts = glossaryOf('고리타입').map(g => g.ko).filter(o => !pick?.length || pick.includes(o));
+  // 고리타입 칸 = 집기·고리·매대 등록의 고리 전부 (표지의 '이 POG에서 쓸 고리' 고르기는 없앰 · 사용자)
+  const opts = glossaryOf('고리타입').map(g => g.ko);
   if (v && !opts.includes(v)) opts.push(v);
   const sig = opts.join('\u0001');
   if (sel.dataset.sig !== sig) {
@@ -1965,38 +1964,6 @@ function setEdActive(id) {
   edThumbs.setActive(id);
   renderSidePanel();
 }
-// 표지 패널: 이 POG에서 쓸 고리 고르기 (pog.hooks). 고른 고리만 각 페이지 고리타입 칸에 나옴. 아무것도 안 고르면 사전의 고리 전부
-function hookPicker(pog, ed) {
-  const all = glossaryOf('고리타입').map(g => g.ko);
-  const picked = new Set((pog.hooks || []).filter(x => all.includes(x)));
-  const used = new Set([...state.fixtures.values()].map(f => f.hookType).filter(Boolean));
-  const apply = () => {
-    const arr = all.filter(x => picked.has(x));
-    pog.hooks = arr; savePog(pog.id, 'hooks', arr);
-    $$('#ed-pages select.hook-sel').forEach(sel => fillHookSelect(sel, sel.value));
-    count.textContent = arr.length ? `${arr.length}개 고름` : '안 고름 (전부 보임)';
-  };
-  const count = h('span', { class: 'mut' }, picked.size ? `${picked.size}개 고름` : '안 고름 (전부 보임)');
-  const q = h('input', { class: 'nb-sel hk-q', placeholder: '고리 찾기' });
-  const list = h('div', { class: 'hk-list' });
-  const draw = () => {
-    const k = norm(q.value);
-    list.replaceChildren(...all.filter(x => !k || norm(x).includes(k)).map(x => {
-      const cb = h('input', { type: 'checkbox', checked: picked.has(x), disabled: !ed });
-      cb.onchange = () => { cb.checked ? picked.add(x) : picked.delete(x); apply(); };
-      return h('label', { class: 'hk-item' }, cb, h('span', {}, x), used.has(x) ? h('small', { class: 'mut' }, '사용 중') : null);
-    }));
-    if (!all.length) list.append(h('p', { class: 'se-help' }, "집기·고리·매대 등록 '고리타입' 탭에 고리가 아직 없어요."));
-  };
-  q.oninput = draw; draw();
-  return h('section', { class: 'se-sec' }, h('h4', {}, '이 POG에서 쓸 고리 ', count),
-    h('p', { class: 'se-help' }, '체크한 고리만 각 페이지 고리타입 칸에 나와요. 하나도 체크하지 않으면 전부 나와요.'),
-    all.length > 8 ? q : null, list,
-    ed && all.length ? h('div', { class: 'se-btns' },
-      h('button', { class: 'btn small ghost', onclick: () => { all.forEach(x => picked.add(x)); apply(); draw(); } }, '모두 체크'),
-      h('button', { class: 'btn small ghost', onclick: () => { picked.clear(); apply(); draw(); } }, '모두 해제'),
-      used.size ? h('button', { class: 'btn small ghost', onclick: () => { used.forEach(x => all.includes(x) && picked.add(x)); apply(); draw(); } }, '쓰는 고리 체크') : null) : null);
-}
 const NARROW = matchMedia('(max-width: 900px)');
 // 사이트 전체 크기 (style.css의 html zoom: PC에서 80% · 사용자). 마우스로 끌 때 화면 px → 사이트 안 px로 바꿀 때 나눔
 const ZM = () => parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
@@ -2037,7 +2004,6 @@ function renderSidePanel() {
       h('label', { class: 'se-lab' }, '표지·모든 페이지 아래'), inp('branchName', pog.storeName || '매장명'),
       h('p', { class: 'se-help' }, '비우면 POG 사이트 매장명이 들어가요.')));
     if (!narrow) nodes.push(sec('대표 POG 담당자', h('p', { class: 'se-help' }, '모든 페이지 아래 \'POG 담당자\'에 들어가요. 페이지마다 다르면 그 페이지 아래 칸에서 따로 고를 수 있어요.'), mgrBox));
-    nodes.push(hookPicker(pog, ed));
     const emp = emptyPages();
     if (ed) nodes.push(sec('페이지', h('div', { class: 'se-btns' }, btn('+ 표지 뒤에 빈 페이지 추가', () => addFreePage(pog.id, (sortedFx()[0]?.order ?? 0) - 1)),
       emp.length ? btn(`🧹 제품 없는 매대 페이지 지우기 (${emp.length}장)`, () => deleteEmptyPages(pog.id), 'danger') : null)));
