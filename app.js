@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261111a';
+const APP_VER = '20261111b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3257,7 +3257,8 @@ function renderDwStage() {
   if (dw.seqMode && !dw.seqDraft) dw.seqDraft = [...(dw.seq || [])];
   const order = dw.seqMode ? dw.seqDraft : dw.seq;
   const seq = seqOn && dw.seqMode ? { order: order || [], onToggle: dw.seqMode ? g => toggleSeq(g) : null } : null;
-  if (seq && dw.seqMode) legend.append(h('span', { class: 'dw-seq-bar' }, ' · 🔢 번호 매기는 중: 매대를 누르는 순서대로 1, 2, 3… 다시 누르면 빠져요. ',
+  if (seq && dw.seqMode) legend.append(h('span', { class: 'dw-seq-bar' }, ' · 🔢 번호 매기는 중: 매대를 누르는 순서대로 1, 2, 3… 번호가 있는 매대를 누르면 번호를 바꾸거나 뺄 수 있어요. ',
+    h('button', { class: 'btn small', title: '도면의 모든 매대에 위에서 아래로, 같은 줄은 왼쪽에서 오른쪽으로 번호를 한 번에 매겨요', onclick: () => autoSeqByPos(v) }, '📐 도면 순서로 자동'), ' ',
     h('span', { id: 'dw-seq-n' }), ' ',
     h('button', { class: 'btn small primary', id: 'dw-seq-save', onclick: () => saveSeq(v) }, '💾 저장'), ' ',
     h('button', { class: 'btn small ghost', onclick: () => { dw.seqDraft = [...(dw.seq || [])]; paintSeq(); } }, '처음대로'), ' ',
@@ -3448,13 +3449,32 @@ function paintSeq() {
   const c = $('#dw-seq-n'); if (c) c.textContent = `지금 ${o.length}개${seqDirty() ? ' · 저장 안 됨' : ' · 저장됨'}`;
   const sv = $('#dw-seq-save'); if (sv) sv.disabled = !seqDirty();
 }
-function toggleSeq(g) { const o = dw.seqDraft ||= [], i = o.indexOf(g.id); if (i >= 0) o.splice(i, 1); else o.push(g.id); paintSeq(); }
-async function saveSeq(v) {
-  const order = [...(dw.seqDraft || [])];
-  try {
-    await setDoc(doc(db, 'drawings', dw.id, 'seq', v.id), { order, vId: v.id, updatedAt: serverTimestamp(), updatedBy: me() });
-    dw.seq = order; paintSeq(); toast(`번호 ${order.length}개를 저장했어요`);
-  } catch (e) { alert('번호를 저장하지 못했어요: ' + (e.code || e.message)); }
+// 번호 없는 매대 = 맨 뒤 번호로. 번호 있는 매대 = 새 번호로 옮기기 (0이나 빈칸 = 빼기) · 사용자: 자동으로 매긴 뒤 안 맞는 것만 고치기
+function toggleSeq(g) {
+  const o = dw.seqDraft ||= [], i = o.indexOf(g.id);
+  if (i < 0) { o.push(g.id); paintSeq(); return; }
+  const a = prompt(`'${g.ko}' · 지금 ${i + 1}번\n바꿀 번호를 넣으세요 (1 ~ ${o.length}). 번호를 빼려면 0 또는 비우고 확인`, String(i + 1));
+  if (a === null) return;
+  const n = parseInt(a, 10);
+  o.splice(i, 1);
+  if (n > 0) o.splice(Math.min(n, o.length + 1) - 1, 0, g.id);
+  paintSeq();
+}
+// 도면 순서로 자동 번호 (사용자): 도면의 매대(파란 칸)를 위에서 아래로 줄을 나눠, 같은 줄은 왼쪽에서 오른쪽으로 1, 2, 3…
+// 줄 = 칸 가운데 높이가 비슷한 것끼리 (칸 높이의 절반 안). 안 맞는 매대는 눌러서 번호를 바꾸고 저장
+function autoSeqByPos(v) {
+  const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0);
+  if (!gs.length) { alert('도면에 매대가 없어요.'); return; }
+  if ((dw.seqDraft || []).length && !confirm(`지금 매긴 번호 ${dw.seqDraft.length}개를 지우고, 도면 순서로 새로 매길까요?\n(저장을 눌러야 반영돼요)`)) return;
+  const cy = g => g.y + g.h / 2, hs = gs.map(g => g.h).sort((a, b) => a - b), mh = hs[Math.floor(hs.length / 2)];
+  const rows = [];
+  for (const g of [...gs].sort((a, b) => cy(a) - cy(b))) {
+    const r = rows.at(-1);
+    if (r && cy(g) - r.cy <= mh * 0.6) r.gs.push(g); else rows.push({ cy: cy(g), gs: [g] });
+  }
+  dw.seqDraft = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)).map(g => g.id);
+  paintSeq();
+  toast(`도면 순서로 ${dw.seqDraft.length}개를 매겼어요. 안 맞는 매대는 눌러서 번호를 바꾸고 💾 저장하세요`);
 }
 // 저장 안 한 번호가 있으면 물어봄 (번호 매기기를 끌 때)
 async function leaveSeq() {
