@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261112b';
+const APP_VER = '20261112c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -260,11 +260,12 @@ function go(v) {
   state.view = v;
   $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v || (!!b.dataset.group && v.startsWith(b.dataset.group))));
   { const on = [...$$('#nav button.on')].pop(), nav = $('#nav'); if (on && nav && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - nav.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2); } // 메뉴가 화면보다 길면 지금 메뉴가 보이게
-  // 1. 도면 / 2. POG를 누르면 (그 아래 화면 포함) 오른쪽에는 그 하위 메뉴만 보임. 매장 등록·집기·고리·매대 등록·바코드 등록은 숨김 (사용자)
+  // 1. 도면 / 2. POG를 누르면 (그 아래 화면 포함) 메뉴에 그 메뉴와 하위 메뉴만 보임 (예: 1. 도면 | 도면 업로드 | 온라인 도면). 홈은 왼쪽 'ARTBOX 국내 POG'로 (사용자)
   const gPog = v.startsWith('pog-'), gDw = v === 'drawing' || v.startsWith('dw-');
   $('#subnav').classList.toggle('on', gPog);
   $('#subnav-dw').classList.toggle('on', gDw);
-  $('#nav').classList.toggle('grp-on', (gPog && !$('#subnav').classList.contains('hidden')) || (gDw && !$('#subnav-dw').classList.contains('hidden')));
+  $('#nav').classList.toggle('grp-pog', gPog && !$('#subnav').classList.contains('hidden'));
+  $('#nav').classList.toggle('grp-dw', gDw && !$('#subnav-dw').classList.contains('hidden'));
   $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + secOf(v)));
   if (v.startsWith('dw-')) setDwMode({ 'dw-up': 'up', 'dw-online': 'on' }[v]);
   window.scrollTo(0, 0);
