@@ -3,7 +3,7 @@ import { getAuth, initializeAuth, inMemoryPersistence, onAuthStateChanged, signI
   sendPasswordResetEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, limit,
-  writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter
+  writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2320,12 +2320,37 @@ function pagesFromGrab(f, i) {
 }
 
 // 국내는 매장 하나에 팀마다 POG가 따로 (POG 사이트 팀명 기준). 붙여넣은 데이터에 팀이 여러 개면 팀마다 POG를 하나씩 만듦
+/* POG 사이트에서 같이 가져온 제품바코드를 바코드 등록에 자동으로 넣기 (사용자). 이미 있는 바코드는 그대로 두고 새것만 넣음 (POG팀도 새로 넣기만 가능 · 규칙) */
+async function autoBarcodes(data) {
+  const map = new Map();
+  for (const f of data.fixtures || []) for (const it of f.items || []) {
+    const bc = String(it.barcode || '').trim(), code = code8(String(it.code || '').trim());
+    if (/^\d{6,14}$/.test(bc) && code && !map.has(bc)) map.set(bc, { code, name: String(it.name || '').slice(0, 100) });
+  }
+  if (!map.size) return;
+  try {
+    const bcs = [...map.keys()], have = new Set();
+    for (let i = 0; i < bcs.length; i += 30) {
+      const snap = await getDocs(query(collection(db, 'barcodes'), where(documentId(), 'in', bcs.slice(i, i + 30))));
+      snap.docs.forEach(d => have.add(d.id));
+    }
+    const add = bcs.filter(b => !have.has(b));
+    if (!add.length) return;
+    for (let i = 0; i < add.length; i += 400) {
+      const b = writeBatch(db);
+      add.slice(i, i + 400).forEach(bc => { const r = map.get(bc); b.set(doc(db, 'barcodes', bc), { code: r.code, ...(r.name ? { name: r.name } : {}), auto: true, updatedAt: serverTimestamp(), updatedBy: me() }); });
+      await b.commit();
+    }
+    toast(`POG 사이트 바코드 ${add.length}개를 바코드 등록에 넣었어요`);
+  } catch (e) { toast('바코드 등록에 자동으로 넣지 못했어요: ' + (e.code || e.message)); }
+}
 async function doImport(text) {
   let data;
   try { data = JSON.parse(text.trim()); } catch { toast('붙여넣은 내용이 올바르지 않아요'); return false; }
   if (!data || data.source !== 'pog.artbox.kr' || !Array.isArray(data.fixtures) || !data.fixtures.length) {
     toast('POG 데이터가 아니에요'); return false;
   }
+  autoBarcodes(data);
   const empty = f => !(f.items || []).length && !(f.props || []).length && !(f.panels || []).length;
   const skipped = data.fixtures.filter(empty);
   // 팀마다 매대 줄 나누기 (POG 사이트 목록 순서 그대로)
@@ -2592,6 +2617,7 @@ function grabPaste(mode, target) {
     let data;
     try { data = JSON.parse(ta.value.trim()); } catch { toast('붙여넣은 내용이 올바르지 않아요'); return; }
     if (!data || data.source !== 'pog.artbox.kr' || !Array.isArray(data.fixtures) || !data.fixtures.length) { toast('POG 데이터가 아니에요'); return; }
+    autoBarcodes(data);
     const cands = [];
     data.fixtures.forEach((f, i) => {
       if (!(f.items || []).length && !(f.props || []).length && !(f.panels || []).length) return;
@@ -2693,6 +2719,7 @@ function openRegrabAuto(hintFx) {
     let data;
     try { data = JSON.parse(ta.value.trim()); } catch { toast('붙여넣은 내용이 올바르지 않아요'); return; }
     if (!data || data.source !== 'pog.artbox.kr' || !Array.isArray(data.fixtures) || !data.fixtures.length) { toast('POG 데이터가 아니에요'); return; }
+    autoBarcodes(data);
     close(); showRegrabPreview(pog, planRegrab(pog, data));
   };
 }
