@@ -4539,6 +4539,8 @@ function renderGlossary() {
   if (!rows.length) body.append(h('tr', {}, h('td', { colspan: 2 + (q ? 1 : 0) + (showCode ? 1 : 0) + (showMake ? 1 : 0), class: 'mut pad' },
     q ? '저장된 이름이 없어요. 위 칸에서 바로 추가할 수 있어요.' : '등록된 이름이 없어요.')));
   const ed = canEdit('glossary'); // 관리자만 편집, 나머지는 보기
+  // 관리자: 지금 분류의 이름을 한꺼번에 지우기 (사용자: 집기 28개 다 삭제)
+  if (ed && !q && rows.length) $('#gl-info').append(h('button', { class: 'btn ghost danger small gl-delall', type: 'button', onclick: () => glDeleteAll(state.glCat) }, `🗑 '${catLabel(state.glCat)}' 모두 삭제 (${rows.length}개)`));
   rows.forEach(g => {
     const inp = (f) => {
       const el = h('input', { value: g[f] || '', disabled: !ed });
@@ -4582,6 +4584,21 @@ function renderGlossary() {
         } }, '삭제') : null))));
   });
   renderGlHint();
+}
+async function glDeleteAll(cat) {
+  const list = glossaryOf(cat), name = catLabel(cat);
+  if (!list.length) return;
+  if (!confirm(`'${name}'에 등록된 이름 ${list.length}개를 모두 삭제할까요?\n이미 만든 POG 페이지에 적어 둔 이름은 그대로 남아요.`)) return;
+  if (!confirm(`정말 지울까요? 지운 이름은 되돌릴 수 없어요.\n(필요하면 먼저 '엑셀로 내보내기'로 저장해 두세요)`)) return;
+  try {
+    for (let i = 0; i < list.length; i += 400) {
+      const b = writeBatch(db);
+      list.slice(i, i + 400).forEach(g => b.delete(doc(db, 'glossary', g.id)));
+      await b.commit();
+    }
+    list.forEach(g => glLog(g, 'delete', [{ f: 'ko', from: g.ko || '', to: '' }]));
+    toast(`'${name}' ${list.length}개를 삭제했어요`);
+  } catch (e) { alert('삭제하다가 멈췄어요: ' + (e.code || e.message) + '\n다시 누르면 남은 것을 지워요.'); }
 }
 // 추가하려는 한국어가 이미 있으면 알려주기
 function renderGlHint() {

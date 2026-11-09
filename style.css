@@ -1041,3 +1041,5 @@ nav button { padding: 7px 10px; }
 .gl-add .gl-make-in { flex: none; display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink, #222); white-space: nowrap; padding: 0 4px; cursor: pointer; }
 .gl-add .gl-make-in input { flex: none; width: 16px; height: 16px; padding: 0; margin: 0; }
 .gl-add .gl-make-in.hidden { display: none; }
+
+.gl-info .gl-delall { margin-left: 8px; }
