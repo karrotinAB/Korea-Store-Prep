@@ -2500,26 +2500,25 @@ async function exportProducts(pog, fixtures) {
       const no = i + 2; // 1번은 표지 (PDF 페이지 번호와 같게)
       for (const f of pg._parts || [pg]) { // 붙인 페이지는 매대마다 따로 계산
         if (!(f.items || []).length) continue;
-        const bay = f.kind === 'free' ? '' : (f.bayCount > 1 ? `${f.bayNo}/${f.bayCount}` : '1');
         for (const r of productRows(f)) {
           const it = r.it, [cat, size] = grp(it.group || it.data?.groupname);
-          body.push([no, displayName(f), bay, r.lv ? r.lv + '단' : '', r.kind, r.order,
+          body.push([body.length + 1, no, displayName(f), r.lv ? r.lv + '단' : '', r.order, // 맨 앞 = 순번 (칸·선반/걸이 열은 뺌 · 사용자)
             code8(String(it.code || it.data?.item || '').trim()), it.name || '',
             Number(it.price || it.data?.amtk) || '', METHOD[it.data?.displaymethod] || '', cat, size]);
         }
       }
     });
     if (!body.length) { toast('이 POG에 제품이 없어요'); return; }
-    const head = ['페이지', '매대명', '칸', '단', '선반/걸이', '순서', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
+    const head = ['순번', '페이지', '매대명', '단', '순서', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
     const info = [
       ['매장', `${pog.storeName || ''} (${pog.storeCode || ''})`],
       ['POG', pogTitle(pog)],
       ['POG 가져온 날', fmtDate(pog.grabbedAt)],
-      ['합계', `페이지 ${new Set(body.map(r => r[0])).size}개, 제품 ${body.length}개`],
+      ['합계', `페이지 ${new Set(body.map(r => r[1])).size}개, 제품 ${body.length}개`],
       [],
     ];
     const ws = X.utils.aoa_to_sheet([...info, head, ...body]);
-    ws['!cols'] = [7, 26, 6, 6, 9, 6, 11, 40, 9, 9, 22, 16].map(wch => ({ wch }));
+    ws['!cols'] = [6, 7, 26, 6, 6, 11, 40, 9, 9, 22, 16].map(wch => ({ wch }));
     ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: info.length, c: 0 }, e: { r: info.length + body.length, c: head.length - 1 } }) };
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, ws, '제품리스트');
