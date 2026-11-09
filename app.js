@@ -2452,6 +2452,83 @@ async function exportCounts(pog, fixtures) {
 $('#ed-counts').onclick = () => exportCounts(state.currentPog, [...state.fixtures.values()]);
 $('#vw-counts').onclick = () => exportCounts(state.viewer.pog, state.viewer.fixtures);
 $('#vw-nobc').onclick = () => exportNoBarcode(state.viewer.pog, state.viewer.fixtures);
+
+/* ---------- 제품리스트 엑셀: 이 POG의 모든 매대(= 가져올 때 체크한 매대) 제품을 시트 하나에 ---------- */
+// 순서: 페이지 → 칸 → 단(위에서부터, 선반·파이프를 같이 셈) → 왼쪽부터. 줄줄이처럼 선반이 없는 매대는 위에서부터
+function productRows(f) {
+  const props = (f.props || []).filter(p => !p.kind || /선반|파이프/.test(p.kind))
+    .map(p => ({ x: +p.x || 0, y: +p.y || 0, w: +p.w || 0, h: +p.h || 18, pipe: p.opt === 'Y' || /파이프/.test(p.kind || '') }));
+  const levels = [];
+  for (const y of props.map(p => p.y).sort((a, b) => a - b)) if (!levels.length || y - levels[levels.length - 1] > 10) levels.push(y);
+  // 선반 위 제품: 제품 밑면 ≈ 선반 윗면 / 걸이 제품: 제품 윗면 ≈ 파이프 아랫면. 진열방식(01 걸이 · 02 진열)이 맞는 쪽을 먼저 봄
+  const support = it => {
+    const cx = (+it.x || 0) + (+it.w || 0) / 2, m = it.data?.displaymethod;
+    let best = null;
+    for (const p of props) {
+      if (cx < p.x - 2 || cx > p.x + p.w + 2) continue;
+      let gap = p.pipe ? (+it.y || 0) - (p.y + p.h) : p.y - ((+it.y || 0) + (+it.h || 0));
+      if (gap < -8) continue;
+      if ((m === '01' && !p.pipe) || (m === '02' && p.pipe)) gap += 30;
+      if (!best || gap < best.gap) best = { p, gap };
+    }
+    return best && best.gap <= 260 ? best.p : null;
+  };
+  const rows = (f.items || []).map(it => {
+    const s = props.length ? support(it) : null;
+    const lv = s ? levels.findIndex(y => s.y - y >= 0 && s.y - y <= 10) + 1 : 0;
+    return { it, lv, kind: s ? (s.pipe ? '걸이' : '선반') : '' };
+  });
+  rows.sort((a, b) => props.length
+    ? (a.lv || 999) - (b.lv || 999) || (+a.it.x || 0) - (+b.it.x || 0)
+    : (+a.it.y || 0) - (+b.it.y || 0) || (+a.it.x || 0) - (+b.it.x || 0));
+  let key = null, n = 0;
+  rows.forEach(r => { n = r.lv === key ? n + 1 : 1; key = r.lv; r.order = n; });
+  return rows;
+}
+async function exportProducts(pog, fixtures) {
+  if (!pog) return;
+  try {
+    const X = await loadXLSX();
+    const METHOD = { '01': '걸이', '02': '진열', '99': '기타' };
+    const grp = g => { // '펜(형태펜)_110_240_130' → 분류 '펜(형태펜)', 사이즈 '110×240×130'
+      const p = String(g || '').split('_');
+      return p.length >= 4 && p.slice(-3).every(s => /^\d+(\.\d+)?$/.test(s)) ? [p.slice(0, -3).join('_'), p.slice(-3).join('×')] : [g || '', ''];
+    };
+    const pages = composeFx([...fixtures].sort((a, b) => a.order - b.order));
+    const body = [];
+    pages.forEach((pg, i) => {
+      const no = i + 2; // 1번은 표지 (PDF 페이지 번호와 같게)
+      for (const f of pg._parts || [pg]) { // 붙인 페이지는 매대마다 따로 계산
+        if (!(f.items || []).length) continue;
+        const bay = f.kind === 'free' ? '' : (f.bayCount > 1 ? `${f.bayNo}/${f.bayCount}` : '1');
+        for (const r of productRows(f)) {
+          const it = r.it, [cat, size] = grp(it.group || it.data?.groupname);
+          body.push([no, displayName(f), bay, r.lv ? r.lv + '단' : '', r.kind, r.order,
+            code8(String(it.code || it.data?.item || '').trim()), it.name || '',
+            Number(it.price || it.data?.amtk) || '', METHOD[it.data?.displaymethod] || '', cat, size]);
+        }
+      }
+    });
+    if (!body.length) { toast('이 POG에 제품이 없어요'); return; }
+    const head = ['페이지', '매대명', '칸', '단', '선반/걸이', '순서', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
+    const info = [
+      ['매장', `${pog.storeName || ''} (${pog.storeCode || ''})`],
+      ['POG', pogTitle(pog)],
+      ['POG 가져온 날', fmtDate(pog.grabbedAt)],
+      ['합계', `페이지 ${new Set(body.map(r => r[0])).size}개, 제품 ${body.length}개`],
+      [],
+    ];
+    const ws = X.utils.aoa_to_sheet([...info, head, ...body]);
+    ws['!cols'] = [7, 26, 6, 6, 9, 6, 11, 40, 9, 9, 22, 16].map(wch => ({ wch }));
+    ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: info.length, c: 0 }, e: { r: info.length + body.length, c: head.length - 1 } }) };
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, '제품리스트');
+    X.writeFile(wb, `제품리스트_${pogTitle(pog)}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`.replace(/[\\/:*?"<>|]/g, ''));
+    toast(`엑셀을 저장했어요 · 제품 ${body.length}개`);
+  } catch (e) { toast(e.message); }
+}
+$('#ed-products').onclick = () => exportProducts(state.currentPog, [...state.fixtures.values()]);
+$('#vw-products').onclick = () => exportProducts(state.viewer.pog, state.viewer.fixtures);
 // 관리자용: 이 POG 제품 중 바코드 등록이 안 된 제품코드만 엑셀로 (바코드 업로드 양식과 같은 열: 제품코드 · 바코드 · 제품명)
 async function exportNoBarcode(pog, fixtures) {
   if (!pog) return;
