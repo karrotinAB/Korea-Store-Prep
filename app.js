@@ -2496,7 +2496,17 @@ async function exportProducts(pog, fixtures) {
       }
     });
     if (!body.length) { toast('이 POG에 제품이 없어요'); return; }
-    const head = ['순번', '페이지', '매대명', '단', '순서', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
+    // 바코드 (바코드 등록에서 제품코드로 찾음, 한 제품에 여러 개면 쉼표로) → 제품코드 앞 열 (사용자)
+    const codes = [...new Set(body.map(r => r[5]).filter(Boolean))], bcOf = new Map();
+    toast('바코드 찾는 중…');
+    try {
+      for (let i = 0; i < codes.length; i += 30) { // 한 번에 30개씩 (Firestore 'in' 한도)
+        const snap = await getDocs(query(collection(db, 'barcodes'), where('code', 'in', codes.slice(i, i + 30))));
+        snap.docs.forEach(d => { const c = String(d.data().code); bcOf.set(c, [...(bcOf.get(c) || []), d.id]); });
+      }
+    } catch { toast('바코드를 읽지 못해서 바코드 칸은 비워 둘게요'); }
+    body.forEach(r => r.splice(5, 0, (bcOf.get(r[5]) || []).sort().join(', ')));
+    const head = ['순번', '페이지', '매대명', '단', '순서', '바코드', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
     const info = [
       ['매장', `${pog.storeName || ''} (${pog.storeCode || ''})`],
       ['POG', pogTitle(pog)],
@@ -2505,7 +2515,8 @@ async function exportProducts(pog, fixtures) {
       [],
     ];
     const ws = X.utils.aoa_to_sheet([...info, head, ...body]);
-    ws['!cols'] = [6, 7, 26, 6, 6, 11, 40, 9, 9, 22, 16].map(wch => ({ wch }));
+    ws['!cols'] = [6, 7, 26, 6, 6, 16, 11, 40, 9, 9, 22, 16].map(wch => ({ wch }));
+    body.forEach((_, i) => ['F', 'G'].forEach(c => { const k = c + (info.length + 2 + i); if (ws[k]) ws[k].t = 's'; })); // 바코드·제품코드는 글자로 (앞의 0이 안 빠지게)
     ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: info.length, c: 0 }, e: { r: info.length + body.length, c: head.length - 1 } }) };
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, ws, '제품리스트');
