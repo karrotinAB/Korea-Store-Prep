@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261111c';
+const APP_VER = '20261111d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -4091,6 +4091,7 @@ async function fbDelete(n) {
 }
 $('#fb-pdf').onclick = () => printPages($('#fb-pages'), fb.pog);
 // POG 만들기에서 이 POG의 피드백 보기
+$('#ed-dwlink').onclick = () => { if (state.currentPog) openPogDwLink(state.currentPog); }; // 툴바 '📐 도면 일괄 연결' (사용자) = 표지의 'POG랑 도면 연결하기'
 $('#ed-fb').onclick = () => { const id = state.currentPog?.id; if (!id) return; go('pog-fb'); openFb(id); };
 
 /* ---------- 찾기 (온라인 POG·온라인 도면) ----------
