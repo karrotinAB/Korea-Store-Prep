@@ -1035,7 +1035,7 @@ body.pfit .pages .page-block { scroll-snap-align: start; scroll-margin-top: 12px
 #nav::-webkit-scrollbar { display: none; }
 nav button { padding: 7px 10px; }
 /* 화면이 좁을 때 POG·도면 하위 메뉴가 열리면 회색 메뉴(매장 등록·용어 사전·바코드 등록)는 잠깐 숨김 → 하위 메뉴가 잘리지 않게. 처음 화면 타일로 갈 수 있음 */
-@media (min-width: 701px) and (max-width: 1500px) { body:has(#subnav.on, #subnav-dw.on) #nav .nav-sub { display: none; } }
+#nav.grp-on .nav-sub { display: none; } /* 도면·POG 하위 메뉴가 보일 때는 등록 메뉴 숨김 (사용자) */
 
 /* 집기·고리·매대 등록 추가 칸의 '제작필요' 체크 (선반/파이프·집기만) */
 .gl-add .gl-make-in { flex: none; display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--ink, #222); white-space: nowrap; padding: 0 4px; cursor: pointer; }
