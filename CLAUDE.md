@@ -39,7 +39,7 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 - **제품 찾기**: 매장 카드 = 매장코드마다(팀 n개). 그 매장 팀별 최종 POG를 모두 읽어서(`fdOpen`, 페이지마다 `_pog`) 찾음. 결과 위치 줄에 팀 이름.
 
 ## 4. 피드백 POG (MD · 사용자)
-- POG 메뉴 아래 탭 '피드백 POG'(`pog-fb`, 화면 `#v-pog-fb`) + POG 화면 타일. POG 만들기 툴바 '💬 피드백'으로도 그 POG 피드백 화면으로 감.
+- POG 메뉴 아래 탭 '피드백 POG'(`pog-fb`, 화면 `#v-pog-fb`) + POG 화면 타일. (POG 만들기 툴바의 '💬 피드백' 버튼은 뺌 · 사용자: PPT로 확인)
 - POG(작성 중·최종 모두)를 보기 전용으로 띄우고, 왼쪽 썸네일·페이지를 누르면 그 페이지가 '지금 페이지'(보라 테두리) → 오른쪽에서 **메모 남기기**(Ctrl+Enter).
 - 저장: `pogs/{pogId}/feedback/{id}` = `{ fx(페이지 id, 표지 '__cover'), page(남길 때 페이지 이름), text, by, byName, at, done, doneBy, doneByName, doneAt }`
 - 페이지·썸네일 오른쪽 위 '💬 n'(반영 안 된 개수, 다 반영하면 초록 ✓). 오른쪽 패널: 이 페이지 피드백 + 다른 페이지의 반영 안 된 피드백(누르면 그 페이지로).
