@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261113d';
+const APP_VER = '20261113e';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2179,8 +2179,9 @@ async function printPages(container, pog) {
 /* ---------- PPT 저장 (시험 · 사용자: 방법 A) ----------
    페이지마다 화면 그대로 그림 한 장 → 슬라이드 한 장 (A4 세로). PPT에서 글상자·도형을 얹을 수 있지만 그림 속 글자는 못 고침.
    빼려면: index.html의 ed-ppt·vw-ppt·fb-ppt 버튼과 이 묶음(savePpt…)만 지우면 됨 */
-const PPT_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js';
-const H2C_URL = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+// 도구 파일은 이 사이트 lib/ 폴더에 같이 둠 (바깥 CDN에서 못 불러오는 일이 있어서 · 사용자). pptxgenjs 3.12.0 · html2canvas 1.4.1 (MIT)
+const PPT_URL = 'lib/pptxgen.bundle.js';
+const H2C_URL = 'lib/html2canvas.min.js';
 const loadScript = (url, name) => new Promise((ok, no) => {
   if (window[name]) return ok(window[name]);
   const sc = h('script', { src: url }); sc.onload = () => ok(window[name]); sc.onerror = () => no(new Error('PPT 도구를 불러오지 못했어요. 인터넷 연결을 확인해주세요.'));
