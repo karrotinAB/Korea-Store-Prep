@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261114b';
+const APP_VER = '20261114c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3367,7 +3367,7 @@ $('#dw-stage').addEventListener('wheel', e => {
   const r2 = cv.getBoundingClientRect();
   const z = ZM(); st.scrollLeft += (r2.left + fx * r2.width - e.clientX) / z; st.scrollTop += (r2.top + fy * r2.height - e.clientY) / z;
 }, { passive: false });
-$('#dw-zoom').onclick = () => { dw.zoom = 1; dwZoomApply(); };
+$('#dw-zoom').onclick = () => { if ((dw.zoom || 1) === 1) dwZoomStep(2); else { dw.zoom = 1; dwZoomApply(); } }; // 누르면 2배, 다시 누르면 원래 크기 (사용자)
 // ＋ / － 버튼 (터치 화면에서 한 손으로 · 사용자)
 const dwZoomStep = f => { const st = $('#dw-stage'), cv = $('#dw-stage > .dw-canvas'); if (!cv) return;
   const r = st.getBoundingClientRect(), mx = r.left + r.width / 2, my = r.top + r.height / 2, c0 = cv.getBoundingClientRect(), fx = (mx - c0.left) / c0.width, fy = (my - c0.top) / c0.height;
