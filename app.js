@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261114a';
+const APP_VER = '20261114b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3926,17 +3926,40 @@ async function openHeaderPicker(pog, fx, after) {
   // 지금 연결된 칸: 같은 버전이면 그 칸, 다른 버전에서 골랐으면 같은 한글 이름 칸 (사용자: 표시가 안 됐음)
   const r0 = fx.drawingRef, curG = r0 ? (r0.vId === v.id ? (v.groups || []).find(x => x.id === r0.gid) : null) || (v.groups || []).find(x => norm(x.ko) === norm(r0.ko)) : null;
   if (curG) used.delete(curG.id); // 이 페이지 칸은 초록(다른 페이지)보다 주황(지금 연결)으로
-  const close = modal(h('div', { class: 'hp-pick' },
-    h('h3', {}, `도면에서 매대 고르기 · ${storeName(st0)} ver.${v.no}${dwFinal(d) === v.id ? ' ★최종본' : ''}`),
-    cur,
-    h('p', { class: 'mut' }, '매대를 누르면 헤더에 들어가요. 주황 = 이 페이지 · 초록 = 이 POG의 다른 페이지 · 보라 점선 = 다른 팀 POG에 연결된 매대. 넣은 뒤에 뒤에 숫자(1, 2…)를 붙여도 돼요.'),
-    drawingView(v, { used, others, selId: curG?.id || null, onPick: g => {
+  // 번호는 이 팀 것만 (사용자): 팀 번호가 있으면 그것, 없으면 전체 번호 중 이 팀 매대(이 POG에 연결 · 업로드 화면에서 이 팀으로 정한 매대)만 1, 2, 3…으로
+  const team = pogTeam(pog), sq = await readSeq(st0.id, v.id, team);
+  let order = sq?.order || [];
+  if (sq && sq.team !== team) {
+    const mine = new Set([...used, ...(curG ? [curG.id] : []), ...(v.groups || []).filter(g => g.team === team).map(g => g.id)]);
+    order = order.filter(id => mine.has(id) && !others.has(id));
+  }
+  // 확대·축소 (사용자): － / ＋ 버튼, Ctrl(또는 Alt) + 마우스 휠
+  let zoom = 1;
+  const view = drawingView(v, { used, others, selId: curG?.id || null, onPick: g => {
       const ref = { storeId: st0.id, vId: v.id, vNo: v.no, gid: g.id, ko: g.ko };
       const ug = undoGroup(); saveFx(pog.id, fx.id, 'headerName', g.ko, ug); saveFx(pog.id, fx.id, 'drawingRef', ref, ug);
       const blk = state.pageEls.get(fx.id), inp = blk?.querySelector('[data-f="headerName"]'); if (inp) inp.value = g.ko;
       fx.drawingRef = ref; fx.headerName = g.ko;
       close(); toast(`헤더에 '${g.ko}'를 넣었어요`); after?.();
-    }, seq: await readSeq(st0.id, v.id, pogTeam(pog)) })), { wide: true });
+    }, seq: order.length ? { order } : null });
+  const box = h('div', { class: 'hp-zoombox' }, view);
+  const zlab = h('span', { class: 'hp-zlab' }, '100%');
+  const setZoom = (z, cx = .5, cy = .5) => {
+    const old = zoom; zoom = Math.max(1, Math.min(5, Math.round(z * 4) / 4)); if (zoom === old) return;
+    const fx0 = (box.scrollLeft + box.clientWidth * cx) / box.scrollWidth, fy0 = (box.scrollTop + box.clientHeight * cy) / box.scrollHeight;
+    Object.assign(view.style, { width: zoom * 100 + '%', maxWidth: 'none' }); zlab.textContent = Math.round(zoom * 100) + '%';
+    box.scrollLeft = fx0 * box.scrollWidth - box.clientWidth * cx; box.scrollTop = fy0 * box.scrollHeight - box.clientHeight * cy;
+  };
+  box.addEventListener('wheel', e => { if (!(e.ctrlKey || e.altKey)) return; e.preventDefault(); const r = box.getBoundingClientRect(); setZoom(zoom * (e.deltaY < 0 ? 1.25 : 0.8), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); }, { passive: false });
+  const zbar = h('div', { class: 'hp-zbar' }, h('button', { class: 'btn small ghost', type: 'button', onclick: () => setZoom(zoom / 1.25) }, '－'), zlab,
+    h('button', { class: 'btn small ghost', type: 'button', onclick: () => setZoom(zoom * 1.25) }, '＋'),
+    h('button', { class: 'btn small ghost', type: 'button', onclick: () => setZoom(1) }, '원래 크기'),
+    h('span', { class: 'mut' }, ` Ctrl + 마우스 휠로도 키우고 줄여요${order.length ? ` · 번호 = ${team || '이 팀'} 매대만` : ''}`));
+  const close = modal(h('div', { class: 'hp-pick' },
+    h('h3', {}, `도면에서 매대 고르기 · ${storeName(st0)} ver.${v.no}${dwFinal(d) === v.id ? ' ★최종본' : ''}`),
+    cur,
+    h('p', { class: 'mut' }, '매대를 누르면 헤더에 들어가요. 주황 = 이 페이지 · 초록 = 이 POG의 다른 페이지 · 보라 점선 = 다른 팀 POG에 연결된 매대. 넣은 뒤에 뒤에 숫자(1, 2…)를 붙여도 돼요.'),
+    zbar, box), { wide: true });
   setTimeout(() => $('#modal-root .hp-pick .dw-box.on')?.scrollIntoView({ block: 'center', inline: 'center' }), 120); // 지금 연결된 칸이 보이게
 }
 // 이 POG 매장의 ★최종본(없으면 마지막으로 내보낸) 도면 버전

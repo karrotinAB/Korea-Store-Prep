@@ -1089,3 +1089,9 @@ nav button { padding: 7px 10px; }
 .dw-box.dw-team.mine { background: transparent !important; border: 2px solid #f7931e !important; }
 .dw-team-bar { color: var(--or-d); font-weight: 600; }
 @media print { .dw-box.dw-team.mine { border-color: transparent !important; } }
+
+/* 도면에서 매대 고르기: 확대·축소 (사용자) */
+.hp-zbar { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; font-size: 13px; }
+.hp-zlab { min-width: 3.2em; text-align: center; font-weight: 600; }
+.hp-zoombox { overflow: auto; max-height: calc(var(--vh) * .62 / .8); border: 1px solid var(--line); border-radius: 6px; background: #f4f5f7; }
+.hp-zoombox > .dw-canvas { margin: 0; }
