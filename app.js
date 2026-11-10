@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261113b';
+const APP_VER = '20261113d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2175,6 +2175,79 @@ async function printPages(container, pog) {
   if (bad) toast(`사진 ${bad}장은 불러오지 못해서 제품명으로 나와요`);
   window.print();
 }
+
+/* ---------- PPT 저장 (시험 · 사용자: 방법 A) ----------
+   페이지마다 화면 그대로 그림 한 장 → 슬라이드 한 장 (A4 세로). PPT에서 글상자·도형을 얹을 수 있지만 그림 속 글자는 못 고침.
+   빼려면: index.html의 ed-ppt·vw-ppt·fb-ppt 버튼과 이 묶음(savePpt…)만 지우면 됨 */
+const PPT_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js';
+const H2C_URL = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+const loadScript = (url, name) => new Promise((ok, no) => {
+  if (window[name]) return ok(window[name]);
+  const sc = h('script', { src: url }); sc.onload = () => ok(window[name]); sc.onerror = () => no(new Error('PPT 도구를 불러오지 못했어요. 인터넷 연결을 확인해주세요.'));
+  document.head.append(sc);
+});
+// 사진을 이 사이트 안의 그림(dataURL)으로 바꿔 둠 (다른 사이트 사진은 그대로는 그림으로 못 뜸). 바꾸지 못한 사진 수를 돌려줌
+async function inlineImgs(container) {
+  const imgs = $$('img', container).filter(i => i.complete && i.naturalWidth && !/^data:/.test(i.src));
+  const cache = new Map(); let bad = 0;
+  const conv = src => cache.get(src) || cache.set(src, new Promise(res => {
+    const im = new Image(); im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
+    im.onload = () => { try { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); res(c.toDataURL('image/png')); } catch { res(null); } };
+    im.onerror = () => res(null); setTimeout(() => res(null), 15000);
+    im.src = src;
+  })).get(src);
+  const back = [];
+  await Promise.all(imgs.map(async i => { const d = await conv(i.currentSrc || i.src); if (d) { back.push([i, i.src]); i.src = d; } else bad++; }));
+  return { bad, restore: () => back.forEach(([i, src]) => { i.src = src; }) };
+}
+async function savePpt(container, pog) {
+  if (!pog) return;
+  const pages = $$('.page-block .page', container);
+  if (!pages.length) { toast('저장할 페이지가 없어요'); return; }
+  let restore = null, z0 = null;
+  try {
+    toast('PPT 만드는 중… (사진 불러오기)');
+    const [H2C, PPT] = await Promise.all([loadScript(H2C_URL, 'html2canvas'), loadScript(PPT_URL, 'PptxGenJS')]);
+    // 사진 다 불러오기 (PDF 저장과 같게)
+    retryBroken(container, true);
+    const imgs = $$('img', container); imgs.forEach(i => { i.loading = 'eager'; });
+    const wait = imgs.filter(i => !(i.complete && i.naturalWidth) && !i.dataset.failed && i.isConnected);
+    if (wait.length) await Promise.race([Promise.all(wait.map(i => new Promise(r => { i.addEventListener('load', r, { once: true }); i.addEventListener('gaveup', r, { once: true }); }))), new Promise(r => setTimeout(r, 20000))]);
+    const inl = await inlineImgs(container); restore = inl.restore;
+    // PC 화면 축소(zoom .8)를 잠깐 끄고 찍음 (그림이 어긋나지 않게)
+    z0 = document.documentElement.style.zoom; document.documentElement.style.zoom = '1';
+    const ppt = new PPT(); ppt.defineLayout({ name: 'A4P', width: 8.27, height: 11.69 }); ppt.layout = 'A4P';
+    ppt.title = pogTitle(pog);
+    for (let k = 0; k < pages.length; k++) {
+      toast(`PPT 만드는 중… ${k + 1} / ${pages.length}쪽`);
+      const orig = $$('input, textarea, select', pages[k]);
+      const cv = await H2C(pages[k], { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
+        // 입력칸은 그림으로 찍으면 글자가 잘려서, 찍을 때만 같은 모양의 글자 칸으로 바꿈
+        onclone: (d, el) => { [...el.querySelectorAll('input, textarea, select')].forEach((c, i) => {
+          const o = orig[i]; if (!o) return; const cs = getComputedStyle(o);
+          const val = o.tagName === 'SELECT' ? (o.selectedOptions[0]?.value ? o.selectedOptions[0].text : '') : (o.type === 'checkbox' ? (o.checked ? '☑' : '☐') : o.value);
+          const dv = d.createElement('div'); dv.textContent = val || (o.matches('.ph-name, .cover-title, .cover-store') ? o.placeholder : ''); // 비어 있으면 자동 이름 (PDF 인쇄와 같게)
+          for (const k2 of ['font', 'color', 'textAlign', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'backgroundColor', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderRadius', 'letterSpacing', 'boxSizing', 'margin']) dv.style[k2] = cs[k2];
+          Object.assign(dv.style, { width: o.offsetWidth + 'px', height: o.offsetHeight + 'px', overflow: 'hidden', whiteSpace: o.tagName === 'TEXTAREA' ? 'pre-wrap' : 'nowrap', display: o.tagName === 'TEXTAREA' ? 'block' : 'flex', alignItems: 'center', justifyContent: cs.textAlign === 'center' ? 'center' : cs.textAlign === 'right' ? 'flex-end' : 'flex-start', lineHeight: o.tagName === 'TEXTAREA' ? cs.lineHeight : 'normal' });
+          if (cs.display === 'none') dv.style.display = 'none';
+          if (cs.position === 'absolute') Object.assign(dv.style, { position: 'absolute', left: cs.left, top: cs.top, right: cs.right, bottom: cs.bottom });
+          c.replaceWith(dv);
+        }); },
+        ignoreElements: el => el.classList && (el.classList.contains('no-print') || el.classList.contains('fb-badge') || el.classList.contains('cv-blk') || el.classList.contains('log-btn')) });
+      ppt.addSlide().addImage({ data: cv.toDataURL('image/jpeg', 0.92), x: 0, y: 0, w: 8.27, h: 11.69 });
+    }
+    document.documentElement.style.zoom = z0; z0 = null;
+    restore(); restore = null;
+    const blob = await ppt.write({ outputType: 'blob' });
+    const a = h('a', { href: URL.createObjectURL(blob), download: `POG_${pogTitle(pog).replace(/ · /g, '_')}_${fmtDate(new Date()).replace(/\./g, '')}.pptx`.replace(/[\\/:*?"<>|]/g, '') });
+    document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+    toast(`PPT를 저장했어요 · ${pages.length}쪽` + (inl.bad ? ` · 사진 ${inl.bad}장은 사진 서버가 막아서 빠졌을 수 있어요` : ''));
+  } catch (e) { alert('PPT를 만들지 못했어요: ' + (e.message || e)); }
+  finally { if (z0 !== null) document.documentElement.style.zoom = z0; restore?.(); }
+}
+$('#ed-ppt').onclick = () => savePpt($('#ed-pages'), state.currentPog);
+$('#vw-ppt').onclick = () => savePpt($('#vw-pages'), state.viewer.pog);
+$('#fb-ppt').onclick = () => savePpt($('#fb-pages'), fb.pog);
 
 /* ---------- 새 POG 가져오기 ---------- */
 $('#btn-import').onclick = openImport;
