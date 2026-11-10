@@ -1081,3 +1081,11 @@ nav button { padding: 7px 10px; }
   body.nav-hide.nav-peek #nav { display: flex; box-shadow: 6px 0 24px rgba(0,0,0,.16); z-index: 60; }
   body.nav-hide #app > .view { margin-left: 0; }
 }
+
+/* 도면 팀별 보기 (사용자) */
+.dw-team-sel { max-width: 180px; }
+.dw-box.dw-team { pointer-events: none; z-index: 3; }
+.dw-box.dw-team.dim { background: rgba(255,255,255,.78) !important; border-color: transparent !important; }
+.dw-box.dw-team.mine { background: transparent !important; border: 2px solid #f7931e !important; }
+.dw-team-bar { color: var(--or-d); font-weight: 600; }
+@media print { .dw-box.dw-team.mine { border-color: transparent !important; } }

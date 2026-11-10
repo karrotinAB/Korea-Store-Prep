@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261112f';
+const APP_VER = '20261113a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2931,7 +2931,7 @@ function closeDw() {
 }
 function openDw(id) {
   closeDw();
-  dw.id = id; $('#dw-find').value = ''; dwf.pog = undefined; dw.seqMode = false; dw.seqDraft = null; $('#dw-seqbtn')?.classList.remove('primary'); dw.seqUnsub?.(); dw.seqKey = null; dw.seq = []; dw.cropping = false; dw.cropDraft = null; dw.zoom = 1;
+  dw.id = id; dw.team = ''; dw.teamMap = null; $('#dw-find').value = ''; dwf.pog = undefined; dw.seqMode = false; dw.seqDraft = null; $('#dw-seqbtn')?.classList.remove('primary'); dw.seqUnsub?.(); dw.seqKey = null; dw.seq = []; dw.cropping = false; dw.cropDraft = null; dw.zoom = 1;
   $('#dw-empty').classList.add('hidden'); $('#dw-body').classList.remove('hidden');
   $('#dw-stage').replaceChildren(h('div', { class: 'mut pad' }, '불러오는 중…'));
   renderDwList();
@@ -3175,7 +3175,7 @@ async function starVersion(v) {
 // 그림: 업로드 화면 = 원본 + 읽은 매대명 표시 / 온라인 = 원본
 // 저장 구역(v.crop, SVG 단위 {x,y,w,h}): 바깥 칸(.dw-canvas)은 그 구역 비율, 안쪽 전체 도면(.dw-full)을 밀어서 그 구역만 보이게
 const dwCrop = v => { const c = v.crop; return c && c.w > 0 && c.h > 0 ? c : { x: 0, y: 0, w: v.w, h: v.h }; };
-function drawingView(v, { onPick, onPickMany, used, others, selId, picks, plain, only, hits, full, seq } = {}) {
+function drawingView(v, { onPick, onPickMany, used, others, selId, picks, plain, only, hits, full, seq, teamSel } = {}) {
   const c = full ? { x: 0, y: 0, w: v.w, h: v.h } : dwCrop(v);
   // 글자 칸이 도면과 꼭 같이 움직이도록 위치·크기를 직접 씀 (style.css가 예전 것이어도 어긋나지 않게)
   const wrap = h('div', { class: 'dw-full', style: `position:absolute;container-type:inline-size;left:${-c.x / c.w * 100}%;top:${-c.y / c.h * 100}%;width:${v.w / c.w * 100}%;height:${v.h / c.h * 100}%` },
@@ -3213,8 +3213,14 @@ function drawingView(v, { onPick, onPickMany, used, others, selId, picks, plain,
     };
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   });
-  // 도면 번호 (온라인 도면 🔢): seq = { order: [gid…], onToggle? }. 누르면 다음 번호, 다시 누르면 빠짐
+  // 팀별 보기: 고른 팀이 아닌 매대는 흰 막으로 흐리게, 고른 팀 매대는 테두리 (누르기는 아래로 통과)
+  if (teamSel) for (const g of v.groups || []) {
+    const mine = teamSel.mine.has(g.id);
+    wrap.append(h('div', { class: 'dw-box dw-team ' + (mine ? 'mine' : 'dim'), style: `left:${pct(g.x, v.w)};top:${pct(g.y, v.h)};width:${pct(g.w, v.w)};height:${pct(g.h, v.h)}`, title: g.ko + (teamOfG(g) ? ` · ${teamOfG(g)}` : '') }));
+  }
+  // 도면 번호 (온라인 도면 🔢): seq = { order: [gid…], only?: 팀 매대, onToggle? }. 누르면 다음 번호, 다시 누르면 빠짐
   if (seq) for (const g of v.groups || []) {
+    if (seq.only && !seq.only.has(g.id)) continue;
     const n = (seq.order || []).indexOf(g.id) + 1;
     if (!n && !seq.onToggle) continue;
     const el = h('div', { 'data-gid': g.id, class: 'dw-box dw-seq' + (n ? ' on' : '') + (seq.onToggle ? ' pick' : ''), style: `left:${pct(g.x, v.w)};top:${pct(g.y, v.h)};width:${pct(g.w, v.w)};height:${pct(g.h, v.h)}`, title: g.ko },
@@ -3244,6 +3250,8 @@ function renderDwStage() {
   const pickable = dw.tab === 'up' && canEdit('drawing');
   box.classList.toggle('nopan', pickable && !dw.cropping && !!dw.multiPick); // 터치: 네모 그리기 중에는 한 손가락 = 그리기
   if (pickable && dw.cropping) { renderCropStage(box, v); return; }
+  loadDwTeams(v); fillDwTeamSel(v);
+  const teamSel = dw.team ? { team: dw.team, mine: teamGids(v, dw.team) } : null;
   const hits = pickable ? null : dwFindHits(v);
   // 도면 번호 (온라인 도면, 직원): 🔢 번호 매기기를 켜면 누르는 순서대로 1, 2, 3… 다시 누르면 빠짐
   const seqOn = dw.tab === 'on' && isStaff();
@@ -3251,14 +3259,15 @@ function renderDwStage() {
   // 번호 매기는 동안은 화면에서만 바꾸고(다시 그리지 않음), '💾 저장'을 눌러야 저장 (사용자: 누를 때마다 저장하니 느림)
   if (dw.seqMode && !dw.seqDraft) dw.seqDraft = [...(dw.seq || [])];
   const order = dw.seqMode ? dw.seqDraft : dw.seq;
-  const seq = seqOn && dw.seqMode ? { order: order || [], onToggle: dw.seqMode ? g => toggleSeq(g) : null } : null;
-  if (seq && dw.seqMode) legend.append(h('span', { class: 'dw-seq-bar' }, ' · 🔢 번호 매기는 중: 매대를 누르는 순서대로 1, 2, 3… 번호가 있는 매대를 누르면 번호를 바꾸거나 뺄 수 있어요. ',
+  const seq = seqOn && dw.seqMode ? { order: order || [], only: teamSel?.mine, onToggle: dw.seqMode ? g => toggleSeq(g) : null } : null;
+  if (teamSel) legend.append(h('span', { class: 'dw-team-bar' }, ` · 팀 '${teamSel.team}' 매대 ${teamSel.mine.size}개만 진하게 (다른 팀은 흐리게)`));
+  if (seq && dw.seqMode) legend.append(h('span', { class: 'dw-seq-bar' }, ` · 🔢 ${dw.team ? dw.team + ' 팀 ' : ''}번호 매기는 중: 매대를 누르는 순서대로 1, 2, 3… 번호가 있는 매대를 누르면 번호를 바꾸거나 뺄 수 있어요. `,
     h('button', { class: 'btn small', title: '도면의 모든 매대에 위에서 아래로, 같은 줄은 왼쪽에서 오른쪽으로 번호를 한 번에 매겨요', onclick: () => autoSeqByPos(v) }, '📐 도면 순서로 자동'), ' ',
     h('span', { id: 'dw-seq-n' }), ' ',
     h('button', { class: 'btn small primary', id: 'dw-seq-save', onclick: () => saveSeq(v) }, '💾 저장'), ' ',
     h('button', { class: 'btn small ghost', onclick: () => { dw.seqDraft = [...(dw.seq || [])]; paintSeq(); } }, '처음대로'), ' ',
     h('button', { class: 'btn small ghost', onclick: () => { if (confirm('번호를 모두 지울까요? (저장을 눌러야 반영돼요)')) { dw.seqDraft = []; paintSeq(); } } }, '모두 지우기')));
-  box.replaceChildren(legend, drawingView(v, pickable ? { picks: dwPicks(), onPick: g => togglePick(g.id), onPickMany: ids => { const p = dwPicks(); ids.forEach(i => p.add(i)); paintPicks(); renderDwSide(); } } : { selId: dw.sel, plain: true, hits, seq }));
+  box.replaceChildren(legend, drawingView(v, pickable ? { picks: dwPicks(), onPick: g => togglePick(g.id), onPickMany: ids => { const p = dwPicks(); ids.forEach(i => p.add(i)); paintPicks(); renderDwSide(); }, teamSel } : { selId: dw.sel, plain: true, hits, seq, teamSel }));
   dwZoomApply();
   if (seq && dw.seqMode) paintSeq();
   if (hits && dwf.jump) { dwf.jump = false; setTimeout(() => $('.dw-find', box)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }), 30); }
@@ -3421,10 +3430,61 @@ function renderCropStage(box, v) {
       h('button', { class: 'btn small ghost', onclick: done }, '취소'))), view);
   dwZoomApply();
 }
+/* ---------- 도면 팀별 보기 (사용자: POG처럼 도면도 팀별로) ----------
+   도면은 매장마다 하나. 매대(파란 칸)의 팀 = 업로드 화면에서 직접 정한 팀(g.team) → 없으면 그 팀 POG와 연결된 매대.
+   팀을 고르면 다른 팀 매대는 흐리게. 번호는 팀마다 따로 (seq 문서 id = 버전id__팀) */
+const seqId = (vId, team) => team ? `${vId}__${team}` : vId;
+const teamOfG = g => g.team || dw.teamMap?.byGid.get(g.id) || '';
+const teamGids = (v, team) => new Set((v.groups || []).filter(g => teamOfG(g) === team).map(g => g.id));
+// 이 매장의 팀별 POG(최종본이 있으면 가장 최근 최종본, 없으면 가장 최근에 고친 것)에서 도면 연결 → 매대마다 팀
+async function loadDwTeams(v) {
+  const key = dw.id + '|' + v.id; if (dw.teamMap?.key === key || dw.teamLoading === key) return;
+  dw.teamLoading = key;
+  const id = dw.id, st = dwStores().find(x => x.id === id);
+  const best = new Map(), t = p => (p.status === 'final' ? 2e13 : 0) + (p.finalizedAt?.toMillis?.() || p.updatedAt?.toMillis?.() || 0);
+  for (const p of state.pogs) {
+    if (!(p.storeId === id || (st?.code && String(p.storeCode) === String(st.code)))) continue;
+    const o = best.get(pogTeam(p)); if (!o || t(p) > t(o)) best.set(pogTeam(p), p);
+  }
+  const ps = [...best.values()].sort((a, b) => teamNo(a) - teamNo(b));
+  const byGid = new Map(), byKo = new Map((v.groups || []).map(g => [norm(g.ko), g.id])), has = new Set((v.groups || []).map(g => g.id));
+  try {
+    const all = await Promise.all(ps.map(p => getDocs(collection(db, 'pogs', p.id, 'fixtures')).then(s2 => s2.docs.map(d => [pogTeam(p), d.data()])).catch(() => [])));
+    for (const [team, f] of all.flat()) {
+      const r = f.drawingRef; if (!r || !team) continue;
+      const gid = r.vId === v.id && has.has(r.gid) ? r.gid : byKo.get(norm(r.ko));
+      if (gid && !byGid.has(gid)) byGid.set(gid, team);
+    }
+  } catch { }
+  if (dw.id !== id) return;
+  dw.teamLoading = null;
+  dw.teamMap = { key, byGid, teams: ps.map(pogTeam).filter(Boolean) };
+  fillDwTeamSel(v); renderDwStage(); renderDwSide();
+}
+// 툴바 '팀' 고르기: 이 매장 POG의 팀 + 업로드 화면에서 직접 정한 팀
+function dwTeamList(v) {
+  const out = [...(dw.teamMap?.teams || [])];
+  for (const g of v?.groups || []) if (g.team && !out.includes(g.team)) out.push(g.team);
+  return out;
+}
+function fillDwTeamSel(v) {
+  const sel = $('#dw-team'); if (!sel) return;
+  const teams = dwTeamList(v);
+  if (dw.team && !teams.includes(dw.team)) dw.team = '';
+  sel.replaceChildren(h('option', { value: '' }, '팀: 전체'), ...teams.map(t => h('option', { value: t }, `팀: ${t}`)));
+  sel.value = dw.team || '';
+  sel.classList.toggle('hidden', !v || !teams.length);
+}
+$('#dw-team').addEventListener('change', async e => {
+  const t = e.target.value;
+  if (dw.seqMode) await leaveSeq();
+  dw.team = t; dw.seqKey = null; $('#dw-seqbtn')?.classList.remove('primary');
+  renderDwStage(); renderDwSide();
+});
 function subDwSeq(v) {
-  const key = dw.id + '|' + v.id; if (dw.seqKey === key) return;
+  const key = dw.id + '|' + v.id + '|' + (dw.team || ''); if (dw.seqKey === key) return;
   dw.seqUnsub?.(); dw.seqKey = key; dw.seq = [];
-  dw.seqUnsub = onSnapshot(doc(db, 'drawings', dw.id, 'seq', v.id), d => {
+  dw.seqUnsub = onSnapshot(doc(db, 'drawings', dw.id, 'seq', seqId(v.id, dw.team)), d => {
     if (dw.seqKey !== key) return;
     dw.seq = d.exists() ? (d.data().order || []) : [];
     if (dw.seqMode) paintSeq(); else renderDwStage(); // 번호 매기는 중이면 다시 그리지 않음
@@ -3458,8 +3518,9 @@ function toggleSeq(g) {
 // 도면 순서로 자동 번호 (사용자): 도면의 매대(파란 칸)를 위에서 아래로 줄을 나눠, 같은 줄은 왼쪽에서 오른쪽으로 1, 2, 3…
 // 줄 = 칸 가운데 높이가 비슷한 것끼리 (칸 높이의 절반 안). 안 맞는 매대는 눌러서 번호를 바꾸고 저장
 function autoSeqByPos(v) {
-  const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0);
-  if (!gs.length) { alert('도면에 매대가 없어요.'); return; }
+  const mine = dw.team ? teamGids(v, dw.team) : null;
+  const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && (!mine || mine.has(g.id)));
+  if (!gs.length) { alert(dw.team ? `'${dw.team}' 팀 매대가 없어요.` : '도면에 매대가 없어요.'); return; }
   if ((dw.seqDraft || []).length && !confirm(`지금 매긴 번호 ${dw.seqDraft.length}개를 지우고, 도면 순서로 새로 매길까요?\n(저장을 눌러야 반영돼요)`)) return;
   const cy = g => g.y + g.h / 2, hs = gs.map(g => g.h).sort((a, b) => a - b), mh = hs[Math.floor(hs.length / 2)];
   const rows = [];
@@ -3469,13 +3530,13 @@ function autoSeqByPos(v) {
   }
   dw.seqDraft = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)).map(g => g.id);
   paintSeq();
-  toast(`도면 순서로 ${dw.seqDraft.length}개를 매겼어요. 안 맞는 매대는 눌러서 번호를 바꾸고 💾 저장하세요`);
+  toast(`${dw.team ? dw.team + ' 팀 · ' : ''}도면 순서로 ${dw.seqDraft.length}개를 매겼어요. 안 맞는 매대는 눌러서 번호를 바꾸고 💾 저장하세요`);
 }
 async function saveSeq(v) {
   const order = [...(dw.seqDraft || [])];
   try {
-    await setDoc(doc(db, 'drawings', dw.id, 'seq', v.id), { order, vId: v.id, updatedAt: serverTimestamp(), updatedBy: me() });
-    dw.seq = order; paintSeq(); toast(`번호 ${order.length}개를 저장했어요`);
+    await setDoc(doc(db, 'drawings', dw.id, 'seq', seqId(v.id, dw.team)), { order, vId: v.id, ...(dw.team ? { team: dw.team } : {}), updatedAt: serverTimestamp(), updatedBy: me() });
+    dw.seq = order; paintSeq(); toast(`${dw.team ? dw.team + ' 팀 ' : ''}번호 ${order.length}개를 저장했어요`);
   } catch (e) { alert('번호를 저장하지 못했어요: ' + (e.code || e.message)); }
 }
 // 저장 안 한 번호가 있으면 물어봄 (번호 매기기를 끌 때)
@@ -3501,6 +3562,7 @@ function dwFindHits(v) {
     const g = (v.groups || []).find(x => r.vId === v.id ? x.id === r.gid : x.ko === r.ko);
     if (g) { hits.add(g.id); items += its.length; }
   }
+  if (dw.team) { const mine = teamGids(v, dw.team); [...hits].forEach(g => { if (!mine.has(g)) hits.delete(g); }); }
   n.textContent = hits.size ? `매대 ${hits.size}곳${items ? ` · 제품 ${items}개` : ''}` : (dwf.pog === null ? '없어요' : dwf.pog ? '없어요' : '찾는 중…');
   n.classList.toggle('none', !hits.size);
   return hits;
@@ -3728,14 +3790,30 @@ function groupEditor(v) {
     save([...groups.filter(x => !picks.has(x.id)), one], `${sel.length}개를 '${one.ko}'로 합쳤어요`);
   };
   const g1 = sel.length === 1 ? sel[0] : null;
-  return h('section', { class: 'se-sec' }, h('h4', {}, '매대명 묶음 고치기'),
+  // 고른 매대의 팀 정하기 (사용자: 도면 팀별 보기). 비우면 POG 연결로 자동
+  const teams = dwTeamList(v);
+  const tsel = h('select', { class: 'nb-sel' }, h('option', { value: '' }, '자동 (그 팀 POG와 연결된 매대)'), ...teams.map(t => h('option', { value: t }, t)), h('option', { value: '__new' }, '+ 다른 팀 이름 쓰기'));
+  const setTeam = async () => {
+    let t = tsel.value;
+    if (t === '__new') { t = (prompt('팀 이름 (예: 디자인지제)') || '').trim(); if (!t) return; }
+    const ids = new Set(sel.map(g => g.id)), before = structuredClone(v.groups || []);
+    const after = (v.groups || []).map(g => ids.has(g.id) ? (t ? { ...g, team: t } : (({ team, ...r }) => r)(g)) : g);
+    const ref = doc(db, 'drawings', dw.id, 'versions', v.id);
+    try { await updateDoc(ref, { groups: after }); dwTrack(null, '매대 팀', () => updateDoc(ref, { groups: before }), () => updateDoc(ref, { groups: after })); toast(t ? `${sel.length}개를 '${t}' 팀으로 정했어요` : `${sel.length}개를 자동(POG 연결)으로 되돌렸어요`); }
+    catch (e) { alert('저장하지 못했어요: ' + (e.code || e.message)); }
+  };
+  const teamSec = h('section', { class: 'se-sec' }, h('h4', {}, '매대 팀 정하기'),
+    h('p', { class: 'se-help' }, "도면 '팀' 보기에서 쓰여요. 보통은 그 팀 POG와 연결된 매대가 자동으로 그 팀이 돼요. 연결 안 됐거나 틀린 매대만 골라서 정하세요."),
+    sel.length ? h('div', { class: 'mut' }, `고른 매대 ${sel.length}개 · 지금: ${[...new Set(sel.map(g => teamOfG(g) || '팀 없음'))].join(', ')}`) : h('div', { class: 'mut' }, '도면에서 매대를 먼저 고르세요.'),
+    h('div', { class: 'se-btns' }, tsel, h('button', { class: 'btn small', disabled: !sel.length, onclick: setTeam }, '팀 정하기')));
+  return h('div', {}, h('section', { class: 'se-sec' }, h('h4', {}, '매대명 묶음 고치기'),
     h('p', { class: 'se-help' }, '도면에서 파란 칸을 누르거나, 빈 곳을 끌어 네모로 여러 칸을 한 번에 고르세요. 한 매대인 글자들을 골라 [합치기]하면 한 묶음(매대 하나)이 되고, POG에는 \'글자1/글자2\'처럼 /로 이어져 들어가요. 한 칸에 여러 매대가 들어갔으면 [나누기].'),
     sel.length ? h('div', { class: 'dw-glist' }, ...sel.map(g => h('div', { class: 'dw-gi on', onclick: () => togglePick(g.id) }, h('span', { class: 'ko' }, g.ko), h('span', { class: 'en' }, '×')))) : null,
     h('div', { class: 'se-btns' },
       h('button', { class: 'btn small', disabled: !(g1 && (g1.parts?.length || 0) > 1), onclick: split }, '나누기'),
       h('button', { class: 'btn small', disabled: sel.length < 2, onclick: merge }, sel.length >= 2 ? `${sel.length}개 합치기` : '합치기'),
       sel.length ? h('button', { class: 'btn small ghost', onclick: () => { dw.picks = new Set(); paintPicks(); renderDwSide(); } }, '고른 것 지우기') : null),
-    g1 && !g1.parts ? h('div', { class: 'tr-why' }, '예전에 올린 도면이라 나눌 수 없어요. 다시 올리면 돼요.') : null);
+    g1 && !g1.parts ? h('div', { class: 'tr-why' }, '예전에 올린 도면이라 나눌 수 없어요. 다시 올리면 돼요.') : null), teamSec);
 }
 $('#dw-side').addEventListener('focusout', () => setTimeout(() => renderDwSide(), 80));
 
@@ -3781,7 +3859,7 @@ async function openHeaderPicker(pog, fx, after) {
       const blk = state.pageEls.get(fx.id), inp = blk?.querySelector('[data-f="headerName"]'); if (inp) inp.value = g.ko;
       fx.drawingRef = ref; fx.headerName = g.ko;
       close(); toast(`헤더에 '${g.ko}'를 넣었어요`); after?.();
-    }, seq: await readSeq(st0.id, v.id) })), { wide: true });
+    }, seq: await readSeq(st0.id, v.id, pogTeam(pog)) })), { wide: true });
   setTimeout(() => $('#modal-root .hp-pick .dw-box.on')?.scrollIntoView({ block: 'center', inline: 'center' }), 120); // 지금 연결된 칸이 보이게
 }
 // 이 POG 매장의 ★최종본(없으면 마지막으로 내보낸) 도면 버전
@@ -3793,8 +3871,11 @@ async function pogDrawing(pog) {
   return v ? { st0, v } : null;
 }
 // 온라인 도면에서 매긴 매대 번호 (drawings/{매장}/seq/{버전} = { order: [gid…] }, 1번부터)
-async function readSeq(storeId, vId) {
-  try { const d = await getDoc(doc(db, 'drawings', storeId, 'seq', vId)); return d.exists() ? { order: d.data().order || [] } : null; } catch { return null; }
+async function readSeq(storeId, vId, team = '') { // 팀 번호가 있으면 그것, 없으면 전체 번호
+  for (const id of team ? [seqId(vId, team), vId] : [vId]) {
+    try { const d = await getDoc(doc(db, 'drawings', storeId, 'seq', id)); if (d.exists()) return { order: d.data().order || [], team: d.data().team || '' }; } catch { }
+  }
+  return null;
 }
 // 이름 비슷한 정도 0~1: 낱말('/'·쉼표·괄호·띄어쓰기로 나눔)이 겹치는 정도 + 글자 두 개씩 겹치는 정도. POG 원래 이름 끝의 '_2_2600_1000'·'(1/4)'는 뺌
 const nameWords = s => String(s || '').replace(/\(\d+\/\d+\)/g, '').replace(/_[\d_A-Za-z]*$/, '').split(/[\/,·()\[\]\s&+]+/).map(w => w.replace(/[^가-힣A-Za-z0-9]/g, '')).filter(w => w.length > 0);
@@ -3839,7 +3920,7 @@ async function openPogDwLink(pog) {
   const body = h('div', { class: 'pdl-list' });
   const info = h('p', { class: 'mut' });
   const paint = async () => {
-    const seq = await readSeq(st0.id, v.id), order = seq?.order || [];
+    const seq = await readSeq(st0.id, v.id, pogTeam(pog)), order = seq?.order || [];
     const pages = [...state.edComposed.values()];
     info.textContent = `${storeName(st0)} · 도면 ver.${v.no} · 도면 번호 ${order.length ? order.length + '개 매김' : '아직 없음 (온라인 도면에서 🔢 번호 매기기)'}`;
     body.replaceChildren(...pages.map((fx, i) => {
@@ -3853,7 +3934,7 @@ async function openPogDwLink(pog) {
     sortBtn.disabled = !order.length;
   };
   const sortBtn = h('button', { class: 'btn primary', onclick: async () => {
-    const seq = await readSeq(st0.id, v.id), order = seq?.order || [];
+    const seq = await readSeq(st0.id, v.id, pogTeam(pog)), order = seq?.order || [];
     const ids = shownIds(), num = id => seqNoOf(state.edComposed.get(id), v, order);
     const has = ids.filter(id => num(id)), rest = ids.filter(id => !num(id));
     if (!has.length) { alert('도면 번호가 매겨진 매대와 연결된 페이지가 없어요.'); return; }
