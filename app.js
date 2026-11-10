@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261113a';
+const APP_VER = '20261113b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -55,6 +55,7 @@ function applyAccess() {
   $$('[data-view], [data-go]').forEach(el => el.classList.toggle('hidden', !canSee(el.dataset.view || el.dataset.go)));
   $$('[data-edit]').forEach(el => el.classList.toggle('hidden', !canEdit(el.dataset.edit)));
   $('#subnav').classList.toggle('hidden', !canSee('pog-make'));
+  $('#subnav-dw').classList.toggle('hidden', !canSee('dw-up'));
   $$('.tiles').forEach(t => t.classList.toggle('few', [...t.children].filter(c => c.classList.contains('tile') && !c.classList.contains('hidden')).length <= 2));
   $$('[data-staff]').forEach(el => el.classList.toggle('hidden', !isStaff()));
   $$('[data-admin]').forEach(el => el.classList.toggle('hidden', state.level !== 'admin')); // 관리자만 보이는 버튼
@@ -254,18 +255,19 @@ function stopListeners() { unsubs.forEach(u => u()); unsubs = []; closePog(); cl
 /* ---------- 메뉴 이동 ---------- */
 const secOf = v => v.startsWith('dw-') ? 'dw' : v; // 도면 업로드·온라인 도면은 같은 화면(#v-dw)
 function go(v) {
-  if (v === 'drawing') v = 'dw-online'; // 도면은 한 화면 (사용자: 온라인 도면·도면 업로드 합치기). 업로드는 그 안의 '📤 도면 업로드'
   if (!$('#v-' + secOf(v))) v = 'home';
   if (!canSee(v)) v = canSee('home') ? 'home' : canSee('finder') ? 'finder' : 'noaccess';
   state.view = v;
   $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v || (!!b.dataset.group && v.startsWith(b.dataset.group))));
   { const on = [...$$('#nav button.on')].pop(), nav = $('#nav'); if (on && nav && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = Math.max(0, on.offsetLeft - nav.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2); } // 메뉴가 화면보다 길면 지금 메뉴가 보이게
   // 1. 도면 / 2. POG를 누르면 (그 아래 화면 포함) 메뉴에 그 메뉴와 하위 메뉴만 보임 (예: 1. 도면 | 도면 업로드 | 온라인 도면). 홈은 왼쪽 'ARTBOX 국내 POG'로 (사용자)
-  const gPog = v.startsWith('pog-');
+  const gPog = v.startsWith('pog-'), gDw = v === 'drawing' || v.startsWith('dw-');
   $('#subnav').classList.toggle('on', gPog);
+  $('#subnav-dw').classList.toggle('on', gDw);
   $('#nav').classList.toggle('grp-pog', gPog && !$('#subnav').classList.contains('hidden'));
+  $('#nav').classList.toggle('grp-dw', gDw && !$('#subnav-dw').classList.contains('hidden'));
   // PC 왼쪽 메뉴: 처음 화면·POG 고르기에서만 보이고, 안쪽 화면(도면·POG 만들기 등)에 들어가면 숨김 → 위쪽 '☰ 메뉴'로 잠깐 열기 (사용자)
-  document.body.classList.toggle('nav-hide', !['home', 'pog-home', 'noaccess'].includes(v));
+  document.body.classList.toggle('nav-hide', !['home', 'pog-home', 'drawing', 'noaccess'].includes(v));
   document.body.classList.remove('nav-peek');
   $$('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + secOf(v)));
   if (v.startsWith('dw-')) setDwMode({ 'dw-up': 'up', 'dw-online': 'on' }[v]);
@@ -2883,12 +2885,13 @@ $('#st-add').addEventListener('submit', async e => {
 const dwFinal = d => d?.finalVersion || null;
 const dwFinalNo = d => d?.finalNo || null;
 const dw = { tab: 'up', id: null, doc: null, versions: [], vId: null, sel: null, unsubs: [] };
-// 화면: up = 도면 업로드(VMD), on = 온라인 도면(최종본 보기)
+// 화면: up = 도면 업로드(VMD 편집 + POG 작업용 팀별 보기·팀 번호), on = 온라인 도면(최종본, 모든 팀을 한 장에 · 사용자: 다시 나눔)
 const dwf = { pog: undefined, jump: false }; // 도면 찾기 (아래 dwFindHits)
-const DW_TITLE = { up: '도면 업로드', on: '도면' };
+const DW_TITLE = { up: '도면 업로드', on: '온라인 도면' };
 function setDwMode(m) {
   if (dw.tab === m && dw.modeSet) return;
   dw.modeSet = true; dw.tab = m;
+  if (m === 'on') dw.team = ''; // 온라인 도면은 모든 팀을 한 장에
   $('#dw-mode-title').textContent = DW_TITLE[m];
   const id = dw.id; closeDw(); renderDwList();
   if (id && dwListRows().some(x => x.id === id)) openDw(id);
@@ -2900,7 +2903,7 @@ function dwListRows() {
   const q = $('#dw-search').value.trim().toLowerCase();
   return dwStores().filter(st => {
     const d = state.dwMap.get(st.id);
-    if (dw.tab !== 'up' && !(d?.status === 'final') && !canEdit('drawing')) return false; // 도면 보기는 내보낸 도면만 (도면 편집 계정은 모든 매장 · 거기서 📤 도면 업로드)
+    if (dw.tab !== 'up' && !(d?.status === 'final')) return false; // 온라인 도면은 내보낸 도면만
     return !q || [st.code, st.partner, st.branch].join(' ').toLowerCase().includes(q);
   });
 }
@@ -2922,7 +2925,7 @@ function renderDwList() {
     ? [h('div', { class: 'upload-rule' }, h('b', {}, '업로드 파일은 SVG 파일'), ' · ', h('b', {}, '글씨는 윤곽선 만들기 하지 말아주세요'),
         h('div', { class: 'mut' }, '매대명이 글자로 남아 있어야 POG에서 매대를 고를 수 있어요.')),
        h('div', {}, '왼쪽에서 매장을 고르세요.')]
-    : [h('div', {}, '볼 매장을 고르세요.'), h('div', { class: 'mut' }, canEdit('drawing') ? "도면을 올리거나 고치려면 매장을 고르고 위의 '📤 도면 업로드'를 누르세요." : 'VMD실이 내보낸 도면만 나와요.')]));
+    : [h('div', {}, '볼 매장을 고르세요.'), h('div', { class: 'mut' }, 'VMD실이 내보낸 도면만 나와요. 팀별로 보거나 팀 번호를 매기려면 도면 업로드 화면에서 해요.')]));
 }
 function closeDw() {
   dw.unsubs.forEach(u => u()); dw.unsubs = []; dw.id = null; dw.doc = null; dw.versions = []; dw.vId = null; dw.sel = null;
@@ -2961,23 +2964,19 @@ function renderDw() {
   $('#dw-area-f').classList.toggle('hidden', !up && !dw.doc?.area);
   $('#dw-side').classList.toggle('hidden', dw.tab === 'on'); // 온라인 도면은 보기만
   $('#dw-log').classList.toggle('hidden', dw.tab === 'on');
-  $('#dw-seqbtn').classList.toggle('hidden', dw.tab !== 'on' || !isStaff() || !v);
+  $('#dw-seqbtn').classList.toggle('hidden', !isStaff() || !v); // 온라인 도면 = 전체 번호, 도면 업로드 = 팀을 고르면 팀 번호
   dwUndoBtns();
   $('#dw-find-box').classList.toggle('hidden', up);
   const fin = dwFinal(dw.doc);
   $('#dw-ver').textContent = v ? `ver.${v.no}${v.id === fin ? ' ★최종본' : ''}${v.exported ? '' : ' · 작성 중'}` : '도면 없음';
   $('#dw-ver').className = 'badge ' + (v?.exported ? 'final' : 'draft');
   $('#dw-upload').classList.toggle('hidden', !up || !canEdit('drawing'));
-  $('#dw-goup').classList.toggle('hidden', up || !canEdit('drawing'));
-  $('#dw-goon').classList.toggle('hidden', !up);
   $('#dw-upload').textContent = dw.versions.length ? '재업로드' : '도면 파일 올리기';
   $('#dw-export').classList.toggle('hidden', !up || !canEdit('drawing') || !v || v.exported);
   $('#dw-reedit').classList.toggle('hidden', !up || !canEdit('drawing') || !v?.exported || v.id !== dw.versions.at(-1)?.id);
   $('#dw-print').classList.toggle('hidden', !v);
   renderDwStage(); renderDwSide();
 }
-$('#dw-goup').onclick = () => go('dw-up');
-$('#dw-goon').onclick = () => go('dw-online');
 $('#dw-area').addEventListener('input', e => {
   e.target.classList.toggle('need', !(Number(e.target.value) > 0));
   const id = dw.id, st = state.stores.find(x => x.id === id), val = e.target.value === '' ? '' : Number(e.target.value);
@@ -3238,7 +3237,7 @@ function renderDwStage() {
   if (!v) {
     box.replaceChildren(h('div', { class: 'upload-rule' }, h('b', {}, '업로드 파일은 SVG 파일'), ' · ', h('b', {}, '글씨는 윤곽선 만들기 하지 말아주세요'),
       h('div', { class: 'mut' }, !canEdit('drawing') ? 'VMD실이 아직 도면을 올리지 않았어요.' : dw.tab === 'up' ? "평수를 적고, 한글 도면 SVG 파일을 여기에 끌어다 놓거나 위의 '도면 파일 올리기'를 눌러주세요."
-        : dw.versions.length ? "아직 내보낸 도면이 없어요. 위의 '📤 도면 업로드'에서 확인하고 내보내기를 눌러주세요." : "아직 올린 도면이 없어요. 위의 '📤 도면 업로드'를 눌러 올려주세요.")));
+        : '아직 내보낸 도면이 없어요.')));
     return;
   }
   const legend = dw.tab === 'up'
@@ -3247,14 +3246,14 @@ function renderDwStage() {
       canEdit('drawing') && HAS_TOUCH ? h('button', { class: 'btn small dw-multi' + (dw.multiPick ? ' primary' : ''), type: 'button', onclick: () => { dw.multiPick = !dw.multiPick; renderDwStage(); } },
         dw.multiPick ? '☑ 여러 칸 고르는 중 (끄기)' : '☐ 여러 칸 고르기') : null)
     : h('div', { class: 'dw-legend' }, $('#dw-ver').textContent);
-  const pickable = dw.tab === 'up' && canEdit('drawing');
+  const pickable = dw.tab === 'up' && canEdit('drawing') && !dw.seqMode; // 번호 매기는 중에는 매대 고르기 대신 번호
   box.classList.toggle('nopan', pickable && !dw.cropping && !!dw.multiPick); // 터치: 네모 그리기 중에는 한 손가락 = 그리기
   if (pickable && dw.cropping) { renderCropStage(box, v); return; }
   loadDwTeams(v); fillDwTeamSel(v);
-  const teamSel = dw.team ? { team: dw.team, mine: teamGids(v, dw.team) } : null;
+  const teamSel = dw.tab === 'up' && dw.team ? { team: dw.team, mine: teamGids(v, dw.team) } : null; // 팀별 보기는 도면 업로드(POG 작업)에서만
   const hits = pickable ? null : dwFindHits(v);
   // 도면 번호 (온라인 도면, 직원): 🔢 번호 매기기를 켜면 누르는 순서대로 1, 2, 3… 다시 누르면 빠짐
-  const seqOn = dw.tab === 'on' && isStaff();
+  const seqOn = isStaff();
   if (seqOn) subDwSeq(v);
   // 번호 매기는 동안은 화면에서만 바꾸고(다시 그리지 않음), '💾 저장'을 눌러야 저장 (사용자: 누를 때마다 저장하니 느림)
   if (dw.seqMode && !dw.seqDraft) dw.seqDraft = [...(dw.seq || [])];
@@ -3473,7 +3472,7 @@ function fillDwTeamSel(v) {
   if (dw.team && !teams.includes(dw.team)) dw.team = '';
   sel.replaceChildren(h('option', { value: '' }, '팀: 전체'), ...teams.map(t => h('option', { value: t }, `팀: ${t}`)));
   sel.value = dw.team || '';
-  sel.classList.toggle('hidden', !v || !teams.length);
+  sel.classList.toggle('hidden', !v || !teams.length || dw.tab !== 'up');
 }
 $('#dw-team').addEventListener('change', async e => {
   const t = e.target.value;

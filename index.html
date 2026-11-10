@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261113a">
+<link rel="stylesheet" href="style.css?v=20261113b">
 </head>
 <body>
 
@@ -35,12 +35,16 @@
     <button class="brand link-brand" data-go="home" title="처음 화면">ARTBOX <b>국내 POG</b></button>
     <nav id="nav">
       <button data-view="home">홈</button>
-      <button data-view="dw-online" data-group="dw-">1. 도면</button>
+      <button data-view="drawing" data-group="dw-">1. 도면</button>
       <button data-view="pog-home" data-group="pog-">2. POG</button>
       <button data-view="finder">3. 제품 찾기</button>
       <button data-view="stores" class="nav-sub">매장 등록</button>
       <button data-view="glossary" class="nav-sub">집기·고리·매대 등록</button>
       <button data-view="barcodes" class="nav-sub">바코드 등록</button>
+      <span class="subnav" id="subnav-dw">
+        <button data-view="dw-up">도면 업로드</button>
+        <button data-view="dw-online">온라인 도면</button>
+      </span>
       <span class="subnav" id="subnav">
         <button data-view="pog-make">POG 만들기</button>
         <button data-view="pog-fb">피드백 POG</button>
@@ -144,8 +148,6 @@
             <span class="find-box hidden" id="dw-find-box"><input id="dw-find" type="search" placeholder="🔍 매대·카테고리·제품 찾기" autocomplete="off"><span class="find-n" id="dw-find-n"></span></span>
             <span class="saving" id="dw-saving"></span>
             <div class="tb-right">
-              <button class="btn primary" id="dw-goup" data-edit="drawing" title="이 매장 도면을 올리거나 매대명 묶음을 고쳐요 (VMD팀·관리자)">📤 도면 업로드</button>
-              <button class="btn" id="dw-goon" title="도면 보기로 돌아가기">← 도면 보기</button>
               <button class="btn" id="dw-upload" data-edit="drawing">도면 파일 올리기</button>
               <button class="btn primary" id="dw-export" data-edit="drawing">내보내기</button>
               <button class="btn" id="dw-reedit" data-edit="drawing" title="내보낸 도면을 다시 고칠 수 있게 '작성 중'으로 되돌려요">✎ 다시 편집</button>
@@ -420,6 +422,6 @@
 <div class="copyright" aria-label="저작권">© 2026 Karrot in AB</div>
 
 <!-- 파일을 고치면 ?v= 숫자도 바꿀 것 (브라우저가 예전 파일을 쓰지 않도록) -->
-<script type="module" src="app.js?v=20261113a"></script>
+<script type="module" src="app.js?v=20261113b"></script>
 </body>
 </html>
