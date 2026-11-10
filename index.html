@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261113f">
+<link rel="stylesheet" href="style.css?v=20261113g">
 </head>
 <body>
 
@@ -239,7 +239,7 @@
               <button class="btn" id="ed-counts" data-staff title="선반/파이프·고리·집기 수량 합계 (시트 1: 선반·파이프·제작비품 / 시트 2: 관리부 비품·집기·고리)">선반·고리·집기 수량 엑셀</button>
               <button class="btn" id="ed-regrab" data-edit="pog-make" title="POG 사이트에서 매대를 다시 가져와요 (대체하기·추가하기)">↻ 다시 가져오기</button>
               <button class="btn" id="ed-dwlink" data-edit="pog-make" title="모든 페이지를 도면 매대와 한꺼번에 연결 (🔎 자동 추측 연결) · 도면 순서로 페이지 바꾸기">📐 도면 일괄 연결</button>
-              <button class="btn" id="ed-pdf">PDF 저장</button><button class="btn" id="ed-ppt" title="페이지마다 그림 한 장 → 슬라이드 (시험)">PPT 저장</button>
+              <button class="btn" id="ed-pdf">PDF 저장</button><button class="btn hidden" id="ed-ppt" title="페이지마다 그림 한 장 → 슬라이드 (시험)">PPT 저장</button>
               <button class="btn small ghost ed-ur" id="ed-undo" data-edit="pog-make" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기" disabled>↶</button>
               <button class="btn small ghost ed-ur" id="ed-redo" data-edit="pog-make" title="다시 하기 (Ctrl+Y)" aria-label="다시 하기" disabled>↷</button>
               <button class="btn primary" id="ed-final" data-edit="pog-make">최종 POG 내보내기</button>
@@ -272,7 +272,7 @@
             <button class="btn small list-toggle" type="button" title="POG 목록 열기/닫기">☰ 목록</button>
             <div class="tb-title" id="fb-title"></div>
             <span class="badge" id="fb-count"></span>
-            <div class="tb-right"><button class="btn" id="fb-pdf">PDF 저장</button><button class="btn" id="fb-ppt" title="페이지마다 그림 한 장 → 슬라이드 (시험)">PPT 저장</button></div>
+            <div class="tb-right"><button class="btn" id="fb-pdf">PDF 저장</button><button class="btn hidden" id="fb-ppt" title="페이지마다 그림 한 장 → 슬라이드 (시험)">PPT 저장</button></div>
           </div>
           <div class="ed-main">
             <div class="thumbs" id="fb-thumbs"></div>
@@ -421,6 +421,6 @@
 <div class="copyright" aria-label="저작권">© 2026 Karrot in AB</div>
 
 <!-- 파일을 고치면 ?v= 숫자도 바꿀 것 (브라우저가 예전 파일을 쓰지 않도록) -->
-<script type="module" src="app.js?v=20261113f"></script>
+<script type="module" src="app.js?v=20261113g"></script>
 </body>
 </html>

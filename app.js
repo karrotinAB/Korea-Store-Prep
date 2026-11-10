@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261113f';
+const APP_VER = '20261113g';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1579,6 +1579,7 @@ function applyPogDoc() {
   $('#ed-title').textContent = `${pogTitle(p)} ${p.storeCode ? '(' + p.storeCode + ')' : ''}`;
   refreshManagerSelect();
   const final = p.status === 'final';
+  $('#ed-ppt').classList.toggle('hidden', !final); // PPT 저장은 최종 POG만 (사용자)
   const editable = !final && canEdit('pog-make'); // POG팀·관리자만 편집, 나머지는 보기
   state.edEditable = editable;
   $('#ed-status').textContent = final ? '최종' : canEdit('pog-make') ? '작성 중' : '작성 중 · 보기 전용';
@@ -4138,12 +4139,12 @@ function closeFb() {
 }
 function openFb(id) {
   closeFb();
-  fb.pog = { id };
+  fb.pog = { id }; $('#fb-ppt').classList.add('hidden');
   $('#fb-empty').classList.add('hidden'); $('#fb-body').classList.remove('hidden');
   $('#v-pog-fb .split').classList.add('list-off');
   $('#fb-pages').innerHTML = '<div class="mut pad">불러오는 중…</div>';
   renderFbList();
-  fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; renderFbPages(); }));
+  fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; $('#fb-ppt').classList.toggle('hidden', fb.pog.status !== 'final'); renderFbPages(); })); // PPT 저장은 최종 POG만
   fb.unsubs.push(onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { fb.fixtures = s.docs.map(d => ({ id: d.id, ...d.data() })); renderFbPages(); }));
   fb.unsubs.push(onSnapshot(collection(db, 'pogs', id, 'feedback'), s => {
     fb.notes = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.at?.toMillis?.() ?? Date.now()) - (b.at?.toMillis?.() ?? Date.now()));
