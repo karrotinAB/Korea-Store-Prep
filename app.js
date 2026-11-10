@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261113h';
+const APP_VER = '20261114a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1579,7 +1579,7 @@ function applyPogDoc() {
   $('#ed-title').textContent = `${pogTitle(p)} ${p.storeCode ? '(' + p.storeCode + ')' : ''}`;
   refreshManagerSelect();
   const final = p.status === 'final';
-  $('#ed-pdf').classList.toggle('hidden', !final); $('#ed-ppt').classList.toggle('hidden', final); // PDF 저장 = 최종 POG만, PPT 저장 = 작성 중 POG만 (사용자)
+  $('#ed-pdf').classList.toggle('hidden', !final); $('#ed-ppt').classList.toggle('hidden', !canPpt()); // PDF 저장 = 최종 POG만, PPT 저장 = POG팀·관리자 (작성 중·최종 모두 · 사용자)
   const editable = !final && canEdit('pog-make'); // POG팀·관리자만 편집, 나머지는 보기
   state.edEditable = editable;
   $('#ed-status').textContent = final ? '최종' : canEdit('pog-make') ? '작성 중' : '작성 중 · 보기 전용';
@@ -2179,7 +2179,9 @@ async function printPages(container, pog) {
 
 /* ---------- PPT 저장 (시험 · 사용자: 방법 A) ----------
    페이지마다 화면 그대로 그림 한 장 → 슬라이드 한 장 (A4 세로). PPT에서 글상자·도형을 얹을 수 있지만 그림 속 글자는 못 고침.
-   빼려면: index.html의 ed-ppt·fb-ppt 버튼과 이 묶음(savePpt…)만 지우면 됨 */
+   빼려면: index.html의 ed-ppt·fb-ppt·vw-ppt 버튼과 이 묶음(savePpt…)만 지우면 됨
+   누가: POG팀·관리자만 (사용자). 작성 중 POG로 만든 PPT는 슬라이드마다 '작성 중' 표시 */
+const canPpt = () => ['pog', 'admin'].includes(state.level);
 // 도구 파일은 이 사이트 lib/ 폴더에 같이 둠 (바깥 CDN에서 못 불러오는 일이 있어서 · 사용자). pptxgenjs 3.12.0 · html2canvas 1.4.1 (MIT)
 const PPT_URL = 'lib/pptxgen.bundle.js';
 const H2C_URL = 'lib/html2canvas.min.js';
@@ -2236,7 +2238,8 @@ async function savePpt(container, pog) {
           c.replaceWith(dv);
         }); },
         ignoreElements: el => el.classList && (el.classList.contains('no-print') || el.classList.contains('fb-badge') || el.classList.contains('cv-blk') || el.classList.contains('log-btn')) });
-      ppt.addSlide().addImage({ data: cv.toDataURL('image/jpeg', 0.92), x: 0, y: 0, w: 8.27, h: 11.69 });
+      const sl = ppt.addSlide(); sl.addImage({ data: cv.toDataURL('image/jpeg', 0.92), x: 0, y: 0, w: 8.27, h: 11.69 });
+      if (pog.status !== 'final') sl.addText(`작성 중 · ${fmtDate(new Date())}`, { x: 5.6, y: 0.08, w: 2.55, h: 0.32, align: 'center', fontFace: 'Malgun Gothic', fontSize: 11, bold: true, color: 'E53935', fill: { color: 'FFFFFF' }, line: { color: 'E53935', width: 1 } }); // 최종본이 아닌 걸 알 수 있게
     }
     document.documentElement.style.zoom = z0; z0 = null;
     restore(); restore = null;
@@ -2249,6 +2252,7 @@ async function savePpt(container, pog) {
 }
 $('#ed-ppt').onclick = () => savePpt($('#ed-pages'), state.currentPog);
 $('#fb-ppt').onclick = () => savePpt($('#fb-pages'), fb.pog);
+$('#vw-ppt').onclick = () => savePpt($('#vw-pages'), state.viewer.pog);
 
 /* ---------- 새 POG 가져오기 ---------- */
 $('#btn-import').onclick = openImport;
@@ -4089,7 +4093,7 @@ function closeViewer() {
   $('#v-pog-online .split')?.classList.remove('list-off');
 }
 function openViewer(id) {
-  closeViewer(); $('#vw-find').value = '';
+  closeViewer(); $('#vw-find').value = ''; $('#vw-ppt').classList.toggle('hidden', !canPpt()); // PPT 저장 = POG팀·관리자
   const v = state.viewer;
   v.pog = { id };
   $('#viewer-empty').classList.add('hidden'); $('#viewer-body').classList.remove('hidden');
@@ -4143,7 +4147,7 @@ function openFb(id) {
   $('#v-pog-fb .split').classList.add('list-off');
   $('#fb-pages').innerHTML = '<div class="mut pad">불러오는 중…</div>';
   renderFbList();
-  fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; $('#fb-pdf').classList.toggle('hidden', fb.pog.status !== 'final'); $('#fb-ppt').classList.toggle('hidden', fb.pog.status === 'final'); renderFbPages(); })); // PDF = 최종만, PPT = 작성 중만
+  fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; $('#fb-pdf').classList.toggle('hidden', fb.pog.status !== 'final'); $('#fb-ppt').classList.toggle('hidden', !canPpt()); renderFbPages(); })); // PDF = 최종만, PPT = 작성 중만
   fb.unsubs.push(onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { fb.fixtures = s.docs.map(d => ({ id: d.id, ...d.data() })); renderFbPages(); }));
   fb.unsubs.push(onSnapshot(collection(db, 'pogs', id, 'feedback'), s => {
     fb.notes = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.at?.toMillis?.() ?? Date.now()) - (b.at?.toMillis?.() ?? Date.now()));
