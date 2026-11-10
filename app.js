@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261113g';
+const APP_VER = '20261113h';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1579,7 +1579,7 @@ function applyPogDoc() {
   $('#ed-title').textContent = `${pogTitle(p)} ${p.storeCode ? '(' + p.storeCode + ')' : ''}`;
   refreshManagerSelect();
   const final = p.status === 'final';
-  $('#ed-ppt').classList.toggle('hidden', !final); // PPT 저장은 최종 POG만 (사용자)
+  $('#ed-pdf').classList.toggle('hidden', !final); $('#ed-ppt').classList.toggle('hidden', final); // PDF 저장 = 최종 POG만, PPT 저장 = 작성 중 POG만 (사용자)
   const editable = !final && canEdit('pog-make'); // POG팀·관리자만 편집, 나머지는 보기
   state.edEditable = editable;
   $('#ed-status').textContent = final ? '최종' : canEdit('pog-make') ? '작성 중' : '작성 중 · 보기 전용';
@@ -2179,7 +2179,7 @@ async function printPages(container, pog) {
 
 /* ---------- PPT 저장 (시험 · 사용자: 방법 A) ----------
    페이지마다 화면 그대로 그림 한 장 → 슬라이드 한 장 (A4 세로). PPT에서 글상자·도형을 얹을 수 있지만 그림 속 글자는 못 고침.
-   빼려면: index.html의 ed-ppt·vw-ppt·fb-ppt 버튼과 이 묶음(savePpt…)만 지우면 됨 */
+   빼려면: index.html의 ed-ppt·fb-ppt 버튼과 이 묶음(savePpt…)만 지우면 됨 */
 // 도구 파일은 이 사이트 lib/ 폴더에 같이 둠 (바깥 CDN에서 못 불러오는 일이 있어서 · 사용자). pptxgenjs 3.12.0 · html2canvas 1.4.1 (MIT)
 const PPT_URL = 'lib/pptxgen.bundle.js';
 const H2C_URL = 'lib/html2canvas.min.js';
@@ -2248,7 +2248,6 @@ async function savePpt(container, pog) {
   finally { if (z0 !== null) document.documentElement.style.zoom = z0; restore?.(); }
 }
 $('#ed-ppt').onclick = () => savePpt($('#ed-pages'), state.currentPog);
-$('#vw-ppt').onclick = () => savePpt($('#vw-pages'), state.viewer.pog);
 $('#fb-ppt').onclick = () => savePpt($('#fb-pages'), fb.pog);
 
 /* ---------- 새 POG 가져오기 ---------- */
@@ -4139,12 +4138,12 @@ function closeFb() {
 }
 function openFb(id) {
   closeFb();
-  fb.pog = { id }; $('#fb-ppt').classList.add('hidden');
+  fb.pog = { id }; $('#fb-ppt').classList.add('hidden'); $('#fb-pdf').classList.add('hidden');
   $('#fb-empty').classList.add('hidden'); $('#fb-body').classList.remove('hidden');
   $('#v-pog-fb .split').classList.add('list-off');
   $('#fb-pages').innerHTML = '<div class="mut pad">불러오는 중…</div>';
   renderFbList();
-  fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; $('#fb-ppt').classList.toggle('hidden', fb.pog.status !== 'final'); renderFbPages(); })); // PPT 저장은 최종 POG만
+  fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; $('#fb-pdf').classList.toggle('hidden', fb.pog.status !== 'final'); $('#fb-ppt').classList.toggle('hidden', fb.pog.status === 'final'); renderFbPages(); })); // PDF = 최종만, PPT = 작성 중만
   fb.unsubs.push(onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { fb.fixtures = s.docs.map(d => ({ id: d.id, ...d.data() })); renderFbPages(); }));
   fb.unsubs.push(onSnapshot(collection(db, 'pogs', id, 'feedback'), s => {
     fb.notes = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.at?.toMillis?.() ?? Date.now()) - (b.at?.toMillis?.() ?? Date.now()));

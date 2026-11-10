@@ -65,7 +65,7 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **도면 팀별 보기 (사용자, 방법1: 도면은 매장마다 하나)**: 도면 업로드 화면 툴바 '팀:'(`#dw-team`, `dw.team`, 온라인 도면에서는 안 보임). 매대 팀 = 업로드 화면에서 직접 정한 `groups[].team` → 없으면 그 팀 POG와 연결된 매대(`loadDwTeams`, `teamOfG`). 다른 팀 매대는 흐리게(`.dw-team.dim`). 번호는 팀마다 `seq/{버전id}__{팀}`(`seqId`), POG는 `readSeq(…, pogTeam)`로 자기 팀 번호 먼저. 업로드 화면 오른쪽 '매대 팀 정하기'.
 
-- **PPT 저장 (시험 · 사용자: 방법 A)**: POG 만들기·온라인 POG·피드백 POG 툴바 'PPT 저장'(`ed-ppt`·`vw-ppt`·`fb-ppt`, `savePpt`) — **최종 POG에서만 보임**(사용자). 페이지마다 html2canvas로 그림 한 장 → pptxgenjs 슬라이드(A4 세로). 두 도구는 `lib/`에 같이 둠(CDN에서 못 불러왔음). 사진은 `inlineImgs`로 dataURL로 바꿔서 찍음, 입력칸은 찍을 때만 글자 칸으로. **빼달라고 하면 버튼 3개 + app.js 'PPT 저장' 묶음 + `lib/` 두 파일만 지우면 됨.**
+- **PPT 저장 (시험 · 사용자: 방법 A)**: POG 만들기·피드백 POG 툴바 'PPT 저장'(`ed-ppt`·`fb-ppt`, `savePpt`) — **PPT 저장 = 작성 중 POG만, PDF 저장 = 최종 POG만**(사용자). 온라인 POG(최종만)는 PDF만. 페이지마다 html2canvas로 그림 한 장 → pptxgenjs 슬라이드(A4 세로). 두 도구는 `lib/`에 같이 둠(CDN에서 못 불러왔음). 사진은 `inlineImgs`로 dataURL로 바꿔서 찍음, 입력칸은 찍을 때만 글자 칸으로. **빼달라고 하면 버튼 2개 + app.js 'PPT 저장' 묶음 + `lib/` 두 파일만 지우면 됨.**
 
 ## 8. 매장 등록 (사용자)
 - 칸은 **지점코드 · 지점명 · 오픈 예정일**만 (파트너 이름 칸은 없앰). 문서 필드는 `code`·`branch`·`openDate` 그대로.
