@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261114c';
+const APP_VER = '20261114d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3349,7 +3349,7 @@ function renderDwStage() {
   if (seq && dw.seqMode) paintSeq();
   if (hits && dwf.jump) { dwf.jump = false; setTimeout(() => $('.dw-find', box)?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }), 30); }
 }
-// 확대·축소: Alt + 마우스 휠 (마우스가 있는 곳을 중심으로). 툴바 '🔍 n%'를 누르면 원래 크기
+// 확대·축소: Ctrl 또는 Alt + 마우스 휠 (마우스가 있는 곳을 중심으로). 툴바 '🔍 n%'를 누르면 원래 크기
 function dwZoomApply() {
   const z = dw.zoom || 1, cv = $('#dw-stage > .dw-canvas');
   if (cv) Object.assign(cv.style, z === 1 ? { width: '', maxWidth: '' } : { width: `calc(min(100%, 1200px) * ${z})`, maxWidth: 'none' });
@@ -3357,7 +3357,7 @@ function dwZoomApply() {
   $$('.dw-zbtn').forEach(x => x.classList.toggle('hidden', !cv));
 }
 $('#dw-stage').addEventListener('wheel', e => {
-  if (!e.altKey) return;
+  if (!e.altKey && !e.ctrlKey) return; // Ctrl + 휠도 (사용자: PC에서 편하게). 브라우저 화면 확대 대신 도면만 확대
   const cv = $('#dw-stage > .dw-canvas'); if (!cv) return;
   e.preventDefault();
   const st = $('#dw-stage'), r = cv.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
