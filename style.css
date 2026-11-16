@@ -154,7 +154,7 @@ nav button.on { background: rgba(255,255,255,.24); opacity: 1; font-weight: 700;
 .anno.edit .nt { pointer-events: auto; cursor: move; }
 .nt-text { padding: 2px 8px; font-weight: 700; }
 .nt-tx { width: 100%; height: 100%; display: grid; place-items: center; text-align: center; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; line-height: 1.25; overflow: hidden; }
-.nt-img img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+.nt-img img { width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; }
 .nt-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .anno .nt-hit { position: static; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: move; }
 .anno .nt-hit.sel { stroke: rgba(10,132,255,.22); }
@@ -1104,3 +1104,9 @@ nav button { padding: 7px 10px; }
 .pb.info-h { flex-direction: column; }
 .pb.info-h .pside { width: auto; flex-direction: row; align-items: stretch; gap: 6px; }
 .pb.info-h .pside > .sbox { flex: 1 1 0; min-width: 0; }
+
+/* 메모 변 가운데 점: 가로만·세로만 (사용자: 사진 가로·세로 따로 늘리기) */
+.nh-n { left: calc(50% - 6px); top: -8px; cursor: ns-resize; }
+.nh-s { left: calc(50% - 6px); bottom: -8px; cursor: ns-resize; }
+.nh-e { right: -8px; top: calc(50% - 6px); cursor: ew-resize; }
+.nh-w { left: -8px; top: calc(50% - 6px); cursor: ew-resize; }

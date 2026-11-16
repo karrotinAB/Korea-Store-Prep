@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116j';
+const APP_VER = '20261116k';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1389,7 +1389,7 @@ function renderNotes(block) {
     if (ed) {
       el.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'move'));
       if (n.t === 'text') el.addEventListener('dblclick', () => block._bar?.querySelector('.nb-text')?.focus());
-      if (handles) for (const c of ['nw', 'ne', 'sw', 'se']) { const hd = h('div', { class: 'nh nh-' + c }); hd.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'r-' + c)); el.append(hd); }
+      if (handles) for (const c of ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w']) { const hd = h('div', { class: 'nh nh-' + c }); hd.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'r-' + c)); el.append(hd); }
     }
     layer.append(el);
     if (n.t === 'text') fitText(el.querySelector('.nt-tx'), n.fs || 14);
@@ -1418,10 +1418,10 @@ function startNoteDrag(e, block, n, mode) {
     const mvOne = (m, oo) => { if (m.t === 'arrow') { m.x1 = oo.x1 + dx; m.y1 = oo.y1 + dy; m.x2 = oo.x2 + dx; m.y2 = oo.y2 + dy; } else { m.x = Math.round(oo.x + dx); m.y = Math.round(oo.y + dy); } };
     if (mode === 'move') { mvOne(n, o); others.forEach(([m, oo]) => mvOne(m, oo)); }
     else if (mode.startsWith('r-')) { // 네 모서리: 반대쪽 모서리는 그대로
-      const c = mode.slice(2), west = c.includes('w'), north = c.includes('n');
-      let w = Math.max(16, Math.round(west ? o.w - dx : o.w + dx));
-      let hh = Math.max(16, Math.round(north ? o.h - dy : o.h + dy));
-      if (n.t === 'img') hh = Math.max(16, Math.round(w * o.h / o.w)); // 사진은 비율 유지
+      const c = mode.slice(2), west = c.includes('w'), north = c.includes('n'), horiz = /[ew]/.test(c), vert = /[ns]/.test(c);
+      let w = horiz ? Math.max(16, Math.round(west ? o.w - dx : o.w + dx)) : o.w;
+      let hh = vert ? Math.max(16, Math.round(north ? o.h - dy : o.h + dy)) : o.h;
+      if (n.t === 'img' && c.length === 2) hh = Math.max(16, Math.round(w * o.h / o.w)); // 사진: 모서리 = 비율 유지, 변 = 가로·세로 따로 늘리기
       n.w = w; n.h = hh;
       n.x = west ? o.x + o.w - w : o.x;
       n.y = north ? o.y + o.h - hh : o.y;
@@ -1520,7 +1520,7 @@ function renderNoteBar(block) {
   }
   if (n.t === 'arrow') box.append(lab('색'), swatches(n.color, c => set({ color: c || n.color })),
     lab('굵기'), sel(n.bw || 3, [['2', '2'], ['3', '3'], ['5', '5'], ['8', '8']], v => set({ bw: Number(v) })));
-  if (n.t === 'img') box.append(h('span', { class: 'mut' }, '모서리를 끌면 비율을 유지하며 크기가 바뀌어요.'));
+  if (n.t === 'img') box.append(h('span', { class: 'mut' }, '모서리 점 = 비율 그대로 크기 바꾸기 · 변 가운데 점 = 가로만·세로만 늘리고 줄이기'));
   if (n.t === 'text') box.append(h('span', { class: 'mut nb-tip' }, '네 모서리 점을 끌어 상자 크기를 바꿔요. 글이 넘치면 글자가 자동으로 작아져요.'));
   box.append(h('span', { class: 'nb-sp' }),
     n.t !== 'img' ? h('button', { class: 'btn small ghost', onclick: () => { const c = structuredClone(n); delete c.id; if (c.t === 'arrow') { c.x1 += 20; c.y1 += 20; c.x2 += 20; c.y2 += 20; } else { c.x += 20; c.y += 20; } addNote(block, c); } }, '복제') : null,
