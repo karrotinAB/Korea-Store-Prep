@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261114d';
+const APP_VER = '20261116a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -342,7 +342,7 @@ const savePog = (pogId, f, v) => { track(pogId, '__pog', [f], `__pog|${f}`); que
 const LOG_F = {
   headerName: '매대명', fixtureType: '매대 타입', hookType: '고리타입', hookCount: '고리 갯수', sp: '선반/파이프', shelfPipe: '선반/파이프',
   extras: '이외집기', otherFixtures: '기타 메모', manager: '담당자', notes: '메모 상자', itemZ: '제품 앞뒤', order: '페이지 순서', merged: '매대 붙이기',
-  mergedInto: '붙인 곳', drawingRef: '도면 매대 연결', items: '제품', props: '집기', coverTitle: '표지 제목', hooks: '쓸 고리', cat: '카테고리',
+  mergedInto: '붙인 곳', drawingRef: '도면 매대 연결', items: '제품', props: '집기', coverTitle: '표지 제목', hooks: '고리타입/갯수', cat: '카테고리',
   memo: '메모', crop: '저장 구역', tr: '번역', groups: '매대명 묶음', outsideItems: '매대 밖 제품', area: '평수',
   blocks: '매대 나누기 묶음', base: '원래 매대 위치·크기', info: '집기 정보 칸', mdName: 'POG 사이트 매대', teamName: '카테고리(팀명)',
 };
@@ -998,10 +998,7 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
 // 오른쪽 집기 정보 칸 (매대 타입·고리·선반/파이프·이외집기)
 const infoSide = (box, field, L, editable) => h('div', { class: 'pside' },
   box(L.type, field('fixtureType', h('input', { list: 'dl-fixtureType', placeholder: '예: 벽매대1000' }))),
-  box(L.hook, h('div', { class: 'hook-row' },
-    field('hookType', h('select', { class: 'hook-sel' })),
-    h('span', { class: 'x' }, '×'),
-    field('hookCount', h('input', { type: 'number', min: 0, class: 'hook-cnt', placeholder: '0' })))),
+  box(L.hook, h('div', { class: 'hook-list' })),
   box(L.sp, h('div', { class: 'sp-list' })),
   box(L.other, h('div', { class: 'ex-list' }), field('otherFixtures', h('textarea', { rows: 2, class: 'ex-memo', placeholder: editable ? '기타 메모 (선택)' : '' }))));
 function initInfo(block, fx) {
@@ -1009,7 +1006,29 @@ function initInfo(block, fx) {
   block._extras = structuredClone(fx.extras || []);
   renderExtras(block);
   block._sp = spRows(fx); renderSp(block);
+  block._hooks = hookRows(fx); renderHooks(block);
   return block;
+}
+/* 고리타입/갯수: 여러 줄 (사용자: 한 종류만 넣을 수 있었음). fixture.hooks = [{ id, name, qty }]
+   예전 데이터(hookType·hookCount 한 칸)는 첫 줄로 읽음. 저장할 때 첫 줄을 hookType·hookCount에도 같이 맞춰 둠 */
+function hookRows(fx) {
+  if (Array.isArray(fx.hooks) && fx.hooks.length) return structuredClone(fx.hooks);
+  return [{ id: 'h0', name: fx.hookType || '', qty: fx.hookCount ?? '' }];
+}
+function renderHooks(block) {
+  const box = block.querySelector('.page .hook-list'); if (!box) return;
+  const ed = block._editable, list = block._hooks;
+  const save = () => { const g = `${block._fx}|hooks`, f = list[0] || {}; saveFx(block._pog, block._fx, 'hooks', structuredClone(list), g); saveFx(block._pog, block._fx, 'hookType', f.name || '', g); saveFx(block._pog, block._fx, 'hookCount', f.qty ?? '', g); };
+  box.replaceChildren(...list.map(x => {
+    const sel = h('select', { class: 'f hook-sel', disabled: !ed }); fillHookSelect(sel, x.name || '');
+    const qty = h('input', { class: 'f hook-cnt', type: 'number', min: 0, placeholder: '0', disabled: !ed });
+    qty.value = x.qty ?? '';
+    sel.addEventListener('change', () => { x.name = sel.value; save(); });
+    qty.addEventListener('input', () => { x.qty = qty.value === '' ? '' : Number(qty.value); save(); });
+    return h('div', { class: 'hook-row' }, sel, h('span', { class: 'x' }, '×'), qty,
+      ed && list.length > 1 ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { block._hooks = list.filter(y => y !== x); save(); renderHooks(block); } }, '×') : null);
+  }), ...(ed ? [h('button', { class: 'ex-add no-print', onclick: () => { list.push({ id: uid(), name: '', qty: '' }); save(); renderHooks(block); } }, '+ 고리 추가')] : []));
+  roFill(block);
 }
 
 /* 이외집기: 사전 '집기'에서 고르고 × 수량 (여러 줄). fixture.extras = [{ id, name, qty }]
@@ -2463,7 +2482,7 @@ async function doImport(text) {
       for (const [i, { id, ...pg }] of pages.entries()) {
         b.set(doc(db, 'pogs', ref.id, 'fixtures', id), {
           order: i, ...pg,
-          headerName: '', fixtureType: '', hookType: '', hookCount: '',
+          headerName: '', fixtureType: '', hookType: '', hookCount: '', hooks: [],
           otherFixtures: '', memo: '', photos: [],
         });
         if (++n >= 400) { await b.commit(); b = writeBatch(db); n = 0; }
@@ -2513,7 +2532,7 @@ async function exportCounts(pog, fixtures) {
         r.qty += q; r.pages.set(no, (r.pages.get(no) || 0) + q); sum.set(k, r);
       };
       spRows(f).forEach(x => add('선반/파이프', x.name, x.qty));
-      add('고리', f.hookType, f.hookCount);
+      hookRows(f).forEach(x => add('고리', x.name, x.qty));
       (f.extras || []).forEach(x => add('집기', x.name, x.qty));
     });
     if (!sum.size) { toast('입력된 선반/파이프·고리·집기가 없어요'); return; }
@@ -2767,7 +2786,7 @@ async function addGrabPages(pog, pages) {
   for (const { id, ...rest } of pages) {
     const nid = freeId(id); first = first || nid;
     track(pog.id, nid, 'new', g);
-    b.set(doc(db, 'pogs', pog.id, 'fixtures', nid), { order: ++end, ...rest, headerName: '', fixtureType: '', hookType: '', hookCount: '', otherFixtures: '', memo: '', photos: [], notes: [], createdAt: serverTimestamp(), createdBy: me() });
+    b.set(doc(db, 'pogs', pog.id, 'fixtures', nid), { order: ++end, ...rest, headerName: '', fixtureType: '', hookType: '', hookCount: '', hooks: [], otherFixtures: '', memo: '', photos: [], notes: [], createdAt: serverTimestamp(), createdBy: me() });
   }
   await b.commit();
   const teams = [...new Set(pages.map(p => catName(p.teamName)).filter(t => t && !(pog.teams || []).includes(t)))];
@@ -2838,7 +2857,7 @@ async function applyRegrab(pog, plan) {
   await flushWrites(); clearUndo();
   const all = sortedFx(), ids = new Set(all.map(x => x.id));
   const freeId = id => { let v = id; while (ids.has(v)) v = `${id}_${Date.now().toString(36)}`; ids.add(v); return v; };
-  const blank = { headerName: '', fixtureType: '', hookType: '', hookCount: '', otherFixtures: '', memo: '', photos: [], notes: [] };
+  const blank = { headerName: '', fixtureType: '', hookType: '', hookCount: '', hooks: [], otherFixtures: '', memo: '', photos: [], notes: [] };
   let b = writeBatch(db), n = 0;
   const flush = async () => { if (n) { await b.commit(); b = writeBatch(db); n = 0; } };
   const put = async (fn) => { fn(); if (++n >= 400) await flush(); };
@@ -4752,6 +4771,7 @@ function refreshGlossaryLists() {
   const dx = $('#dl-extras'); dx.innerHTML = '';
   glossaryOf('집기').forEach(g => dx.append(h('option', { value: g.ko })));
   $$('select.hook-sel').forEach(sel => fillHookSelect(sel, sel.value));
+  state.pageEls?.forEach(b => { if (b._hooks && !b.querySelector('.hook-list')?.contains(document.activeElement)) renderHooks(b); });
   state.pageEls?.forEach(b => { if (b._sp && !b.querySelector('.sp-list')?.contains(document.activeElement)) renderSp(b); });
 }
 function setGlCat(c) {

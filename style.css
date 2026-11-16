@@ -1095,3 +1095,7 @@ nav button { padding: 7px 10px; }
 .hp-zlab { min-width: 3.2em; text-align: center; font-weight: 600; }
 .hp-zoombox { overflow: auto; max-height: calc(var(--vh) * .62 / .8); border: 1px solid var(--line); border-radius: 6px; background: #f4f5f7; }
 .hp-zoombox > .dw-canvas { margin: 0; }
+
+/* 고리타입 여러 줄 (사용자) */
+.hook-list { display: flex; flex-direction: column; gap: 3px; width: 100%; }
+.hook-row .ex-del { flex: none; }
