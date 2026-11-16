@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116d';
+const APP_VER = '20261116e';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1140,7 +1140,7 @@ function renderExtras(block) {
   const ed = block._editable, list = block._extras;
   const save = () => saveFx(block._pog, block._fx, 'extras', structuredClone(list));
   box.replaceChildren(...list.map(x => {
-    const name = h('input', { class: 'f ex-name', list: 'dl-extras', placeholder: '집기 고르기', disabled: !ed });
+    const name = h('input', { class: 'f ex-name', list: 'dl-extras', placeholder: ed ? '고르거나 직접 입력' : '', title: '목록에서 고르거나 직접 써도 돼요. 새 이름은 ERP 질문 후 집기·고리·매대 등록 집기에도 들어가요', disabled: !ed });
     const qty = h('input', { class: 'f ex-qty', type: 'number', min: 0, placeholder: '0', disabled: !ed });
     name.value = x.name || ''; qty.value = x.qty ?? '';
     if (x.color) { name.style.color = x.color; qty.style.color = x.color; } // 수량에도 같은 색 (사용자)
