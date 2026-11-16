@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116b';
+const APP_VER = '20261116c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1308,18 +1308,44 @@ const svgEl = (tag, attrs = {}) => { const el = document.createElementNS(SVGNS, 
 let noteSaveBlock = null; // Delete 키로 지울 때 쓰는, 지금 선택된 메모가 있는 페이지
 
 function saveNotes(block) { saveFx(block._pog, block._fx, 'notes', structuredClone(block._notes)); }
-function selectNote(block, id) {
+// 메모 여러 개 고르기 (사용자): Shift·Ctrl+클릭으로 더하거나 빼기. block._msel = 고른 메모 id들, block._sel = 마지막으로 고른 것
+const selIds = block => block._msel?.size ? [...block._msel].filter(id => block._notes.some(n => n.id === id)) : (block._sel ? [block._sel] : []);
+function selectNote(block, id, { add = false } = {}) {
   if (id) setEdActive(block._fx);
-  if (block._sel === id) return;
-  block._sel = id; noteSaveBlock = id ? block : null;
+  if (add && id) {
+    const s2 = new Set(selIds(block)); s2.has(id) ? s2.delete(id) : s2.add(id);
+    block._msel = s2; block._sel = s2.has(id) ? id : ([...s2].pop() || null); noteSaveBlock = s2.size ? block : null;
+    renderNotes(block); renderNoteBar(block); return;
+  }
+  if (block._sel === id && (block._msel?.size || 0) <= 1) return;
+  block._sel = id; block._msel = new Set(id ? [id] : []); noteSaveBlock = id ? block : null;
   renderNotes(block); renderNoteBar(block);
+}
+// 복사·붙여넣기 (사용자: 메모를 여러 개 골라 다른 페이지에). Ctrl+C / Ctrl+V 또는 메모 막대 버튼. 붙일 때 같은 자리에
+function copyNotes(block) {
+  const ids = new Set(selIds(block)); if (!ids.size) return;
+  const src = block._notes.filter(n => ids.has(n.id));
+  let marked = false; src.forEach(n => { if (n.t === 'img' && n.path && !n.shared) { n.shared = true; marked = true; } }); // 같은 사진 파일을 같이 쓰게 됨 → 지울 때 파일은 남김
+  if (marked) saveNotes(block);
+  state.noteClip = src.map(n => { const c = structuredClone(n); delete c.id; if (c.t === 'img') { delete c.path; c.shared = true; } return c; });
+  state.lastClip = 'notes';
+  toast(`메모 ${src.length}개를 복사했어요. 붙일 페이지를 보고 Ctrl+V (또는 메모 막대 '📋 붙여넣기')`);
+  state.pageEls?.forEach(b => { if (b._bar) renderNoteBar(b); });
+}
+function pasteNotes(block) {
+  const clip = state.noteClip; if (!clip?.length || !block?._editable) return;
+  const ids = clip.map(c => { const n = structuredClone(c); n.id = uid(); block._notes.push(n); return n.id; });
+  saveNotes(block);
+  block._msel = new Set(ids); block._sel = ids.at(-1); noteSaveBlock = block; setEdActive(block._fx);
+  renderNotes(block); renderNoteBar(block);
+  toast(`메모 ${ids.length}개를 붙였어요. 끌어서 자리를 맞추세요 (Ctrl+Z로 되돌릴 수 있어요)`);
 }
 function renderNotes(block) {
   const layer = $('.anno', block); if (!layer) return;
   layer.innerHTML = '';
   const ed = block._editable;
   for (const n of block._notes) {
-    const sel = ed && n.id === block._sel;
+    const msel = selIds(block), sel = ed && msel.includes(n.id), handles = sel && n.id === block._sel && msel.length <= 1;
     if (n.t === 'arrow') {
       const svg = svgEl('svg', { class: 'nt-svg' }), mid = 'm' + uid();
       const mk = svgEl('marker', { id: mid, viewBox: '0 0 10 10', refX: 7, refY: 5, markerWidth: 4, markerHeight: 4, orient: 'auto-start-reverse' });
@@ -1332,7 +1358,7 @@ function renderNotes(block) {
         svg.append(hit);
       }
       layer.append(svg);
-      if (sel) for (const k of ['1', '2']) {
+      if (handles) for (const k of ['1', '2']) {
         const hd = h('div', { class: 'nh nh-pt', style: `left:${n['x' + k]}px;top:${n['y' + k]}px` });
         hd.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'p' + k));
         layer.append(hd);
@@ -1351,7 +1377,7 @@ function renderNotes(block) {
     if (ed) {
       el.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'move'));
       if (n.t === 'text') el.addEventListener('dblclick', () => block._bar?.querySelector('.nb-text')?.focus());
-      if (sel) for (const c of ['nw', 'ne', 'sw', 'se']) { const hd = h('div', { class: 'nh nh-' + c }); hd.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'r-' + c)); el.append(hd); }
+      if (handles) for (const c of ['nw', 'ne', 'sw', 'se']) { const hd = h('div', { class: 'nh nh-' + c }); hd.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'r-' + c)); el.append(hd); }
     }
     layer.append(el);
     if (n.t === 'text') fitText(el.querySelector('.nt-tx'), n.fs || 14);
@@ -1367,15 +1393,18 @@ function startNoteDrag(e, block, n, mode) {
   const z = ZP();
   e.preventDefault(); e.stopPropagation();
   if ($('#ed-side')?.contains(document.activeElement)) document.activeElement.blur(); // 패널에서 글 쓰던 중이면 끝내고 이 페이지로
-  selectNote(block, n.id);
+  if (mode === 'move' && (e.shiftKey || e.ctrlKey || e.metaKey)) { selectNote(block, n.id, { add: true }); return; } // 여러 개 고르기
+  const group = mode === 'move' && selIds(block).length > 1 && selIds(block).includes(n.id); // 고른 메모 여럿을 같이 옮김
+  if (!group) selectNote(block, n.id);
   const sx = e.clientX, sy = e.clientY, o = { ...n };
+  const others = group ? block._notes.filter(x => x !== n && selIds(block).includes(x.id)).map(x => [x, { ...x }]) : [];
   let moved = false;
   block._dragging = true;
   const mv = ev => {
     const dx = (ev.clientX - sx) / z, dy = (ev.clientY - sy) / z;
     if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
-    if (mode === 'move' && n.t === 'arrow') { n.x1 = o.x1 + dx; n.y1 = o.y1 + dy; n.x2 = o.x2 + dx; n.y2 = o.y2 + dy; }
-    else if (mode === 'move') { n.x = Math.round(o.x + dx); n.y = Math.round(o.y + dy); }
+    const mvOne = (m, oo) => { if (m.t === 'arrow') { m.x1 = oo.x1 + dx; m.y1 = oo.y1 + dy; m.x2 = oo.x2 + dx; m.y2 = oo.y2 + dy; } else { m.x = Math.round(oo.x + dx); m.y = Math.round(oo.y + dy); } };
+    if (mode === 'move') { mvOne(n, o); others.forEach(([m, oo]) => mvOne(m, oo)); }
     else if (mode.startsWith('r-')) { // 네 모서리: 반대쪽 모서리는 그대로
       const c = mode.slice(2), west = c.includes('w'), north = c.includes('n');
       let w = Math.max(16, Math.round(west ? o.w - dx : o.w + dx));
@@ -1401,10 +1430,11 @@ function addNote(block, n) {
   saveNotes(block); selectNote(block, n.id);
 }
 function removeNote(block, id) {
-  const n = block._notes.find(x => x.id === id); if (!n) return;
-  block._notes = block._notes.filter(x => x.id !== id);
-  if (n.path) deleteObject(sRef(st, n.path)).catch(() => { });
-  block._sel = null; noteSaveBlock = null;
+  const ids = new Set(id ? [id] : []);
+  const gone = block._notes.filter(x => ids.has(x.id)); if (!gone.length) return;
+  block._notes = block._notes.filter(x => !ids.has(x.id));
+  gone.forEach(n => { if (n.path && !n.shared) deleteObject(sRef(st, n.path)).catch(() => { }); }); // 복사해서 같이 쓰는 사진 파일은 남김
+  block._sel = null; block._msel = new Set(); noteSaveBlock = null;
   saveNotes(block); renderNotes(block); renderNoteBar(block);
 }
 async function addImageNote(block, file) {
@@ -1442,8 +1472,19 @@ function renderNoteBar(block) {
   const box = block._bar?.querySelector('.nb-props'); if (!box) return;
   if (box.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return; // 글 쓰는 중
   box.innerHTML = '';
+  const pasteBtn = state.noteClip?.length ? h('button', { class: 'btn small', title: 'Ctrl+V', onclick: () => pasteNotes(block) }, `📋 붙여넣기 (${state.noteClip.length}개)`) : null;
+  const ids = selIds(block);
+  if (ids.length > 1) { // 여러 개 고름
+    box.append(h('b', {}, `메모 ${ids.length}개 고름`), h('span', { class: 'mut' }, ' · 하나를 끌면 같이 옮겨져요'), h('span', { class: 'nb-sp' }),
+      h('button', { class: 'btn small', title: 'Ctrl+C', onclick: () => copyNotes(block) }, '📄 복사'), pasteBtn,
+      h('button', { class: 'btn small ghost', onclick: () => selectNote(block, null) }, '고르기 풀기'),
+      h('button', { class: 'btn small ghost danger', onclick: () => { if (confirm(`메모 ${ids.length}개를 지울까요?`)) removeSelNotes(block); } }, '삭제'));
+    return;
+  }
   const n = block._notes.find(x => x.id === block._sel);
-  if (!n) { box.append(h('span', { class: 'mut' }, '메모를 누르면 색·채우기를 바꿀 수 있어요. 끌어서 옮기고, 모서리로 크기를 바꿔요.')); return; }
+  if (!n) { box.append(h('span', { class: 'mut' }, '메모를 누르면 색·채우기를 바꿀 수 있어요. Shift(또는 Ctrl)+클릭으로 여러 개 골라 복사(Ctrl+C)·붙여넣기(Ctrl+V)해요.'),
+    block._notes.length > 1 ? h('button', { class: 'btn small ghost', onclick: () => { block._msel = new Set(block._notes.map(x => x.id)); block._sel = block._notes.at(-1).id; noteSaveBlock = block; setEdActive(block._fx); renderNotes(block); renderNoteBar(block); } }, `이 페이지 메모 모두 고르기 (${block._notes.length}개)`) : null,
+    pasteBtn); return; }
   const set = (patch) => { Object.assign(n, patch); saveNotes(block); renderNotes(block); renderNoteBar(block); };
   const lab = t => h('span', { class: 'nb-l' }, t);
   const sel = (v, opts, on) => { const s = h('select', { class: 'nb-sel' }, ...opts.map(([k, t]) => h('option', { value: k }, t))); s.value = String(v); s.onchange = () => on(s.value); return s; };
@@ -1471,12 +1512,21 @@ function renderNoteBar(block) {
   if (n.t === 'text') box.append(h('span', { class: 'mut nb-tip' }, '네 모서리 점을 끌어 상자 크기를 바꿔요. 글이 넘치면 글자가 자동으로 작아져요.'));
   box.append(h('span', { class: 'nb-sp' }),
     n.t !== 'img' ? h('button', { class: 'btn small ghost', onclick: () => { const c = structuredClone(n); delete c.id; if (c.t === 'arrow') { c.x1 += 20; c.y1 += 20; c.x2 += 20; c.y2 += 20; } else { c.x += 20; c.y += 20; } addNote(block, c); } }, '복제') : null,
+    h('button', { class: 'btn small', title: 'Ctrl+C', onclick: () => copyNotes(block) }, '📄 복사'), pasteBtn,
     h('button', { class: 'btn small ghost danger', onclick: () => removeNote(block, n.id) }, '삭제'));
+}
+function removeSelNotes(block) {
+  const ids = new Set(selIds(block)); if (!ids.size) return;
+  const gone = block._notes.filter(x => ids.has(x.id));
+  block._notes = block._notes.filter(x => !ids.has(x.id));
+  gone.forEach(n => { if (n.path && !n.shared) deleteObject(sRef(st, n.path)).catch(() => { }); });
+  block._sel = null; block._msel = new Set(); noteSaveBlock = null;
+  saveNotes(block); renderNotes(block); renderNoteBar(block);
 }
 document.addEventListener('keydown', e => {
   const b = noteSaveBlock; if (!b || !b._sel || !b.isConnected) return;
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
-  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeNote(b, b._sel); }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); selIds(b).length > 1 ? removeSelNotes(b) : removeNote(b, b._sel); }
   if (e.key === 'Escape') selectNote(b, null);
 });
 
@@ -1924,6 +1974,7 @@ function dragBlock(e, block, bid) {
 function paintBlockSel(block) { block.querySelectorAll('.cv-blk').forEach(el => el.classList.toggle('on', el.dataset.b === block._selBlock)); }
 // 잘라내기 → 다른 페이지에서 붙여넣기 (붙여넣을 때 실제로 옮김)
 function cutBlock(pogId, fx, b) {
+  state.lastClip = 'block'; // Ctrl+V = 매대 묶음 붙여넣기 (메모 복사보다 나중이면)
   state.clip = { pogId, from: fx.id, bid: b.id, n: (b.items || []).length };
   toast(`묶음(제품 ${state.clip.n}개)을 잘라냈어요. 옮길 페이지를 보고 Ctrl+V (또는 오른쪽 '여기에 붙여넣기')`);
   renderSidePanel();
@@ -1968,13 +2019,15 @@ function pasteBlock(pogId, to) {
 }
 document.addEventListener('keydown', e => {
   if (state.view !== 'pog-make' || !state.edEditable || !(e.ctrlKey || e.metaKey) || e.altKey) return;
-  const k = e.key.toLowerCase(); if (k !== 'x' && k !== 'v') return;
+  const k = e.key.toLowerCase(); if (k !== 'x' && k !== 'v' && k !== 'c') return;
   const a = document.activeElement;
   if (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) return;
   if ($('#modal-root')?.children.length) return;
   const pog = state.currentPog, fx = state.fixtures.get(state.edActive), block = state.pageEls.get(state.edActive);
   if (!pog || !fx) return;
-  if (k === 'x') { const b = block?._selBlock && (fx.blocks || []).find(x => x.id === block._selBlock); if (!b) return; e.preventDefault(); cutBlock(pog.id, fx, b); }
+  if (k === 'c') { const nb = noteSaveBlock && noteSaveBlock.isConnected && selIds(noteSaveBlock).length ? noteSaveBlock : null; if (!nb) return; e.preventDefault(); copyNotes(nb); return; } // 메모 복사
+  if (k === 'x') { const b = block?._selBlock && (fx.blocks || []).find(x => x.id === block._selBlock); if (!b) return; e.preventDefault(); state.lastClip = 'block'; cutBlock(pog.id, fx, b); }
+  else if (state.lastClip === 'notes' && state.noteClip?.length && block) { e.preventDefault(); pasteNotes(block); } // 메모 붙여넣기 (지금 보고 있는 페이지에)
   else if (state.clip) { e.preventDefault(); pasteBlock(pog.id, fx); }
 });
 

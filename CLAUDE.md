@@ -69,6 +69,8 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **고리타입/갯수 여러 줄 (사용자)**: `fixture.hooks = [{ id, name, qty }]`(`hookRows`, `renderHooks`, '+ 고리 추가', 고르기 칸 '+ 직접 입력…' → 사전 '고리타입'에도 넣음 `addHookGlossary`). 예전 `hookType`·`hookCount`는 첫 줄로 읽고, 저장할 때 첫 줄을 거기에도 맞춤. 수량 엑셀은 모든 줄을 셈.
 
+- **메모 여러 개 고르기·복사·붙여넣기 (사용자)**: Shift·Ctrl+클릭으로 여러 개(`block._msel`, `selIds`), 하나를 끌면 같이 옮겨짐, 메모 막대 '📄 복사'·'📋 붙여넣기'·'모두 고르기', Ctrl+C/Ctrl+V(`copyNotes`·`pasteNotes`, `state.noteClip`, `state.lastClip`로 매대 묶음 붙여넣기와 구분). 같은 자리에 붙음. 사진 메모는 파일을 같이 써서 `shared` 표시(지울 때 파일은 남김).
+
 ## 8. 매장 등록 (사용자)
 - 칸은 **지점코드 · 지점명 · 오픈 예정일**만 (파트너 이름 칸은 없앰). 문서 필드는 `code`·`branch`·`openDate` 그대로.
 - 지점코드 = POG 사이트 매장코드 (POG `storeCode`와 같아야 POG·도면이 이어짐).
