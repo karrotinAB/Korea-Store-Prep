@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116c';
+const APP_VER = '20261116d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -997,7 +997,7 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
 }
 // 오른쪽 집기 정보 칸 (매대 타입·고리·선반/파이프·이외집기)
 const infoSide = (box, field, L, editable) => h('div', { class: 'pside' },
-  box(L.type, field('fixtureType', h('input', { list: 'dl-fixtureType', placeholder: '예: 벽매대1000' }))),
+  box(L.type, field('fixtureType', h('input', { list: 'dl-fixtureType', placeholder: editable ? '고르거나 직접 입력 (예: 벽매대1000)' : '', title: '목록에서 고르거나 직접 써도 돼요. 새 이름은 집기·고리·매대 등록 매대타입에도 들어가요', onchange: e => { if (editable) addTypeGlossary(e.target.value); } }))),
   box(L.hook, h('div', { class: 'hook-list' })),
   box(L.sp, h('div', { class: 'sp-list' })),
   box(L.other, h('div', { class: 'ex-list' }), field('otherFixtures', h('textarea', { rows: 2, class: 'ex-memo', placeholder: editable ? '기타 메모 (선택)' : '' }))));
@@ -1016,6 +1016,16 @@ function hookRows(fx) {
   return [{ id: 'h0', name: fx.hookType || '', qty: fx.hookCount ?? '' }];
 }
 // 직접 쓴 고리타입을 집기·고리·매대 등록 '고리타입'에도 넣기 (이미 있으면 그대로). 못 넣어도 이 페이지에는 저장돼 있음
+// 매대 타입 직접 입력 (사용자): 새 이름이면 집기·고리·매대 등록 '매대타입'에도 넣어서 다음부터 목록에 나오게
+async function addTypeGlossary(name) {
+  name = (name || '').trim(); const n = norm(name); if (!n || glossaryOf('매대타입').some(g => norm(g.ko) === n)) return;
+  const id = 'ft_' + name.replace(/[\/.#$\[\]]/g, '_');
+  try {
+    await setDoc(doc(db, 'glossary', id), { cat: '매대타입', ko: name, auto: true, createdAt: serverTimestamp(), createdBy: me() }, { merge: true });
+    glLog({ id, cat: '매대타입', ko: name }, 'auto', []);
+    toast(`'${name}'을 집기·고리·매대 등록 '매대타입'에도 넣었어요`);
+  } catch (e) { console.warn('사전에 넣지 못했어요 (보안 규칙)', e.code || e); }
+}
 async function addHookGlossary(name) {
   const n = norm(name); if (!n || glossaryOf('고리타입').some(g => norm(g.ko) === n)) return;
   const id = 'hk_' + name.replace(/[\/.#$\[\]]/g, '_');
