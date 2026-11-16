@@ -67,7 +67,7 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **PPT 저장 (시험 · 사용자: 방법 A)**: POG 만들기·피드백 POG·온라인 POG 툴바 'PPT 저장'(`ed-ppt`·`fb-ppt`·`vw-ppt`, `savePpt`) — **PPT 저장 = POG팀·관리자만(`canPpt`), 작성 중·최종 모두. 작성 중 POG의 PPT는 슬라이드마다 '작성 중 · 날짜' 빨간 글상자. PDF 저장 = 최종 POG만**(사용자). 페이지마다 html2canvas로 그림 한 장 → pptxgenjs 슬라이드(A4 세로). 두 도구는 `lib/`에 같이 둠(CDN에서 못 불러왔음). 사진은 `inlineImgs`로 dataURL로 바꿔서 찍음, 입력칸은 찍을 때만 글자 칸으로. **빼달라고 하면 버튼 3개 + app.js 'PPT 저장' 묶음 + `lib/` 두 파일만 지우면 됨.**
 
-- **고리타입/갯수 여러 줄 (사용자)**: `fixture.hooks = [{ id, name, qty }]`(`hookRows`, `renderHooks`, '+ 고리 추가'). 예전 `hookType`·`hookCount`는 첫 줄로 읽고, 저장할 때 첫 줄을 거기에도 맞춤. 수량 엑셀은 모든 줄을 셈.
+- **고리타입/갯수 여러 줄 (사용자)**: `fixture.hooks = [{ id, name, qty }]`(`hookRows`, `renderHooks`, '+ 고리 추가', 고르기 칸 '+ 직접 입력…' → 사전 '고리타입'에도 넣음 `addHookGlossary`). 예전 `hookType`·`hookCount`는 첫 줄로 읽고, 저장할 때 첫 줄을 거기에도 맞춤. 수량 엑셀은 모든 줄을 셈.
 
 ## 8. 매장 등록 (사용자)
 - 칸은 **지점코드 · 지점명 · 오픈 예정일**만 (파트너 이름 칸은 없앰). 문서 필드는 `code`·`branch`·`openDate` 그대로.

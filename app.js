@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116a';
+const APP_VER = '20261116b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1015,15 +1015,32 @@ function hookRows(fx) {
   if (Array.isArray(fx.hooks) && fx.hooks.length) return structuredClone(fx.hooks);
   return [{ id: 'h0', name: fx.hookType || '', qty: fx.hookCount ?? '' }];
 }
+// 직접 쓴 고리타입을 집기·고리·매대 등록 '고리타입'에도 넣기 (이미 있으면 그대로). 못 넣어도 이 페이지에는 저장돼 있음
+async function addHookGlossary(name) {
+  const n = norm(name); if (!n || glossaryOf('고리타입').some(g => norm(g.ko) === n)) return;
+  const id = 'hk_' + name.replace(/[\/.#$\[\]]/g, '_');
+  try {
+    await setDoc(doc(db, 'glossary', id), { cat: '고리타입', ko: name, auto: true, createdAt: serverTimestamp(), createdBy: me() }, { merge: true });
+    glLog({ id, cat: '고리타입', ko: name }, 'auto', []);
+    toast(`'${name}'을 집기·고리·매대 등록 '고리타입'에도 넣었어요`);
+  } catch (e) { console.warn('사전에 넣지 못했어요 (보안 규칙)', e.code || e); }
+}
 function renderHooks(block) {
   const box = block.querySelector('.page .hook-list'); if (!box) return;
   const ed = block._editable, list = block._hooks;
   const save = () => { const g = `${block._fx}|hooks`, f = list[0] || {}; saveFx(block._pog, block._fx, 'hooks', structuredClone(list), g); saveFx(block._pog, block._fx, 'hookType', f.name || '', g); saveFx(block._pog, block._fx, 'hookCount', f.qty ?? '', g); };
   box.replaceChildren(...list.map(x => {
-    const sel = h('select', { class: 'f hook-sel', disabled: !ed }); fillHookSelect(sel, x.name || '');
+    const sel = h('select', { class: 'f hook-sel', disabled: !ed }); if (ed) sel.dataset.custom = '1'; fillHookSelect(sel, x.name || '');
     const qty = h('input', { class: 'f hook-cnt', type: 'number', min: 0, placeholder: '0', disabled: !ed });
     qty.value = x.qty ?? '';
-    sel.addEventListener('change', () => { x.name = sel.value; save(); });
+    sel.addEventListener('change', async () => {
+      if (sel.value === '__custom') { // 고리타입 직접 입력 (사용자). 집기·고리·매대 등록 '고리타입'에도 넣음
+        const v = (prompt('고리타입 이름을 직접 써 주세요 (예: 월1선후크100(은색))', '') || '').trim();
+        if (!v) { sel.value = x.name || ''; return; }
+        x.name = v; save(); addHookGlossary(v); renderHooks(block); return;
+      }
+      x.name = sel.value; save();
+    });
     qty.addEventListener('input', () => { x.qty = qty.value === '' ? '' : Number(qty.value); save(); });
     return h('div', { class: 'hook-row' }, sel, h('span', { class: 'x' }, '×'), qty,
       ed && list.length > 1 ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { block._hooks = list.filter(y => y !== x); save(); renderHooks(block); } }, '×') : null);
@@ -1471,7 +1488,7 @@ function fillHookSelect(sel, v) {
   const sig = opts.join('\u0001');
   if (sel.dataset.sig !== sig) {
     sel.innerHTML = '';
-    sel.append(h('option', { value: '' }, ''), ...opts.map(o => h('option', { value: o }, o)));
+    sel.append(h('option', { value: '' }, ''), ...opts.map(o => h('option', { value: o }, o)), ...(sel.dataset.custom ? [h('option', { value: '__custom' }, '+ 직접 입력…')] : []));
     sel.dataset.sig = sig;
   }
   sel.value = v || '';
