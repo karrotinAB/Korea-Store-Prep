@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116i';
+const APP_VER = '20261116j';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2699,7 +2699,7 @@ async function exportProducts(pog, fixtures) {
           body.push([body.length + 1, no, displayName(f), r.lv ? r.lv + '단' : '', r.order, // 맨 앞 = 순번 (칸·선반/걸이 열은 뺌 · 사용자)
             code8(String(it.code || it.data?.item || '').trim()), it.name || '',
             Number(it.price || it.data?.amtk) || '', METHOD[it.data?.displaymethod] || '', cat, size,
-            catName(it.big) || '']); // 맨 끝 = 팀 = 제품 상세정보의 대분류 (예: '09 마사지/헬스' → 마사지/헬스 · 사용자). 아래에서 B열로 옮김
+            it.pteam || '']); // 맨 끝 = 팀 = POG 사이트 '제품추가' 창의 팀구분 (예: 홈&라이프 · 사용자). 아래에서 B열로 옮김
         }
       }
     });
@@ -2715,7 +2715,7 @@ async function exportProducts(pog, fixtures) {
       }
     } catch { toast('바코드를 읽지 못해서 바코드 칸은 비워 둘게요'); }
     body.forEach(r => r.splice(5, 0, siteBc.get(r[5]) || (bcOf.get(r[5]) || []).sort().join(', ')));
-    body.forEach(r => r.splice(1, 0, r.pop())); // B열 = 팀 (제품 대분류)
+    body.forEach(r => r.splice(1, 0, r.pop())); // B열 = 팀 (제품 팀구분)
     const noMid = body.filter(r => !r[1]).length;
     const head = ['순번', '팀', '페이지', '매대명', '단', '순서', '바코드', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
     const info = [
@@ -2732,7 +2732,7 @@ async function exportProducts(pog, fixtures) {
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, ws, '제품리스트');
     X.writeFile(wb, `제품리스트_${pogTitle(pog)}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`.replace(/[\\/:*?"<>|]/g, ''));
-    toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (noMid ? ` · 팀(대분류)이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
+    toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (noMid ? ` · 팀이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
   } catch (e) { toast(e.message); }
 }
 $('#ed-products').onclick = () => exportProducts(state.currentPog, [...state.fixtures.values()]);

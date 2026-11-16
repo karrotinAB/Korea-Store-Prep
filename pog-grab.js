@@ -349,6 +349,25 @@
         }
       }));
       targets.forEach(t => (t.data?.items || []).forEach(i => { const r = bcOf.get(i.code) || {}; if (r.barcode) i.barcode = r.barcode; if (r.mid) i.mid = r.mid; if (r.big) i.big = r.big; }));
+      // 제품 팀구분 (사용자): '제품추가' 창(popItemAdd.aspx)에서 제품코드로 검색 → 목록의 '홈&라이프 - 슬리퍼 - …' 맨 앞이 팀구분.
+      // 한 번에 400개씩, 재고 0 이하도 보이게(checkzero=N)
+      const tmOf = new Map(), vm = 'N' + (targets.find(t => t.mdidx)?.mdidx || '');
+      for (let k = 0; k < codes.length; k += 400) {
+        $msg.textContent = `제품 팀구분 읽는 중… ${Math.min(codes.length, k + 400)} / ${codes.length}`;
+        try {
+          const qs = new URLSearchParams({ god_code: codes.slice(k, k + 400).join('\r\n'), page: '1', orderby: 'GOD_CODE', checkzero: 'N', checkexist: 'N', viewmode: vm });
+          const r = await fetch(new URL('popItemAdd.aspx?' + qs.toString(), location.href).href, { credentials: 'include' });
+          if (!r.ok) continue;
+          const buf = await r.arrayBuffer(), cs = ((r.headers.get('content-type') || '').match(/charset=([\w-]+)/i) || [])[1] || 'utf-8';
+          const dd = new DOMParser().parseFromString(new TextDecoder(cs).decode(buf), 'text/html');
+          for (const tr of dd.querySelectorAll('tr[id^="tr"]')) {
+            const code = tr.id.slice(2), cell = tr.querySelectorAll('td.namek')[1]; if (!code || !cell) continue;
+            const path = (cell.childNodes[0]?.textContent || cell.textContent || '').split(/\s+-\s+/)[0].trim(); // '홈&라이프 - 슬리퍼 - 겨울' → 홈&라이프
+            if (path) tmOf.set(code, path);
+          }
+        } catch (e) { }
+      }
+      targets.forEach(t => (t.data?.items || []).forEach(i => { const v = tmOf.get(i.code); if (v) i.pteam = v; }));
     }
 
     const countKind = (props, re) => props.filter(p => re.test(p.kind)).length;
