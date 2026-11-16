@@ -1110,3 +1110,4 @@ nav button { padding: 7px 10px; }
 .nh-s { left: calc(50% - 6px); bottom: -8px; cursor: ns-resize; }
 .nh-e { right: -8px; top: calc(50% - 6px); cursor: ew-resize; }
 .nh-w { left: -8px; top: calc(50% - 6px); cursor: ew-resize; }
+.pb.info-h .pside { order: -1; } /* 가로일 때 집기 칸은 페이지 위쪽 (사용자) */

@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116k';
+const APP_VER = '20261116l';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2137,11 +2137,11 @@ function renderSidePanel() {
     if (ed && free) nodes.push(sec('집기 정보', h('p', { class: 'se-help' }, fx.info ? '오른쪽에 매대 타입·고리·선반/파이프·이외집기 칸이 있어요.' : '매대 페이지처럼 오른쪽에 매대 타입·고리·선반/파이프·이외집기 칸을 넣어요.'),
       h('div', { class: 'se-btns' }, fx.info ? btn('집기 정보 빼기', () => { if (confirm('집기 정보 칸을 뺄까요? (입력한 값은 남아 있어서 다시 넣으면 보여요)')) saveFx(pog.id, fx.id, 'info', false); }, 'ghost')
         : btn('🧾 집기 정보 추가하기', () => saveFx(pog.id, fx.id, 'info', true)))));
-    if (ed && (!free || fx.info)) { // 집기 칸 위치: 세로(오른쪽) / 가로(아래) (사용자)
+    if (ed && (!free || fx.info)) { // 집기 칸 위치: 세로(오른쪽) / 가로(위) (사용자)
       const setH = v => { if (!!fx.infoH === v) return; saveFx(pog.id, fx.id, 'infoH', v); fx.infoH = v; rebuildPage(fx.id); renderSidePanel(); };
-      nodes.push(sec('집기 칸 위치', h('p', { class: 'se-help' }, '매대 타입·고리·선반/파이프·이외집기 칸을 그림 오른쪽(세로) 또는 그림 아래(가로)에 놓아요. 이 페이지만 바뀌어요.'),
-        h('div', { class: 'se-btns' }, btn('↕ 세로 (오른쪽)', () => setH(false), fx.infoH ? 'ghost' : ''), btn('↔ 가로 (아래)', () => setH(true), fx.infoH ? '' : 'ghost'),
-          btn('모든 페이지 같게', () => { const list = [...state.fixtures.values()].filter(f => (f.kind !== 'free' || f.info) && !!f.infoH !== !!fx.infoH); if (!list.length) { toast('이미 모든 페이지가 같아요'); return; } if (!confirm(`다른 페이지 ${list.length}장도 ${fx.infoH ? '가로(아래)' : '세로(오른쪽)'}로 바꿀까요?`)) return; const ug = undoGroup(); list.forEach(f => { saveFx(pog.id, f.id, 'infoH', !!fx.infoH, ug); f.infoH = !!fx.infoH; }); list.forEach(f => rebuildPage(f.id)); toast(`${list.length}장을 바꿨어요 (Ctrl+Z로 되돌릴 수 있어요)`); }, 'ghost'))));
+      nodes.push(sec('집기 칸 위치', h('p', { class: 'se-help' }, '매대 타입·고리·선반/파이프·이외집기 칸을 그림 오른쪽(세로) 또는 그림 위(가로)에 놓아요. 이 페이지만 바뀌어요.'),
+        h('div', { class: 'se-btns' }, btn('↕ 세로 (오른쪽)', () => setH(false), fx.infoH ? 'ghost' : ''), btn('↔ 가로 (위)', () => setH(true), fx.infoH ? '' : 'ghost'),
+          btn('모든 페이지 같게', () => { const list = [...state.fixtures.values()].filter(f => (f.kind !== 'free' || f.info) && !!f.infoH !== !!fx.infoH); if (!list.length) { toast('이미 모든 페이지가 같아요'); return; } if (!confirm(`다른 페이지 ${list.length}장도 ${fx.infoH ? '가로(위)' : '세로(오른쪽)'}로 바꿀까요?`)) return; const ug = undoGroup(); list.forEach(f => { saveFx(pog.id, f.id, 'infoH', !!fx.infoH, ug); f.infoH = !!fx.infoH; }); list.forEach(f => rebuildPage(f.id)); toast(`${list.length}장을 바꿨어요 (Ctrl+Z로 되돌릴 수 있어요)`); }, 'ghost'))));
     }
     if (ed && free && ((fx.items || []).length || (fx.props || []).length)) nodes.push(splitSection(pog, fx, block)); // 붙여넣은 매대: 옮기기·크기
     if (ed && !free) {
