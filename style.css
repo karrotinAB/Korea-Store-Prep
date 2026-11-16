@@ -1111,3 +1111,12 @@ nav button { padding: 7px 10px; }
 .nh-e { right: -8px; top: calc(50% - 6px); cursor: ew-resize; }
 .nh-w { left: -8px; top: calc(50% - 6px); cursor: ew-resize; }
 .pb.info-h .pside { order: -1; } /* 가로일 때 집기 칸은 페이지 위쪽 (사용자) */
+/* 매대 자르기 (사용자) */
+.crop-box { position: absolute; z-index: 9500; border: 2px solid #1e6fd9; box-shadow: 0 0 0 9999px rgba(20,30,50,.45); cursor: move; touch-action: none; }
+.crop-h { position: absolute; width: 12px; height: 12px; background: #fff; border: 2px solid #1e6fd9; border-radius: 2px; touch-action: none; }
+.crop-n, .crop-s { left: calc(50% - 6px); cursor: ns-resize; } .crop-n { top: -7px; } .crop-s { bottom: -7px; }
+.crop-e, .crop-w { top: calc(50% - 6px); cursor: ew-resize; } .crop-e { right: -7px; } .crop-w { left: -7px; }
+.crop-ne, .crop-nw, .crop-se, .crop-sw { width: 14px; height: 14px; }
+.crop-ne { top: -8px; right: -8px; cursor: nesw-resize; } .crop-sw { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.crop-nw { top: -8px; left: -8px; cursor: nwse-resize; } .crop-se { bottom: -8px; right: -8px; cursor: nwse-resize; }
+.page-block.cropping .cv-item, .page-block.cropping .cv-blk-h, .page-block.cropping .cv-blk-r { pointer-events: none; }

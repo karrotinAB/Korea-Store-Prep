@@ -78,6 +78,8 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **메모 여러 개 고르기·복사·붙여넣기 (사용자)**: Shift·Ctrl+클릭으로 여러 개(`block._msel`, `selIds`), 하나를 끌면 같이 옮겨짐, 메모 막대 '📄 복사'·'📋 붙여넣기'·'모두 고르기', Ctrl+C/Ctrl+V(`copyNotes`·`pasteNotes`, `state.noteClip`, `state.lastClip`로 매대 묶음 붙여넣기와 구분). 같은 자리에 붙음. 사진 메모는 파일을 같이 써서 `shared` 표시(지울 때 파일은 남김).
 
+- **매대 자르기 (사용자: 가져온 매대 그림도 자르기)**: 오른쪽 패널 '매대 자르기'(`cropSection`) → 파란 네모(`.crop-box`, 안을 끌면 옮김·가장자리/모서리 8개로 크기) → '✓ 자르기'(Enter)/취소(Esc)/'자르기 없애기'. 저장 `fixture.cut = {x0,y0,x1,y1}`(그림 좌표 = `withBlocks` 뒤, `frame`과 같은 좌표). `buildCanvas`가 이 네모를 틀로 쓰고 밖은 숨김(`.cv-in` overflow) → 남긴 부분이 칸에 꽉 차게 커짐. 자르는 중(`state.crop`)엔 그 페이지를 `noCut`으로 다시 그림. `itemSig`에 들어 있음. 다시 가져오기(대체)하면 `cut: null`. 코드: `startCrop`·`paintCrop`·`applyCrop`·`clearCrop`·`endCrop`.
+
 ## 8. 매장 등록 (사용자)
 - 칸은 **지점코드 · 지점명 · 오픈 예정일**만 (파트너 이름 칸은 없앰). 문서 필드는 `code`·`branch`·`openDate` 그대로.
 - 지점코드 = POG 사이트 매장코드 (POG `storeCode`와 같아야 POG·도면이 이어짐).
