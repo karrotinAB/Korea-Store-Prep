@@ -77,3 +77,11 @@ Global Opening Prep와 **데이터가 섞이지 않게 Firebase 프로젝트를 
 3. 다 읽으면 '복사하기' → 사이트 창에 붙여넣기 → **팀마다 POG가 하나씩** 생겨요 (예: 강남점 · 디자인지제)
 - 매대를 체크해 두면 체크한 매대만 읽어요. 같은 매장·같은 팀 POG가 이미 있으면 한 번 더 물어봐요.
 - 이미 있는 POG를 최신으로 바꾸려면 그 POG를 열고 **↻ 다시 가져오기**.
+
+## 메모 사진이 PPT에 안 나올 때 (사진 서버 CORS 설정 · 한 번만)
+PPT 저장은 페이지를 그림으로 찍는데, Firebase Storage(메모 사진 서버)가 다른 주소(github.io)에서 사진을 그림으로 읽는 걸 기본으로 막아서 메모 사진이 빠짐.
+Google Cloud 콘솔(console.cloud.google.com, 프로젝트 korea-store-prep) 오른쪽 위 `>_`(Cloud Shell)를 열고 아래를 붙여넣기:
+```
+echo '[{"origin":["https://karrotinab.github.io"],"method":["GET"],"maxAgeSeconds":3600}]' > cors.json
+gcloud storage buckets update gs://korea-store-prep.firebasestorage.app --cors-file=cors.json
+```
