@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116m';
+const APP_VER = '20261116n';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -60,9 +60,9 @@ function applyAccess() {
   $$('[data-staff]').forEach(el => el.classList.toggle('hidden', !isStaff()));
   $$('[data-admin]').forEach(el => el.classList.toggle('hidden', state.level !== 'admin')); // 관리자만 보이는 버튼
 }
-const CANVAS_W = 540, CANVAS_H = 930;
+const CANVAS_W = 558, CANVAS_H = 930; // 폭 = 페이지 794 - 여백 28 - 간격 12 - 집기 칸 196 (양옆 빈 여백 없이 · 사용자)
 // 집기 칸을 아래로 (가로) 놓은 페이지: 그림은 넓게·낮게 (사용자: 집기 입력 칸 세로/가로)
-const CANVAS_HW = 748, CANVAS_HH = 720;
+const CANVAS_HW = 766, CANVAS_HH = 720; // 폭 = 페이지 794 - 여백 28
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -1209,7 +1209,7 @@ function buildFreePage(fx, pog, { editable, field, L = LABELS_KO, box, onItem })
   const hasCv = (fx.items || []).length || (fx.props || []).length;
   const body = hasCv || fx.info
     ? h('div', { class: 'pb' + (fx.info && fx.infoH ? ' info-h' : '') },
-      hasCv ? h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.info ? (fx.infoH ? CANVAS_HW : CANVAS_W) : CANVAS_W + 220, fx.info && fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable, noCut: state.crop?.id === fx.id })) : h('div', { class: 'pcanvas free-blank' }),
+      hasCv ? h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.info ? (fx.infoH ? CANVAS_HW : CANVAS_W) : CANVAS_W + 208, fx.info && fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable, noCut: state.crop?.id === fx.id })) : h('div', { class: 'pcanvas free-blank' }),
       fx.info ? infoSide(box, field, L, editable) : null)
     : h('div', { class: 'pb free-body' });
   const page = h('div', { class: 'page free' },
