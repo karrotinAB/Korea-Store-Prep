@@ -57,6 +57,7 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 - 빌드 도구 없음 (HTML + CSS + 바닐라 JS 모듈). Firebase SDK 10.12.2 gstatic CDN.
 - **`app.js`·`style.css`를 고치면 `index.html`의 `?v=`를 둘 다 바꿀 것. `app.js` 맨 위 `APP_VER`도 같은 값으로** (화면 맨 아래 'ver …'로 보임 → 사용자가 예전 파일을 쓰는지 확인).
 - **작업이 끝나면 작업 브랜치에 올린 뒤 바로 기본 브랜치(`claude/magical-turing-fm2xe8`, 이 저장소에는 `main`이 없음)에도 합쳐서 올릴 것** (사용자). PR은 만들지 않음.
+- 올린 뒤 GitHub Pages 배포(pages build and deployment)가 실패할 수 있음 (GitHub 서버 오류 502). 사용자가 '안 바뀌었다'고 하면 배포 결과부터 볼 것.
 - PC는 `html { zoom: .8 }` → 끄는 기능은 `ZM()`/`ZP()`로 나눌 것. 화면 높이는 `var(--vh)`·`var(--top)`.
 
 ## 7. 메뉴·도면 화면 (사용자)
