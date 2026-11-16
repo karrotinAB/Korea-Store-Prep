@@ -72,6 +72,8 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **매대 타입·이외집기 직접 입력 (사용자)**: 두 칸 다 목록+직접 쓰기(datalist, 안내 글 '고르거나 직접 입력'). 새 매대 타입은 사전 '매대타입'에도(`addTypeGlossary`), 새 이외집기는 ERP 질문 후 사전 '집기'에도(`addFxGlossary`).
 
+- **집기 칸 위치 세로/가로 (사용자)**: 페이지마다 `fixture.infoH`(true = 그림 아래 가로, 그림 `CANVAS_HW`×`CANVAS_HH`). 오른쪽 패널 '집기 칸 위치' + '모든 페이지 같게'. `itemSig`에 들어 있어서 바꾸면 페이지를 다시 그림.
+
 - **메모 여러 개 고르기·복사·붙여넣기 (사용자)**: Shift·Ctrl+클릭으로 여러 개(`block._msel`, `selIds`), 하나를 끌면 같이 옮겨짐, 메모 막대 '📄 복사'·'📋 붙여넣기'·'모두 고르기', Ctrl+C/Ctrl+V(`copyNotes`·`pasteNotes`, `state.noteClip`, `state.lastClip`로 매대 묶음 붙여넣기와 구분). 같은 자리에 붙음. 사진 메모는 파일을 같이 써서 `shared` 표시(지울 때 파일은 남김).
 
 ## 8. 매장 등록 (사용자)

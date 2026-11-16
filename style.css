@@ -1099,3 +1099,8 @@ nav button { padding: 7px 10px; }
 /* 고리타입 여러 줄 (사용자) */
 .hook-list { display: flex; flex-direction: column; gap: 3px; width: 100%; }
 .hook-row .ex-del { flex: none; }
+
+/* 집기 칸 가로 (그림 아래) (사용자) */
+.pb.info-h { flex-direction: column; }
+.pb.info-h .pside { width: auto; flex-direction: row; align-items: stretch; gap: 6px; }
+.pb.info-h .pside > .sbox { flex: 1 1 0; min-width: 0; }

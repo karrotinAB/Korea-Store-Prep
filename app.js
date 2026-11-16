@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116f';
+const APP_VER = '20261116g';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -61,6 +61,8 @@ function applyAccess() {
   $$('[data-admin]').forEach(el => el.classList.toggle('hidden', state.level !== 'admin')); // 관리자만 보이는 버튼
 }
 const CANVAS_W = 540, CANVAS_H = 930;
+// 집기 칸을 아래로 (가로) 놓은 페이지: 그림은 넓게·낮게 (사용자: 집기 입력 칸 세로/가로)
+const CANVAS_HW = 748, CANVAS_HH = 720;
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -872,7 +874,7 @@ function makeThumbs(box, scroller, onActive, tools = null) { // tools = { can(),
 const itemSig = fx => {
   const str = [...(fx.items || []).map(i => `${i.code}@${i.x},${i.y},${i.w},${i.h}`), ...(fx.props || []).map(p => `${p.x},${p.y},${p.w}`), ...(fx.panels || []).map(p => `${p.x},${p.y},${p.w},${p.h}`)].join('|');
   let hh = 0; for (let i = 0; i < str.length; i++) hh = (hh * 31 + str.charCodeAt(i)) | 0;
-  return `${(fx.items || []).length}:${(fx.props || []).length}:${hh}:${JSON.stringify(fx.blocks || [])}:${JSON.stringify(fx.base || null)}:${fx.info ? 1 : 0}`;
+  return `${(fx.items || []).length}:${(fx.props || []).length}:${hh}:${JSON.stringify(fx.blocks || [])}:${JSON.stringify(fx.base || null)}:${fx.info ? 1 : 0}:${fx.infoH ? 1 : 0}`;
 };
 /* 매대 붙이기: 얇은 매대(스페이스월 등) 두 개를 한 페이지에. 붙인 쪽 fixture.merged = [id…], 붙여진 쪽 .mergedInto = id.
    붙여진 페이지는 따로 안 나오고, 붙인 페이지 그림 오른쪽에 나란히 그린다 (입력칸·번역은 붙인 페이지 것) */
@@ -987,8 +989,8 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
         onclick: e => { if (editable && !e.target.value) openHeaderPicker(pog, fx); } })), // 비어 있으면 누를 때 도면이 뜸
       editable ? h('button', { class: 'ph-dw no-print', type: 'button', title: '도면에서 매대를 골라 헤더에 넣어요', onclick: () => openHeaderPicker(pog, fx) }, '📐 도면에서 고르기') : null,
       h('div', { class: 'ph-cat' }, fx._cat ?? catName(fx.teamName))),
-    h('div', { class: 'pb' },
-      h('div', { class: 'pcanvas' }, buildCanvas(fx, CANVAS_W, CANVAS_H, onItem, { blockUI: editable && !(fx._parts) })),
+    h('div', { class: 'pb' + (fx.infoH ? ' info-h' : '') },
+      h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.infoH ? CANVAS_HW : CANVAS_W, fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable && !(fx._parts) })),
       infoSide(box, field, L, editable)),
     h('div', { class: 'pf1' }, L.mgr + ' ', h('span', { class: 'pf-mgr' }), editable ? mgrSelect(fx, pog) : null),
     h('div', { class: 'pf2' }, h('span', { class: 'pf-branch' })));
@@ -1203,8 +1205,8 @@ function buildFreePage(fx, pog, { editable, field, L = LABELS_KO, box, onItem })
   // 빈 페이지 (사용자): fx.info = 오른쪽 집기 정보 칸, 다른 페이지에서 잘라 붙인 매대(items·props)가 있으면 그림
   const hasCv = (fx.items || []).length || (fx.props || []).length;
   const body = hasCv || fx.info
-    ? h('div', { class: 'pb' },
-      hasCv ? h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.info ? CANVAS_W : CANVAS_W + 220, CANVAS_H, onItem, { blockUI: editable })) : h('div', { class: 'pcanvas free-blank' }),
+    ? h('div', { class: 'pb' + (fx.info && fx.infoH ? ' info-h' : '') },
+      hasCv ? h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.info ? (fx.infoH ? CANVAS_HW : CANVAS_W) : CANVAS_W + 220, fx.info && fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable })) : h('div', { class: 'pcanvas free-blank' }),
       fx.info ? infoSide(box, field, L, editable) : null)
     : h('div', { class: 'pb free-body' });
   const page = h('div', { class: 'page free' },
@@ -2135,6 +2137,12 @@ function renderSidePanel() {
     if (ed && free) nodes.push(sec('집기 정보', h('p', { class: 'se-help' }, fx.info ? '오른쪽에 매대 타입·고리·선반/파이프·이외집기 칸이 있어요.' : '매대 페이지처럼 오른쪽에 매대 타입·고리·선반/파이프·이외집기 칸을 넣어요.'),
       h('div', { class: 'se-btns' }, fx.info ? btn('집기 정보 빼기', () => { if (confirm('집기 정보 칸을 뺄까요? (입력한 값은 남아 있어서 다시 넣으면 보여요)')) saveFx(pog.id, fx.id, 'info', false); }, 'ghost')
         : btn('🧾 집기 정보 추가하기', () => saveFx(pog.id, fx.id, 'info', true)))));
+    if (ed && (!free || fx.info)) { // 집기 칸 위치: 세로(오른쪽) / 가로(아래) (사용자)
+      const setH = v => { if (!!fx.infoH === v) return; saveFx(pog.id, fx.id, 'infoH', v); fx.infoH = v; rebuildPage(fx.id); renderSidePanel(); };
+      nodes.push(sec('집기 칸 위치', h('p', { class: 'se-help' }, '매대 타입·고리·선반/파이프·이외집기 칸을 그림 오른쪽(세로) 또는 그림 아래(가로)에 놓아요. 이 페이지만 바뀌어요.'),
+        h('div', { class: 'se-btns' }, btn('↕ 세로 (오른쪽)', () => setH(false), fx.infoH ? 'ghost' : ''), btn('↔ 가로 (아래)', () => setH(true), fx.infoH ? '' : 'ghost'),
+          btn('모든 페이지 같게', () => { const list = [...state.fixtures.values()].filter(f => (f.kind !== 'free' || f.info) && !!f.infoH !== !!fx.infoH); if (!list.length) { toast('이미 모든 페이지가 같아요'); return; } if (!confirm(`다른 페이지 ${list.length}장도 ${fx.infoH ? '가로(아래)' : '세로(오른쪽)'}로 바꿀까요?`)) return; const ug = undoGroup(); list.forEach(f => { saveFx(pog.id, f.id, 'infoH', !!fx.infoH, ug); f.infoH = !!fx.infoH; }); list.forEach(f => rebuildPage(f.id)); toast(`${list.length}장을 바꿨어요 (Ctrl+Z로 되돌릴 수 있어요)`); }, 'ghost'))));
+    }
     if (ed && free && ((fx.items || []).length || (fx.props || []).length)) nodes.push(splitSection(pog, fx, block)); // 붙여넣은 매대: 옮기기·크기
     if (ed && !free) {
       const list = [...state.edComposed.values()], i = list.findIndex(f => f.id === id), next = list.slice(i + 1).find(f => f.kind !== 'free');
