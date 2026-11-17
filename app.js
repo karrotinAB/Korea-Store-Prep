@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117g';
+const APP_VER = '20261117h';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2450,10 +2450,10 @@ async function savePpt(container, pog) {
     ppt.title = pogTitle(pog);
     for (let k = 0; k < pages.length; k++) {
       toast(`PPT 만드는 중… ${k + 1} / ${pages.length}쪽`);
-      const orig = $$('input, textarea, select', pages[k]);
+      const orig = $$('input, textarea, select', pages[k]).filter(o => !o.closest('.no-print') || o.closest('.page')); // 찍을 때 빠지는 칸은 빼고 (복제본과 순서를 맞춤)
       const cv = await H2C(pages[k], { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
         // 입력칸은 그림으로 찍으면 글자가 잘려서, 찍을 때만 같은 모양의 글자 칸으로 바꿈
-        onclone: (d, el) => { [...el.querySelectorAll('input, textarea, select')].forEach((c, i) => {
+        onclone: (d, el) => { el.querySelectorAll('.page .no-print').forEach(x => { x.style.visibility = 'hidden'; }); [...el.querySelectorAll('input, textarea, select')].forEach((c, i) => {
           const o = orig[i]; if (!o) return; const cs = getComputedStyle(o);
           const val = o.tagName === 'SELECT' ? (o.selectedOptions[0]?.value ? o.selectedOptions[0].text : '') : (o.type === 'checkbox' ? (o.checked ? '☑' : '☐') : o.value);
           const dv = d.createElement('div'); dv.textContent = val || (o.matches('.ph-name, .cover-title, .cover-store') ? o.placeholder : ''); // 비어 있으면 자동 이름 (PDF 인쇄와 같게)
@@ -2463,7 +2463,8 @@ async function savePpt(container, pog) {
           if (cs.position === 'absolute') Object.assign(dv.style, { position: 'absolute', left: cs.left, top: cs.top, right: cs.right, bottom: cs.bottom });
           c.replaceWith(dv);
         }); },
-        ignoreElements: el => el.classList && (el.classList.contains('no-print') || el.classList.contains('fb-badge') || el.classList.contains('cv-blk') || el.classList.contains('log-btn')) });
+        // 페이지 안 편집용 버튼(+ 고리 추가 등)은 빼지 않고 안 보이게만 → 자리가 그대로라 메모 위치가 화면과 같음 (사용자: 메모가 아래로 내려갔음)
+        ignoreElements: el => el.classList && ((el.classList.contains('no-print') && !el.closest?.('.page')) || el.classList.contains('fb-badge') || el.classList.contains('cv-blk') || el.classList.contains('log-btn')) });
       const sl = ppt.addSlide(); sl.addImage({ data: cv.toDataURL('image/jpeg', 0.92), x: 0, y: 0, w: 8.27, h: 11.69 });
       if (pog.status !== 'final') sl.addText(`작성 중 · ${fmtDate(new Date())}`, { x: 5.6, y: 0.08, w: 2.55, h: 0.32, align: 'center', fontFace: 'Malgun Gothic', fontSize: 11, bold: true, color: 'E53935', fill: { color: 'FFFFFF' }, line: { color: 'E53935', width: 1 } }); // 최종본이 아닌 걸 알 수 있게
     }
