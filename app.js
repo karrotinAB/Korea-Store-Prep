@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117q';
+const APP_VER = '20261117r';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -122,13 +122,20 @@ const mgrFmt = m => String(m || '').trim().replace(/^(\S+)\s+(.+)$/, '$1($2)'); 
 function pageMgrs(fx, team) {
   const rs = teamRowsOf(team); if (!rs.length) return { rs, part: '', lead: '' };
   const lead = (rs.find(r => /팀장/.test(r[2])) || [])[2] || '';
-  let part = fx.mdMgr && rs.some(r => r[2] === fx.mdMgr) ? fx.mdMgr : '';
-  if (!part && !fx.mdMgr) { let best = null; for (const r of rs) { if (!r[1]) continue; const sc = nameScore(fx, r[1]); if (!best || sc > best.s) best = { s: sc, m: r[2] }; } if (best && best.s >= 0.34) part = best.m; }
-  return { rs, part: fx.mdMgr === '__none' ? '' : part, lead };
+  let part = fx.mdMgr && rs.some(r => r[2] === fx.mdMgr) ? fx.mdMgr : '', auto2 = '';
+  if (!part && !fx.mdMgr) {
+    let best = null; for (const r of rs) { if (!r[1]) continue; const sc = nameScore(fx, r[1]); if (!best || sc > best.s) best = { s: sc, m: r[2], p: r[1] }; }
+    if (best && best.s >= 0.34) { part = best.m; auto2 = (rs.find(r => r[1] === best.p && r[2] !== best.m && !/팀장/.test(r[2])) || [])[2] || ''; } // 같은 파트 담당자가 둘이면 같이
+  }
+  if (fx.mdMgr === '__none') part = '';
+  const part2 = fx.mdMgr2 && rs.some(r => r[2] === fx.mdMgr2) ? fx.mdMgr2 : (fx.mdMgr2 === '__none' ? '' : auto2);
+  return { rs, part, part2, lead };
 }
+// 머리줄 오른쪽: 팀명 + 담당자 최대 3명 (담당자 1·2 + 팀장 · 사용자)
 function teamLine(fx, team) {
-  const t = catName(team), { part, lead } = pageMgrs(fx, team);
-  return [t, ...[...new Set([part, lead].filter(Boolean))].map(mgrFmt)].filter(Boolean).join(' ');
+  const t = catName(team), { part, part2, lead } = pageMgrs(fx, team);
+  const ppl = [...new Set([part, part2].filter(x => x && x !== lead))].slice(0, 2); // 팀장은 맨 뒤
+  return [t, ...[...ppl, lead].filter(Boolean).map(mgrFmt)].filter(Boolean).join(' ');
 }
 const fmtDate = ts => {
   const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
@@ -2375,8 +2382,12 @@ function renderSidePanel() {
       const sel = h('select', { class: 'se-input', disabled: !ed },
         h('option', { value: '' }, `자동${pm.part && !fx.mdMgr ? ` (${pm.part})` : ''}`), ...people.map(m => h('option', { value: m }, m)), h('option', { value: '__none' }, '팀장만'));
       sel.value = fx.mdMgr || '';
-      sel.onchange = () => { saveFx(pog.id, fx.id, 'mdMgr', sel.value, `${fx.id}|mdMgr`); fx.mdMgr = sel.value; const b2 = state.pageEls.get(fx.id); if (b2) syncPage(b2, fx, pog); };
-      nodes.push(sec('팀 담당자 (머리줄 오른쪽)', pm.rs.length ? sel : h('p', { class: 'se-help' }, `'${catName(team) || '팀 없음'}' 팀 담당자가 목록에 없어요.`),
+      const sel2 = h('select', { class: 'se-input', disabled: !ed },
+        h('option', { value: '' }, `자동${pm.part2 && !fx.mdMgr2 ? ` (${pm.part2})` : ' (없음)'}`), ...people.map(m => h('option', { value: m }, m)), h('option', { value: '__none' }, '없음'));
+      sel2.value = fx.mdMgr2 || '';
+      const put = (f, el) => { saveFx(pog.id, fx.id, f, el.value, `${fx.id}|${f}`); fx[f] = el.value; const b2 = state.pageEls.get(fx.id); if (b2) syncPage(b2, fx, pog); renderSidePanel(); };
+      sel.onchange = () => put('mdMgr', sel); sel2.onchange = () => put('mdMgr2', sel2);
+      nodes.push(sec('팀 담당자 (머리줄 오른쪽 · 팀장 포함 최대 3명)', pm.rs.length ? h('div', {}, h('label', { class: 'se-lab' }, '담당자 1'), sel, h('label', { class: 'se-lab' }, '담당자 2'), sel2, h('p', { class: 'se-help' }, '팀장은 자동으로 들어가요.')) : h('p', { class: 'se-help' }, `'${catName(team) || '팀 없음'}' 팀 담당자가 목록에 없어요.`),
         canEdit('pog-make') ? h('div', { class: 'se-btns' }, btn('👥 팀별 담당자 목록 고치기', openTeamMgrs, 'ghost')) : null));
     }
     if (ed) nodes.push(sec('페이지', h('div', { class: 'se-btns' },

@@ -1144,3 +1144,5 @@ nav button { padding: 7px 10px; }
 .tm-row { display: grid; grid-template-columns: 1.1fr 2.4fr 1.3fr 32px; gap: 6px; align-items: center; }
 .tm-row input { width: 100%; padding: 4px 6px; border: 1px solid var(--line, #ccc); border-radius: 4px; font: inherit; font-size: 13px; }
 .tm-head { position: sticky; top: 0; background: #fff; font-size: 13px; padding: 4px 0; z-index: 1; }
+
+.ph-cat { max-width: 72%; text-align: right; white-space: nowrap; } /* 담당자 3명까지 (사용자) */
