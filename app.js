@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117a';
+const APP_VER = '20261117b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -652,6 +652,14 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
     const pe = h('div', { class: 'cv-panel', style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${p.h}px` });
     if (p.bg) holesOn(pe, bgPitch(p.bg), 0, 0, p.bg);
     layer(p).append(pe);
+  }
+  // 붙어 있는 매대 몸통(md-body…) 사이에 흰 세로줄 (사용자: POG 사이트처럼 매대끼리 나눠 보이게)
+  const bodies = panels.filter(p => /^md-body/.test(p.id || ''));
+  for (const p of bodies) {
+    const q = bodies.find(o => o !== p && Math.abs(o.x + o.w - p.x) <= 3 && Math.min(o.y + o.h, p.y + p.h) - Math.max(o.y, p.y) > 10);
+    if (!q) continue;
+    const top = Math.max(p.y, q.y), bot = Math.min(p.y + p.h, q.y + q.h);
+    layer(p).append(h('div', { class: 'cv-bay-sep', style: `left:${p.x - x0 + pad - 2}px;top:${top - y0 + pad}px;height:${bot - top}px` }));
   }
   for (const p of props) {
     const color = p.color && !/rgba\(0, 0, 0, 0\)|transparent/.test(p.color) ? p.color : '#7d7d7d';

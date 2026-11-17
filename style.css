@@ -1120,3 +1120,5 @@ nav button { padding: 7px 10px; }
 .crop-ne { top: -8px; right: -8px; cursor: nesw-resize; } .crop-sw { bottom: -8px; left: -8px; cursor: nesw-resize; }
 .crop-nw { top: -8px; left: -8px; cursor: nwse-resize; } .crop-se { bottom: -8px; right: -8px; cursor: nwse-resize; }
 .page-block.cropping .cv-item, .page-block.cropping .cv-blk-h, .page-block.cropping .cv-blk-r { pointer-events: none; }
+
+.cv-bay-sep { position: absolute; width: 4px; background: #fff; pointer-events: none; } /* 매대 몸통 사이 흰 세로줄 (사용자) */
