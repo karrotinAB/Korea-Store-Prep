@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117h';
+const APP_VER = '20261117i';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3354,9 +3354,10 @@ async function analyzeSvg(text) {
     leaves(t).forEach((el, li) => {
       if (!el.textContent.trim()) return;
       if (isDarkFill(getComputedStyle(el).fill)) { dark.add(ti + ':' + li); for (const c of charRuns(el)) if (/\d/.test(c.text)) dims.push({ text: c.text, x: +((c.x - root.left) * k).toFixed(2), y: +((c.y - root.top) * k).toFixed(2), w: +(c.w * k).toFixed(2), h: +(c.h * k).toFixed(2) }); return; }
+      const red = isRedFill(getComputedStyle(el).fill); // 매대명 = 빨간 글씨만 (사용자: 회색 숫자 1,245 등은 매대가 아님)
       for (const c of charRuns(el)) {
         const w = c.w * k, hh = c.h * k;
-        lines.push({ text: c.text, x: (c.x - root.left) * k, y: (c.y - root.top) * k, w, h: hh, lh: c.text.length > 1 && hh > w * 1.5 ? w : hh }); // lh = 글자 굵기 (세로 글씨면 폭)
+        lines.push({ text: c.text, x: (c.x - root.left) * k, y: (c.y - root.top) * k, w, h: hh, lh: c.text.length > 1 && hh > w * 1.5 ? w : hh, red }); // lh = 글자 굵기 (세로 글씨면 폭)
       }
     });
   });
@@ -3370,7 +3371,13 @@ async function analyzeSvg(text) {
     const ls = leaves(t), keep = ls.filter((_, li) => dark.has(ti + ':' + li));
     if (!keep.length) t.remove(); else if (keep.length < ls.length) ls.forEach((el, li) => { if (!dark.has(ti + ':' + li)) el.remove(); });
   });
-  return { w: vw, h: vh, clean, base: new XMLSerializer().serializeToString(base), lines: lines.length, darkKept: dark.size, groups: groupLines(lines), dims, mods: dwModules(rects, dims) };
+  return { w: vw, h: vh, clean, base: new XMLSerializer().serializeToString(base), lines: lines.length, darkKept: dark.size, groups: groupLines(lines.some(l => l.red) ? lines.filter(l => l.red) : lines), dims, mods: dwModules(rects, dims) };
+}
+// 빨간 글씨인지 (매대명)
+function isRedFill(f) {
+  const m = String(f || '').match(/rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/); if (!m) return false;
+  const [r, g, b] = [+m[1], +m[2], +m[3]];
+  return r >= 150 && r - g >= 80 && r - b >= 80;
 }
 // 검은색(또는 아주 진한 회색) 글씨인지: Illustrator 검정 #231F20 등
 function isDarkFill(f) {
@@ -3837,9 +3844,10 @@ function toggleSeq(g) {
 }
 // 도면 순서로 자동 번호 (사용자): 도면의 매대(파란 칸)를 위에서 아래로 줄을 나눠, 같은 줄은 왼쪽에서 오른쪽으로 1, 2, 3…
 // 줄 = 칸 가운데 높이가 비슷한 것끼리 (칸 높이의 절반 안). 안 맞는 매대는 눌러서 번호를 바꾸고 저장
+const NOT_MD_RE = /^([\d,.]+|H\d{3,4})+$/;
 async function autoSeqByPos(v) {
   const mine = dw.team ? teamGids(v, dw.team) : null;
-  const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && (!mine || mine.has(g.id)));
+  const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && (!mine || mine.has(g.id)) && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, ''))); // 숫자만(1,245)·H1700은 매대 아님 (사용자)
   if (!gs.length) { alert(dw.team ? `'${dw.team}' 팀 매대가 없어요.` : '도면에 매대가 없어요.'); return; }
   if ((dw.seqDraft || []).length && !confirm(`지금 매긴 번호 ${dw.seqDraft.length}개를 지우고, 도면 순서로 새로 매길까요?\n(저장을 눌러야 반영돼요)`)) return;
   const cy = g => g.y + g.h / 2, hs = gs.map(g => g.h).sort((a, b) => a - b), mh = hs[Math.floor(hs.length / 2)];
