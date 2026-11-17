@@ -375,8 +375,8 @@
       const d = t.data || { items: [], props: [] };
       return {
         mdidx: t.mdidx, teamName: t.teamName, mdName: t.mdName, bayCount: t.bayCount ?? null,
-        shelfCount: t.shelfCount ?? countKind(d.props, /선반/),
-        pipeCount: t.pipeCount ?? countKind(d.props, /파이프/),
+        shelfCount: t.shelfCount ?? d.props.filter(p => p.opt !== 'Y' && /선반/.test(p.kind)).length,
+        pipeCount: t.pipeCount ?? d.props.filter(p => p.opt === 'Y' || /파이프/.test(p.kind)).length,
         itemCount: t.itemCount ?? d.items.length,
         items: d.items, props: d.props, panels: d.panels || [], board: d.board || null, src: d.src || null, error: d.error || '',
       };

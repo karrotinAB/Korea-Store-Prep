@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117f';
+const APP_VER = '20261117g';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -663,7 +663,7 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
   }
   for (const p of props) {
     // 선반 = 진한 회색, 파이프 = 연한 회색 (사용자: POG 사이트처럼 진하기로 구분)
-    const color = /선반/.test(p.kind || '') ? '#5c5c5c' : /파이프/.test(p.kind || '') ? '#bdbdbd' : p.color && !/rgba\(0, 0, 0, 0\)|transparent/.test(p.color) ? p.color : '#7d7d7d';
+    const color = isPipe(p) ? '#bdbdbd' : isShelf(p) ? '#5c5c5c' : p.color && !/rgba\(0, 0, 0, 0\)|transparent/.test(p.color) ? p.color : '#7d7d7d';
     const jr = Math.max(1, p.w * 0.12); // 줄줄 매대 줄: 가운데 구멍
     layer(p).append(h('div', { class: 'cv-prop' + (p.jj ? ' cv-strip' : ''), 'data-pid': p.id, title: p.kind || '',
       style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${Math.max(p.h || 0, 4)}px;background:${color}` + (p.jj ? `;background-image:radial-gradient(circle, #6f6f6f ${jr}px, transparent ${jr + 0.5}px);background-size:${p.w}px ${p.w * 1.5}px;background-position:center` : '') }));
@@ -2580,6 +2580,9 @@ function splitOutside(items, props, panels = []) {
 }
 
 // 북마클릿이 읽은 매대 한 줄 → POG 페이지 목록 (칸 나누기·매대 밖 제품 빼기). 처음 가져오기·다시 가져오기에서 같이 씀
+// 파이프 = POG 사이트 집기 옵션 'Y'(data-propoption) 또는 이름에 '파이프' (POG 사이트는 선반·파이프 이름이 둘 다 '선반'일 때가 있음 · 사용자: 색이 같게 나왔음)
+const isPipe = p => p.opt === 'Y' || /파이프/.test(p.kind || '');
+const isShelf = p => !isPipe(p) && /선반/.test(p.kind || '');
 const autoShelfPipe = (sh, pi) => [sh ? `선반 ${sh}` : '', pi ? `파이프 ${pi}` : ''].filter(Boolean).join(' / ');
 function pagesFromGrab(f, i) {
   const panels = f.panels || [];
@@ -2587,14 +2590,15 @@ function pagesFromGrab(f, i) {
   // 제품이 하나도 없는 칸은 페이지를 만들지 않음 (사용자)
   const bays = splitBays(inside, f.props || [], f.bayCount ?? null, panels).filter(b => b.items.length);
   const shelf = f.shelfCount ?? 0, pipe = f.pipeCount ?? 0;
-  const kinds = (f.props || []).some(p => /선반|파이프/.test(p.kind || ''));
+  const kinds = (f.props || []).some(p => isPipe(p) || isShelf(p));
+  const shNamed = (f.props || []).some(isShelf);
   const base = String(f.mdidx || 'fx' + i);
   const pages = bays.map((bay, k) => {
-    const count = (re, total) => bays.length === 1 ? total
-      : kinds ? bay.props.filter(p => re.test(p.kind || '')).length : Math.round(total / bays.length);
+    const count = (fn, total) => bays.length === 1 ? total
+      : kinds ? bay.props.filter(fn).length : Math.round(total / bays.length);
     // 선반 갯수: 맨 아래 선반(바닥)은 빼고 셈 (사용자). 집기 이름이 있으면 그 칸 선반을 직접 세고, 없으면 POG 사이트 숫자에서 하나 뺌
-    const shelves = (bays.length === 1 ? (f.props || []) : bay.props).filter(p => /선반/.test(p.kind || ''));
-    const sh = kinds ? Math.max(0, shelves.length - 1) : Math.max(0, count(/선반/, shelf) - 1), pi = count(/파이프/, pipe);
+    const shelves = (bays.length === 1 ? (f.props || []) : bay.props).filter(isShelf);
+    const sh = shNamed ? Math.max(0, shelves.length - 1) : Math.max(0, (bays.length === 1 ? shelf : Math.round(shelf / bays.length)) - 1), pi = count(isPipe, pipe);
     return {
       id: bays.length > 1 ? `${base}-${k + 1}` : base,
       mdidx: String(f.mdidx || ''), bayNo: k + 1, bayCount: bays.length,
