@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117z';
+const APP_VER = '20261118a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3893,6 +3893,8 @@ function renderDwStage() {
   const seq = seqOn && dw.seqMode ? { order: order || [], only: teamSel?.mine, onToggle: dw.seqMode ? g => toggleSeq(g) : null } : null;
   if (teamSel) legend.append(h('span', { class: 'dw-team-bar' }, ` · 팀 '${teamSel.team}' 매대 ${teamSel.mine.size}개만 진하게 (다른 팀은 흐리게)`));
   if (seq && dw.seqMode) legend.append(h('span', { class: 'dw-seq-bar' }, ` · 🔢 ${dw.team ? dw.team + ' 팀 ' : ''}번호 매기는 중: 매대를 누르는 순서대로 1, 2, 3… 번호가 있는 매대를 누르면 번호를 바꾸거나 뺄 수 있어요. `,
+    (() => { const sd = h('select', { id: 'dw-seqdir', class: 'nb-sel', title: '번호를 매길 방향 (사용자: 아래에서 위로도)' }, h('option', { value: 'down' }, '위 → 아래'), h('option', { value: 'up' }, '아래 → 위'));
+      try { sd.value = localStorage.getItem('seqDir') || 'down'; } catch { } sd.onchange = () => { try { localStorage.setItem('seqDir', sd.value); } catch { } }; return sd; })(), ' ',
     h('button', { class: 'btn small', title: 'A-1 모듈부터 모듈 번호 순서로(모듈 안은 위에서 아래, 왼쪽에서 오른쪽), 그다음 벽매대 등 나머지를 위에서 아래로 번호를 한 번에 매겨요', onclick: () => autoSeqByPos(v) }, '📐 도면 순서로 자동'), ' ',
     h('span', { id: 'dw-seq-n' }), ' ',
     h('button', { class: 'btn small primary', id: 'dw-seq-save', onclick: () => saveSeq(v) }, '💾 저장'), ' ',
@@ -4155,12 +4157,12 @@ async function autoSeqByPos(v) {
   if (!gs.length) { alert(dw.team ? `'${dw.team}' 팀 매대가 없어요.` : '도면에 매대가 없어요.'); return; }
   if ((dw.seqDraft || []).length && !confirm(`지금 매긴 번호 ${dw.seqDraft.length}개를 지우고, 도면 순서로 새로 매길까요?\n(저장을 눌러야 반영돼요)`)) return;
   const cy = g => g.y + g.h / 2, hs = gs.map(g => g.h).sort((a, b) => a - b), mh = hs[Math.floor(hs.length / 2)];
-  const rows = [];
-  for (const g of [...gs].sort((a, b) => cy(a) - cy(b))) {
+  const up = ($('#dw-seqdir')?.value || 'down') === 'up', rows = []; // 아래 → 위 (사용자)
+  for (const g of [...gs].sort((a, b) => up ? cy(b) - cy(a) : cy(a) - cy(b))) {
     const r = rows.at(-1);
-    if (r && cy(g) - r.cy <= mh * 0.6) r.gs.push(g); else rows.push({ cy: cy(g), gs: [g] });
+    if (r && Math.abs(cy(g) - r.cy) <= mh * 0.6) r.gs.push(g); else rows.push({ cy: cy(g), gs: [g] });
   }
-  const pos = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)); // 위에서 아래, 같은 줄은 왼쪽부터
+  const pos = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)); // 위에서 아래(또는 아래에서 위), 같은 줄은 왼쪽부터
   // A-1 모듈부터 (사용자): 도면의 'A-1'·'A-2'… 표시가 있는 중앙 매대 덩어리마다 그 매대들을 모듈 번호 순서로 먼저, 벽매대 등 나머지는 그 뒤에 위 순서대로
   const an = await dwAnalysis(v), isl = an ? dwIslands(an, pos) : null;
   if (isl?.order.length) dw.seqDraft = [...isl.order, ...pos.filter(g => !isl.has.has(g.id))].map(g => g.id);
