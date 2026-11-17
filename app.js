@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118e';
+const APP_VER = '20261118f';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2994,6 +2994,13 @@ $('#vw-nobc').onclick = () => exportNoBarcode(state.viewer.pog, state.viewer.fix
 
 /* ---------- 제품리스트 엑셀: 이 POG의 모든 매대(= 가져올 때 체크한 매대) 제품을 시트 하나에 ---------- */
 // 순서: 페이지 → 칸 → 단(위에서부터, 선반·파이프를 같이 셈) → 왼쪽부터. 줄줄이처럼 선반이 없는 매대는 위에서부터
+// 매대 자르기(cut) 밖으로 잘려 안 보이는 제품은 뺀 페이지 (붙여넣은 묶음 제품은 자르지 않으니 그대로)
+function cutVisible(f) {
+  if (!okCut(f.cut)) return f;
+  const T = withBlocks(f), c = f.cut;
+  const keep = new Set(T.items.filter(o => (o._b && o._b !== BASE) || ((o.x + o.w / 2) >= c.x0 && (o.x + o.w / 2) <= c.x1 && (o.y + (o.h || 0) / 2) >= c.y0 && (o.y + (o.h || 0) / 2) <= c.y1)).map(o => String(o.id)));
+  return { ...f, items: (f.items || []).filter(o => keep.has(String(o.id))) };
+}
 function productRows(f) {
   const props = (f.props || []).filter(p => !p.kind || /선반|파이프/.test(p.kind))
     .map(p => ({ x: +p.x || 0, y: +p.y || 0, w: +p.w || 0, h: +p.h || 18, pipe: p.opt === 'Y' || /파이프/.test(p.kind || '') }));
@@ -3039,7 +3046,7 @@ async function exportProducts(pog, fixtures) {
       const no = i + 2; // 1번은 표지 (PDF 페이지 번호와 같게)
       for (const f of pg._parts || [pg]) { // 붙인 페이지는 매대마다 따로 계산
         if (!(f.items || []).length) continue;
-        for (const r of productRows(f)) {
+        for (const r of productRows(cutVisible(f))) { // 매대 자르기로 잘라 낸(안 보이는) 제품은 뺌 (사용자)
           const it = r.it, [cat, size] = grp(it.group || it.data?.groupname);
           body.push([body.length + 1, no, displayName(f), r.lv ? r.lv + '단' : '', r.order, // 맨 앞 = 순번 (칸·선반/걸이 열은 뺌 · 사용자)
             code8(String(it.code || it.data?.item || '').trim()), it.name || '',
