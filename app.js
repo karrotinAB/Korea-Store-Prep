@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117r';
+const APP_VER = '20261117s';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3012,18 +3012,21 @@ async function exportProducts(pog, fixtures) {
     } catch { toast('바코드를 읽지 못해서 바코드 칸은 비워 둘게요'); }
     body.forEach(r => r.splice(5, 0, siteBc.get(r[5]) || (bcOf.get(r[5]) || []).sort().join(', ')));
     body.forEach(r => r.splice(1, 0, r.pop())); // B열 = 팀 (제품 팀구분)
-    const noMid = body.filter(r => !r[1]).length;
-    const head = ['순번', '팀', '페이지', '매대명', '단', '순서', '바코드', '제품코드', '제품명', '판매가', '진열방식', '분류', '사이즈(W×H×D mm)'];
+    const noMid = body.filter(r => !r[1]).length, pageN = new Set(body.map(r => r[2])).size;
+    // 열 순서 (사용자): 순번 · 제품코드 · 제품명 · 바코드 · 팀 · 페이지 · 매대명 · 판매가 · 분류 · 사이즈 — 단·순서·진열방식은 뺌
+    const ORDER = [0, 7, 8, 6, 1, 2, 3, 9, 11, 12];
+    body.forEach((r, i) => { body[i] = ORDER.map(k => r[k]); });
+    const head = ['순번', '제품코드', '제품명', '바코드', '팀', '페이지', '매대명', '판매가', '분류', '사이즈(W×H×D mm)'];
     const info = [
       ['매장', `${pog.storeName || ''} (${pog.storeCode || ''})`],
       ['POG', pogTitle(pog)],
       ['POG 가져온 날', fmtDate(pog.grabbedAt)],
-      ['합계', `페이지 ${new Set(body.map(r => r[2])).size}개, 제품 ${body.length}개`],
+      ['합계', `페이지 ${pageN}개, 제품 ${body.length}개`],
       [],
     ];
     const ws = X.utils.aoa_to_sheet([...info, head, ...body]);
-    ws['!cols'] = [6, 12, 7, 26, 6, 6, 16, 11, 40, 9, 9, 22, 16].map(wch => ({ wch }));
-    body.forEach((_, i) => ['G', 'H'].forEach(c => { const k = c + (info.length + 2 + i); if (ws[k]) ws[k].t = 's'; })); // 바코드·제품코드는 글자로 (앞의 0이 안 빠지게)
+    ws['!cols'] = [6, 11, 40, 16, 12, 7, 26, 9, 22, 16].map(wch => ({ wch }));
+    body.forEach((_, i) => ['B', 'D'].forEach(c => { const k = c + (info.length + 2 + i); if (ws[k]) ws[k].t = 's'; })); // 바코드·제품코드는 글자로 (앞의 0이 안 빠지게)
     ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: info.length, c: 0 }, e: { r: info.length + body.length, c: head.length - 1 } }) };
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, ws, '제품리스트');
