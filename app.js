@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117n';
+const APP_VER = '20261117o';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -649,12 +649,14 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
     const back = h('div', { class: 'cv-back', style: `left:${fx0 - x0 + pad}px;top:${pad}px;width:${fx1 - fx0}px;height:${y1 - y0}px` });
     const part = (fx._parts || [fx])[g] || fx;
     if (!panels.some(p => p.bg && (p._g || 0) === g)) holesOn(back, perfOf(part, fx1 - fx0), fx0 - x0 + pad, pad); // 타공판: 매대 뒤에 구멍
-    inner.append(back);
+    baseEl.append(back);
   }
   for (const p of panels) {
     // 배경판은 POG 사이트 색과 상관없이 연한 회색 (진하게 칠하면 선반·파이프와 구분이 안 됨 · 사용자). 무늬(타공판)가 있으면 그 간격대로 구멍
     const pe = h('div', { class: 'cv-panel', style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${p.h}px` });
-    if (p.bg) holesOn(pe, bgPitch(p.bg), 0, 0, p.bg);
+    if (p.bg && isPerfBg(p.bg.img)) holesOn(pe, bgPitch(p.bg), 0, 0, p.bg);
+    else if (p.bg && p.bg.img && !isGridBg(p.bg.img) && !isJuljul(p)) // 그 밖의 매대 판 그림(스페이스월 가로줄 등)은 POG 사이트 그림 그대로
+      Object.assign(pe.style, { backgroundImage: p.bg.img, backgroundSize: p.bg.size || 'auto', backgroundRepeat: p.bg.rep || 'repeat', backgroundPosition: p.bg.pos || '0 0' });
     layer(p).append(pe);
   }
   // 붙어 있는 매대 몸통(md-body…) 사이에 흰 세로줄 (사용자: POG 사이트처럼 매대끼리 나눠 보이게)
@@ -717,9 +719,13 @@ function bgPitch(bg) {
   const u = bgUrl(bg?.img), z = u && imgSize.get(u);
   return z && z.w ? { x: z.w, y: z.h } : u ? { url: u } : null;
 }
+// 타공판 무늬 = POG 사이트 tagongbg… 그림만. canvasbg…는 POG 사이트 화면 바탕 모눈이라 타공이 아님 (사용자: 스페이스월이 타공으로 보였음)
+const isPerfBg = img => /tagong/i.test(img || '');
+const isGridBg = img => /canvasbg/i.test(img || '');
 function perfOf(f, frameW) {
-  const b = f.board && (f.board.holes ? { x: f.board.holes.px, y: f.board.holes.py } : bgPitch(f.board));
-  if (b) return { ...b, bg: f.board };
+  const bd = f.board && !isGridBg(f.board.img) ? f.board : null;
+  const b = bd && (bd.holes ? { x: bd.holes.px, y: bd.holes.py } : isPerfBg(bd.img) ? bgPitch(bd) : null);
+  if (b) return { ...b, bg: bd };
   if (/타공/.test(`${f.mdName || ''} ${f.fixtureType || ''} ${f.headerName || ''}`)) {
     const mm = +((f.mdName || '').match(/_(\d{3,4})(?:\D*)$/) || [])[1]; // 매대명 끝 숫자 = 폭(mm)일 때 25mm 간격으로
     const p = mm >= 300 && mm <= 3000 && frameW ? frameW / mm * 25 : 10;
