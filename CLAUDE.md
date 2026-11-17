@@ -80,6 +80,9 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **매대 자르기 (사용자: 가져온 매대 그림도 자르기)**: 오른쪽 패널 '매대 자르기'(`cropSection`) → 파란 네모(`.crop-box`, 안을 끌면 옮김·가장자리/모서리 8개로 크기) → '✓ 자르기'(Enter)/취소(Esc)/'자르기 없애기'. 저장 `fixture.cut = {x0,y0,x1,y1}`(그림 좌표 = `withBlocks` 뒤, `frame`과 같은 좌표). `buildCanvas`가 이 네모를 틀로 쓰고 밖은 숨김(`.cv-in` overflow) → 남긴 부분이 칸에 꽉 차게 커짐. 자르는 중(`state.crop`)엔 그 페이지를 `noCut`으로 다시 그림. `itemSig`에 들어 있음. 다시 가져오기(대체)하면 `cut: null`. 코드: `startCrop`·`paintCrop`·`applyCrop`·`clearCrop`·`endCrop`.
 
+- **매대 가로·세로 따로 크기 (사용자)**: '↔ 매대 위치·크기 조정'·묶음의 오른쪽 아래 손잡이는 가로·세로 따로(Shift = 비율 그대로, `resizeBlock`), 오른쪽 패널에 '가로 %·세로 %' 숫자 칸(`sizeInputs`). `withBlocks`의 `tr`: 판·선반은 `sx`·`sy`로 늘고, **제품은 작은 쪽 비율로 키워 그 자리 가운데**(찌그러지지 않게).
+- **붙은 매대 몸통 사이 흰 세로줄**: `buildCanvas`에서 `md-body…` 판이 붙어 있으면 `.cv-bay-sep`. 칸 나누기(`clusterX`)는 `md-body`를 폭과 상관없이 칸으로, 좁은 칸(가장 넓은 칸의 40% 미만)은 옆 넓은 칸과 한 페이지로(`splitBays`).
+
 ## 8. 매장 등록 (사용자)
 - 칸은 **지점코드 · 지점명 · 오픈 예정일**만 (파트너 이름 칸은 없앰). 문서 필드는 `code`·`branch`·`openDate` 그대로.
 - 지점코드 = POG 사이트 매장코드 (POG `storeCode`와 같아야 POG·도면이 이어짐).

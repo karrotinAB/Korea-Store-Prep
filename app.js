@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117b';
+const APP_VER = '20261117c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -905,8 +905,14 @@ function withBlocks(fx) {
   const raw = new Map(), add = (g, o) => { const r = raw.get(g.id) || { x0: Infinity, y0: Infinity }; r.x0 = Math.min(r.x0, o.x); r.y0 = Math.min(r.y0, o.y); raw.set(g.id, r); };
   const gI = o => ofI.get(String(o.id)) || base, gP = o => ofP.get(String(o.id)) || base;
   (fx.items || []).forEach(o => add(gI(o), o)); (fx.props || []).forEach(o => add(gP(o), o)); (fx.panels || []).forEach(o => add(base, o));
-  const tr = (o, g) => { const r = raw.get(g.id), kx = g.sx ?? g.s ?? 1, ky = g.sy ?? g.s ?? 1; return { ...o, x: r.x0 + (o.x - r.x0) * kx + (g.dx || 0), y: r.y0 + (o.y - r.y0) * ky + (g.dy || 0), w: o.w * kx, h: (o.h || 0) * ky, _b: g.id }; };
-  return { ...fx, items: (fx.items || []).map(o => tr(o, gI(o))), props: (fx.props || []).map(o => tr(o, gP(o))), panels: (fx.panels || []).map(o => tr(o, base)), _blocks: [base, ...bl] };
+  // 가로·세로를 따로 바꾸면(사용자) 판·선반은 그만큼 늘어나고, 제품은 모양이 찌그러지지 않게 작은 쪽 비율로 키워 그 자리 가운데에 놓음
+  const tr = (o, g, item) => {
+    const r = raw.get(g.id), kx = g.sx ?? g.s ?? 1, ky = g.sy ?? g.s ?? 1, x = r.x0 + (o.x - r.x0) * kx + (g.dx || 0), y = r.y0 + (o.y - r.y0) * ky + (g.dy || 0);
+    if (!item || Math.abs(kx - ky) < 0.001) return { ...o, x, y, w: o.w * kx, h: (o.h || 0) * ky, _b: g.id };
+    const k = Math.min(kx, ky), w = o.w * k, hh = (o.h || 0) * k;
+    return { ...o, x: x + (o.w * kx - w) / 2, y: y + ((o.h || 0) * ky - hh) / 2, w, h: hh, _b: g.id };
+  };
+  return { ...fx, items: (fx.items || []).map(o => tr(o, gI(o), true)), props: (fx.props || []).map(o => tr(o, gP(o))), panels: (fx.panels || []).map(o => tr(o, base)), _blocks: [base, ...bl] };
 }
 // 매대 그림의 범위 (제품·집기·판, 묶음 위치 반영). 묶음을 처음 만들거나 붙여넣기 직전에 fx.frame으로 기억해 두고,
 // 그 뒤에는 이 틀로만 그림 크기를 정함 → 묶음을 옮기거나 붙여넣어 매대 밖으로 튀어나와도 원래 매대가 작아지지 않음 (사용자)
@@ -1821,14 +1827,24 @@ function splitSection(pog, fx, block) {
   return sec('매대 나누기', h('p', { class: 'se-help' }, '제품 일부를 떼어 따로 묶음으로 만들어요. 묶음은 회색 바탕을 따로 칠하고, ✥를 끌어 옮기거나 Ctrl+X → 다른 페이지에서 Ctrl+V로 옮길 수 있어요.'),
     h('div', { class: 'se-btns' }, btn('✂ 매대 나누기', () => { if (state.crop) endCrop(state.crop.id); state.split = { id: fx.id, items: new Set(), props: new Set() }; block._selBlock = null; paintSplit(block); renderSidePanel(); }),
       btn('↔ 매대 위치·크기 조정', () => { if (!bl.length && !fx.base) saveGroup(pog.id, fx, BASE, {}); else { block._selBlock = BASE; paintBlockSel(block); renderSidePanel(); } }, 'ghost')), // 늘 보임 (사용자)
-    bl.length || fx.base ? h('p', { class: 'se-help' }, "그림의 '✥' 표시를 끌면 옮겨지고, 오른쪽 아래 작은 네모를 끌면 크기가 바뀌어요 (제품이 있으면 비율 그대로, 제품 없는 빈 매대만 가로·세로 따로). 누르면 골라져요.") : null,
+    bl.length || fx.base ? h('p', { class: 'se-help' }, "그림의 '✥' 표시를 끌면 옮겨지고, 오른쪽 아래 작은 네모를 끌면 가로·세로가 따로 바뀌어요 (Shift를 누르고 끌면 비율 그대로). 제품 사진은 찌그러지지 않게 비율을 지켜요. 누르면 골라져요.") : null,
     selBase ? h('div', { class: 'se-kid' }, h('span', {}, '선택: ', h('b', {}, '원래 매대'), ` · 크기 ${pct(fx.base)}`)) : null,
+    selBase ? sizeInputs(pog, fx, BASE, fx.base) : null,
     selBase ? h('div', { class: 'se-btns' }, btn('제자리로', () => saveGroup(pog.id, fx, BASE, { dx: 0, dy: 0 }), 'ghost'), btn('원래 크기', () => saveGroup(pog.id, fx, BASE, { s: 1, sx: 1, sy: 1 }), 'ghost'),
       fx.base ? btn('처음 상태로', () => resetBase(pog.id, fx), 'ghost') : null) : null,
     sel ? h('div', { class: 'se-kid' }, h('span', {}, '선택한 묶음: ', h('b', {}, `묶음 ${bl.indexOf(sel) + 1}`), ` · 제품 ${(sel.items || []).length}개 · 크기 ${pct(sel)}`)) : null,
+    sel ? sizeInputs(pog, fx, sel.id, sel) : null,
     sel ? h('div', { class: 'se-btns' }, btn('✂ 잘라내기 (Ctrl+X)', () => cutBlock(pog.id, fx, sel)), btn('제자리로', () => saveGroup(pog.id, fx, sel.id, { dx: 0, dy: 0 }), 'ghost'),
       btn('원래 크기', () => saveGroup(pog.id, fx, sel.id, { s: 1, sx: 1, sy: 1 }), 'ghost'),
       btn('묶음 풀기', () => saveBlocks(pog.id, fx, bl.filter(b => b.id !== sel.id), sel), 'ghost')) : null);
+}
+// 가로 %·세로 % 숫자로 맞추기 (사용자: 가로·세로 각각 크기 조절)
+function sizeInputs(pog, fx, bid, g) {
+  const cur = k => Math.round(((k === 'x' ? g?.sx : g?.sy) ?? g?.s ?? 1) * 100);
+  const inp = k => { const el = h('input', { type: 'number', min: 20, max: 500, step: 5, value: cur(k), class: 'sz-in' });
+    el.addEventListener('change', () => { const v = Math.min(500, Math.max(20, Number(el.value) || 100)) / 100, o = { sx: (g?.sx ?? g?.s ?? 1), sy: (g?.sy ?? g?.s ?? 1) }; o[k === 'x' ? 'sx' : 'sy'] = v; saveGroup(pog.id, fx, bid, { ...o, s: o.sx }); });
+    return el; };
+  return h('div', { class: 'se-btns sz-row' }, h('label', {}, '가로 ', inp('x'), ' %'), h('label', {}, '세로 ', inp('y'), ' %'));
 }
 // 나누기: 끌어서 네모 → 걸친 제품(과 완전히 들어간 선반·파이프)을 고름
 function splitBand(e, block) {
@@ -2040,12 +2056,10 @@ function resizeBlock(e, block, bid) {
   const l = parseFloat(box.style.left) + 4, t = parseFloat(box.style.top) + 4, w0 = Math.max(10, parseFloat(box.style.width) - 8), h0 = Math.max(10, parseFloat(box.style.height) - 8);
   g.style.transformOrigin = `${l}px ${t}px`;
   const sx = e.clientX, sy = e.clientY, lim = v => Math.min(5, Math.max(0.2, v)); let kx = 1, ky = 1;
-  // 제품이 없는 빈 매대(회색 바탕·집기만)는 가로·세로를 따로 (비율이 바뀜, Shift = 비율 그대로).
-  // 제품이 있는 묶음·매대는 비율 그대로 크기만 (사용자)
-  const free = !g.querySelector('.cv-item');
+  // 가로·세로를 따로 (사용자: 매대 그림 가로·세로 각각). Shift를 누르고 끌면 비율 그대로
   const mv = ev => {
     kx = (w0 + (ev.clientX - sx) / sc) / w0; ky = (h0 + (ev.clientY - sy) / sc) / h0;
-    if (!free || ev.shiftKey) kx = ky = (kx + ky) / 2;
+    if (ev.shiftKey) kx = ky = (kx + ky) / 2;
     kx = lim(kx); ky = lim(ky); g.style.transform = `scale(${kx}, ${ky})`;
   };
   const up = () => {

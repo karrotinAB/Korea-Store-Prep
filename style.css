@@ -1122,3 +1122,5 @@ nav button { padding: 7px 10px; }
 .page-block.cropping .cv-item, .page-block.cropping .cv-blk-h, .page-block.cropping .cv-blk-r { pointer-events: none; }
 
 .cv-bay-sep { position: absolute; width: 4px; background: #fff; pointer-events: none; } /* 매대 몸통 사이 흰 세로줄 (사용자) */
+
+.sz-row label { font-size: 13px; } .sz-in { width: 64px; } /* 매대 가로·세로 % (사용자) */
