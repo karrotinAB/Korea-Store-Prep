@@ -1128,3 +1128,12 @@ nav button { padding: 7px 10px; }
 .pb.info-h .pside { height: 141px; flex: none; }
 .pb.info-h .pside > .sbox { min-height: 0; overflow: hidden; }
 .pb.info-h .pside > .sbox > .sbox-c { min-height: 0; overflow-y: auto; }
+
+/* 사진 메모 자르기 (사용자) */
+.nt-img .nt-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.nt-img.cropping { overflow: visible; }
+.nt-img .nt-ghost { opacity: .35; pointer-events: none; }
+.nt-img.cropping { outline: 2px dashed #f7931e; outline-offset: 1px; }
+/* 글상자 안에서 바로 고치기 */
+.nt-text.editing { cursor: text; outline: 2px solid #1e88e5; }
+.nt-text.editing .nt-tx { pointer-events: auto; user-select: text; cursor: text; outline: none; }

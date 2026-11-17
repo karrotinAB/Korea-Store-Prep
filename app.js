@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117m';
+const APP_VER = '20261117n';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -618,20 +618,24 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
   if (cut) ({ x0, y0, x1, y1 } = cut);
   const pad = cut ? 0 : 8, bw = x1 - x0 + pad * 2, bh = y1 - y0 + pad * 2;
   const sc = Math.min(W / bw, H / bh);
-  const inner = h('div', { class: 'cv-in', style: `width:${bw}px;height:${bh}px;left:${(W - bw * sc) / 2}px;transform:scale(${sc})` + (cut ? ';overflow:hidden' : '') });
+  const inner = h('div', { class: 'cv-in', style: `width:${bw}px;height:${bh}px;left:${(W - bw * sc) / 2}px;transform:scale(${sc})` });
   inner._sc = sc; inner._x0 = x0; inner._y0 = y0; inner._x1 = x1; inner._y1 = y1; inner._pad = pad;
+  // 매대 자르기: 원래 매대만 네모 안으로 자르고, 붙여넣은 묶음은 자르지 않음 → 그림 칸 어디든 따로 옮길 수 있음 (사용자)
+  const clipEl = cut ? h('div', { class: 'cv-cut', style: `position:absolute;left:0;top:0;width:${bw}px;height:${bh}px;overflow:hidden` }) : null;
+  if (clipEl) inner.append(clipEl);
+  const baseEl = clipEl || inner;
   // 매대 나누기로 만든 묶음이 있으면: 묶음마다·나머지마다 그 제품·집기를 감싸는 곳만 회색 바탕 (사용자). 묶음은 따로 한 층(.cv-bgrp)이라 끌어서 옮길 수 있음
   const grpOf = new Map(); // 묶음 id → 층
-  const layer = o => o._b ? grpOf.get(o._b) : inner;
+  const layer = o => (o._b && grpOf.get(o._b)) || baseEl;
   if (hasBlocks) {
     const sets = [{ id: null }, ...fx._blocks];
     for (const b of sets) {
       const mem = [...panels, ...props, ...items].filter(o => (o._b || null) === b.id);
-      if (b.id) { const gEl = h('div', { class: 'cv-bgrp', 'data-b': b.id }); grpOf.set(b.id, gEl); inner.append(gEl); }
+      if (b.id) { const gEl = h('div', { class: 'cv-bgrp', 'data-b': b.id }); grpOf.set(b.id, gEl); (b.base ? baseEl : inner).append(gEl); }
       if (!mem.length) continue;
       const bx0 = Math.min(...mem.map(o => o.x)), by0 = Math.min(...mem.map(o => o.y)), bx1 = Math.max(...mem.map(o => o.x + o.w)), by1 = Math.max(...mem.map(o => o.y + Math.max(o.h || 0, 4)));
       const back = h('div', { class: 'cv-back', style: `left:${bx0 - x0 + pad - 4}px;top:${by0 - y0 + pad - 4}px;width:${bx1 - bx0 + 8}px;height:${by1 - by0 + 8}px` });
-      (b.id ? grpOf.get(b.id) : inner).append(back);
+      (b.id ? grpOf.get(b.id) : baseEl).append(back);
       if (b.id && blockUI) grpOf.get(b.id).append(h('div', { class: 'cv-blk no-print', 'data-b': b.id, style: `left:${bx0 - x0 + pad - 4}px;top:${by0 - y0 + pad - 4}px;width:${bx1 - bx0 + 8}px;height:${by1 - by0 + 8}px` },
         h('span', { class: 'cv-blk-h', 'data-b': b.id, title: b.base ? '끌어서 원래 매대 옮기기 · 누르면 선택' : '끌어서 옮기기 · 누르면 선택 (Ctrl+X로 잘라내기)' }, b.base ? '✥ 매대' : `✥ 묶음 ${fx._blocks.filter(x => !x.base).indexOf(b) + 1}`),
         h('span', { class: 'cv-blk-r', 'data-b': b.id, title: '끌어서 크기 조절' })));
@@ -1311,6 +1315,7 @@ async function deletePage(pogId, fx) {
   const msg = fx.kind === 'free' ? `'${displayName(fx)}' 페이지를 삭제할까요?`
     : `'${displayName(fx)}' 페이지를 삭제할까요?\n입력한 매대명·고리·이외집기·메모도 함께 지워져요.${kids.length ? `\n붙여 둔 매대 ${kids.length}개는 떼어져서 따로 페이지로 남아요.` : ''}\n(나중에 POG 사이트에서 다시 가져오면 이 매대가 맨 뒤에 다시 생길 수 있어요)`;
   if (!confirm(msg)) return;
+  const ord = [...(state.edComposed?.keys() || [])], pi = ord.indexOf(fx.id), prevId = pi > 0 ? ord[pi - 1] : null; // 지운 뒤 바로 앞 페이지로 (사용자: 첫 페이지로 돌아갔음)
   try {
     const b = writeBatch(db), g = undoGroup();
     kids.forEach(id => track(pogId, id, ['mergedInto'], g)); track(pogId, fx.id, '*', g); track(pogId, '__pog', ['fixtureCount'], g);
@@ -1319,6 +1324,8 @@ async function deletePage(pogId, fx) {
     if (fx.kind !== 'free') b.update(doc(db, 'pogs', pogId), { fixtureCount: Math.max(0, (state.currentPog?.fixtureCount || 1) - 1), updatedAt: serverTimestamp() });
     await b.commit();
     toast(`'${displayName(fx)}' 페이지를 삭제했어요 · Ctrl+Z로 되돌릴 수 있어요`); // 메모 사진 파일은 되돌릴 수 있게 남겨 둠
+    const go = () => { const el = (prevId && state.pageEls.get(prevId)) || state.coverEl; if (!el) return; el.scrollIntoView({ block: 'start' }); state.edActive = prevId || '__cover'; renderSidePanel(); };
+    setTimeout(go, 150); setTimeout(go, 600);
   } catch (e) { alert('삭제하지 못했어요: ' + (e.code || e.message)); }
 }
 
@@ -1349,6 +1356,7 @@ function saveNotes(block) { saveFx(block._pog, block._fx, 'notes', structuredClo
 // 메모 여러 개 고르기 (사용자): Shift·Ctrl+클릭으로 더하거나 빼기. block._msel = 고른 메모 id들, block._sel = 마지막으로 고른 것
 const selIds = block => block._msel?.size ? [...block._msel].filter(id => block._notes.some(n => n.id === id)) : (block._sel ? [block._sel] : []);
 function selectNote(block, id, { add = false } = {}) {
+  if (block._cropNote && block._cropNote !== id) block._cropNote = null; // 다른 메모를 누르면 사진 자르기 끝
   if (id) setEdActive(block._fx);
   if (add && id) {
     const s2 = new Set(selIds(block)); s2.has(id) ? s2.delete(id) : s2.add(id);
@@ -1408,18 +1416,35 @@ function renderNotes(block) {
     if (n.t === 'box') el = h('div', { class: 'nt nt-box', style: st + `border:${n.bw || 3}px solid ${n.color};background:${n.fill ? rgba(n.color, n.alpha ?? 0.3) : 'transparent'}` });
     else if (n.t === 'text') el = h('div', { class: 'nt nt-text', style: st + `background:${n.bg || 'transparent'};color:${n.color || '#222'};border:${n.border ? '2px solid ' + n.border : '0'}` },
       h('div', { class: 'nt-tx', style: `font-size:${n.fs || 14}px` }, n.text || '')); // 글은 안쪽 칸에 (모서리 점이 잘리지 않게)
-    else if (n.t === 'img') el = h('div', { class: 'nt nt-img', style: st }, h('img', { src: n.url, alt: '', draggable: 'false' }));
+    else if (n.t === 'img') { // 자른 사진(n.crop = 원래 사진에서 보이는 부분 x·y·w·h, 0~1)은 넘치는 부분을 숨김. 자르는 중엔 원래 사진 전체를 흐리게
+      const c = n.crop, cropping = block._cropNote === n.id;
+      const pos = c ? `position:absolute;max-width:none;width:${100 / c.w}%;height:${100 / c.h}%;left:${-c.x / c.w * 100}%;top:${-c.y / c.h * 100}%` : '';
+      el = h('div', { class: 'nt nt-img' + (cropping ? ' cropping' : ''), style: st },
+        cropping && c ? h('img', { class: 'nt-ghost', src: n.url, alt: '', draggable: 'false', style: pos }) : '',
+        h('div', { class: 'nt-clip' }, h('img', { src: n.url, alt: '', draggable: 'false', style: pos })));
+    }
     else continue;
     el.dataset.id = n.id;
     if (sel) el.classList.add('sel');
     if (ed) {
       el.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'move'));
-      if (n.t === 'text') el.addEventListener('dblclick', () => block._bar?.querySelector('.nb-text')?.focus());
+      if (n.t === 'text') el.addEventListener('dblclick', e => { e.stopPropagation(); editNoteText(block, n, el); }); // 더블클릭 = 상자 안에서 바로 고치기 (사용자)
       if (handles) for (const c of ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w']) { const hd = h('div', { class: 'nh nh-' + c }); hd.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'r-' + c)); el.append(hd); }
     }
     layer.append(el);
     if (n.t === 'text') fitText(el.querySelector('.nt-tx'), n.fs || 14);
   }
+}
+// 글상자 안에서 바로 글 고치기: 다 쓰고 밖을 누르거나 Esc
+function editNoteText(block, n, el) {
+  const tx = el.querySelector('.nt-tx'); if (!tx || tx.isContentEditable) return;
+  tx.contentEditable = 'plaintext-only'; if (tx.contentEditable !== 'plaintext-only') tx.contentEditable = 'true';
+  el.classList.add('editing'); tx.style.fontSize = (n.fs || 14) + 'px';
+  tx.focus(); const r = document.createRange(); r.selectNodeContents(tx); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r);
+  const stop = e => e.stopPropagation();
+  tx.addEventListener('pointerdown', stop); tx.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') tx.blur(); });
+  tx.addEventListener('input', () => { n.text = tx.innerText.replace(/\n$/, ''); const ta = block._bar?.querySelector('.nb-text'); if (ta) ta.value = n.text; saveNotes(block); });
+  tx.addEventListener('blur', () => { tx.contentEditable = 'false'; el.classList.remove('editing'); renderNotes(block); }, { once: true });
 }
 // 글상자: 상자 크기는 그대로 두고, 글이 넘치면 글자를 줄여서 맞춤 (화면에 보일 때만 잴 수 있음)
 function fitText(el, fs) {
@@ -1428,6 +1453,7 @@ function fitText(el, fs) {
   while (f > 7 && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) { f -= 1; el.style.fontSize = f + 'px'; }
 }
 function startNoteDrag(e, block, n, mode) {
+  if (e.target?.isContentEditable) return; // 글상자 안에서 글 고치는 중
   const z = ZP();
   e.preventDefault(); e.stopPropagation();
   if ($('#ed-side')?.contains(document.activeElement)) document.activeElement.blur(); // 패널에서 글 쓰던 중이면 끝내고 이 페이지로
@@ -1447,10 +1473,19 @@ function startNoteDrag(e, block, n, mode) {
       const c = mode.slice(2), west = c.includes('w'), north = c.includes('n'), horiz = /[ew]/.test(c), vert = /[ns]/.test(c);
       let w = horiz ? Math.max(16, Math.round(west ? o.w - dx : o.w + dx)) : o.w;
       let hh = vert ? Math.max(16, Math.round(north ? o.h - dy : o.h + dy)) : o.h;
-      if (n.t === 'img' && c.length === 2) hh = Math.max(16, Math.round(w * o.h / o.w)); // 사진: 모서리 = 비율 유지, 변 = 가로·세로 따로 늘리기
+      const crop = n.t === 'img' && block._cropNote === n.id;
+      if (n.t === 'img' && c.length === 2 && !crop) hh = Math.max(16, Math.round(w * o.h / o.w)); // 사진: 모서리 = 비율 유지, 변 = 가로·세로 따로 늘리기
+      if (crop) { // 자르기: 사진 크기·자리는 그대로, 보이는 네모만 바뀜 (원래 사진 밖으로는 못 넓힘)
+        const c0 = o.crop || { x: 0, y: 0, w: 1, h: 1 }, fw = o.w / c0.w, fh = o.h / c0.h, ox = o.x - c0.x * fw, oy = o.y - c0.y * fh;
+        let x0 = west ? o.x + o.w - w : o.x, y0 = north ? o.y + o.h - hh : o.y, x1 = x0 + w, y1 = y0 + hh;
+        x0 = Math.max(ox, x0); y0 = Math.max(oy, y0); x1 = Math.min(ox + fw, x1); y1 = Math.min(oy + fh, y1);
+        n.x = x0; n.y = y0; n.w = x1 - x0; n.h = y1 - y0;
+        n.crop = { x: (x0 - ox) / fw, y: (y0 - oy) / fh, w: (x1 - x0) / fw, h: (y1 - y0) / fh };
+      } else {
       n.w = w; n.h = hh;
       n.x = west ? o.x + o.w - w : o.x;
       n.y = north ? o.y + o.h - hh : o.y;
+      }
     }
     else { n['x' + mode[1]] = o['x' + mode[1]] + dx; n['y' + mode[1]] = o['y' + mode[1]] + dy; }
     renderNotes(block);
@@ -1548,7 +1583,13 @@ function renderNoteBar(block) {
   }
   if (n.t === 'arrow') box.append(lab('색'), swatches(n.color, c => set({ color: c || n.color })),
     lab('굵기'), sel(n.bw || 3, [['2', '2'], ['3', '3'], ['5', '5'], ['8', '8']], v => set({ bw: Number(v) })));
-  if (n.t === 'img') box.append(h('span', { class: 'mut' }, '모서리 점 = 비율 그대로 크기 바꾸기 · 변 가운데 점 = 가로만·세로만 늘리고 줄이기'));
+  if (n.t === 'img') {
+    const on = block._cropNote === n.id;
+    const endCropN = () => { block._cropNote = null; if (n.crop && n.crop.x <= 0.001 && n.crop.y <= 0.001 && n.crop.w >= 0.999 && n.crop.h >= 0.999) delete n.crop; saveNotes(block); renderNotes(block); renderNoteBar(block); };
+    box.append(on ? h('span', { class: 'mut' }, '✂ 자르는 중: 모서리·변의 점을 안쪽으로 끌면 그만큼 잘려요 (흐린 부분 = 잘려 나가는 곳)') : h('span', { class: 'mut' }, '모서리 점 = 비율 그대로 크기 바꾸기 · 변 가운데 점 = 가로만·세로만 늘리고 줄이기'),
+      on ? h('button', { class: 'btn small primary', onclick: endCropN }, '✓ 자르기 끝') : h('button', { class: 'btn small', onclick: () => { block._cropNote = n.id; if (!n.crop) n.crop = { x: 0, y: 0, w: 1, h: 1 }; renderNotes(block); renderNoteBar(block); } }, '✂ 사진 자르기'),
+      n.crop && !on ? h('button', { class: 'btn small ghost', onclick: () => { const c = n.crop, fw = n.w / c.w, fh = n.h / c.h; n.x -= c.x * fw; n.y -= c.y * fh; n.w = fw; n.h = fh; delete n.crop; saveNotes(block); renderNotes(block); renderNoteBar(block); } }, '자르기 없애기') : '');
+  }
   if (n.t === 'text') box.append(h('span', { class: 'mut nb-tip' }, '네 모서리 점을 끌어 상자 크기를 바꿔요. 글이 넘치면 글자가 자동으로 작아져요.'));
   box.append(h('span', { class: 'nb-sp' }),
     n.t !== 'img' ? h('button', { class: 'btn small ghost', onclick: () => { const c = structuredClone(n); delete c.id; if (c.t === 'arrow') { c.x1 += 20; c.y1 += 20; c.x2 += 20; c.y2 += 20; } else { c.x += 20; c.y += 20; } addNote(block, c); } }, '복제') : null,
@@ -1565,7 +1606,7 @@ function removeSelNotes(block) {
 }
 document.addEventListener('keydown', e => {
   const b = noteSaveBlock; if (!b || !b._sel || !b.isConnected) return;
-  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); selIds(b).length > 1 ? removeSelNotes(b) : removeNote(b, b._sel); }
   if (e.key === 'Escape') selectNote(b, null);
 });
@@ -1603,7 +1644,7 @@ function syncPage(block, fx, pog) {
   if (exBox && !exBox.contains(document.activeElement) && !pendingKey(`${fx.id}|extras`) && JSON.stringify(fx.extras || []) !== JSON.stringify(block._extras)) {
     block._extras = structuredClone(fx.extras || []); renderExtras(block);
   }
-  const typing = !!block._bar && block._bar.querySelector('.nb-text') === document.activeElement;
+  const typing = (!!block._bar && block._bar.querySelector('.nb-text') === document.activeElement) || (document.activeElement?.isContentEditable && block.contains(document.activeElement));
   if (!block._dragging && !typing && !pendingKey(`${fx.id}|notes`) && JSON.stringify(fx.notes || []) !== JSON.stringify(block._notes)) {
     block._notes = structuredClone(fx.notes || []);
     if (!block._notes.some(n => n.id === block._sel)) block._sel = null;
@@ -1786,7 +1827,7 @@ function edFind(jump = 0) {
   let items = 0;
   for (const f of composeFx(sortedFx())) {
     const blk = state.pageEls.get(f.id); if (!blk) continue;
-    const fxHit = mode === 'page' && findNorm([displayName(f), f.headerName, f.mdName].join('|')).includes(q);
+    const fxHit = mode === 'page' && findNorm(f.headerName ? f.headerName : [displayName(f), f.mdName].join('|')).includes(q); // 매대명을 바꿨으면 바꾼 이름으로만 (사용자)
     const its = mode === 'item' ? (f.items || []).filter(it => findNorm(it.name).includes(q) || findNorm(it.code).includes(q)) : [];
     if (!fxHit && !its.length) continue;
     ef.hits.push(f.id); items += its.length;
@@ -1957,13 +1998,6 @@ function saveBlocks(pogId, fx, list, unbake, keepSel = null) {
   if (list.length && !fx.frame) { const fr = cvBox(fx); saveFx(pogId, fx.id, 'frame', fr, ug); fx.frame = fr; } // 처음 나눌 때의 매대 범위를 기억
   if (!list.length && fx.frame) { saveFx(pogId, fx.id, 'frame', null, ug); fx.frame = null; }
   saveFx(pogId, fx.id, 'blocks', list, ug); fx.blocks = list;
-  if (okCut(fx.cut) && keepSel && keepSel !== BASE) { // 자르기한 페이지: 묶음을 네모 밖으로 옮겨도 보이게 네모를 넓힘 (사용자: 붙인 매대를 따로 돌아다니게)
-    const T = withBlocks(fx), mine = [...T.items, ...T.props].filter(o => o._b === keepSel && o.w > 0);
-    if (mine.length) {
-      const c = fx.cut, nc = { x0: Math.min(c.x0, ...mine.map(o => o.x)), y0: Math.min(c.y0, ...mine.map(o => o.y)), x1: Math.max(c.x1, ...mine.map(o => o.x + o.w)), y1: Math.max(c.y1, ...mine.map(o => o.y + Math.max(o.h || 0, 4))) };
-      if (nc.x0 !== c.x0 || nc.y0 !== c.y0 || nc.x1 !== c.x1 || nc.y1 !== c.y1) { saveFx(pogId, fx.id, 'cut', nc, ug); fx.cut = nc; }
-    }
-  }
   rebuildPage(fx.id, keepSel);
 }
 /* ---------- 매대 자르기 (사용자: 가져온 매대 그림도 자를 수 있게)
@@ -2138,9 +2172,9 @@ function pasteBlock(pogId, to) {
   const left = Math.min(...mv.map(o => o.x)), bw = Math.max(...mv.map(o => o.x + o.w)) - left, top = Math.min(...mv.map(o => o.y));
   // 기존 매대 오른쪽 바깥에 따로 놓음 (사용자: 매대 안으로 들어가서 따로 움직이기 어려웠음).
   // 자르기한 페이지는 네모를 넓혀서 보이게, 아니면 그림 칸 오른쪽 빈자리에 들어갈 때만 바깥 (안 들어가면 예전처럼 매대 오른쪽 끝 안쪽)
-  let outside = !!to.cut;
-  if (fr && !outside) {
-    const W = to.infoH ? CANVAS_HW : CANVAS_W, H = to.infoH ? CANVAS_HH : CANVAS_H, bw0 = fr.x1 - fr.x0 + 16, bh0 = fr.y1 - fr.y0 + 16, sc = Math.min(W / bw0, H / bh0);
+  let outside = false;
+  if (fr) {
+    const pd = to.cut ? 0 : 16, W = to.infoH ? CANVAS_HW : CANVAS_W, H = to.infoH ? CANVAS_HH : CANVAS_H, bw0 = fr.x1 - fr.x0 + pd, bh0 = fr.y1 - fr.y0 + pd, sc = Math.min(W / bw0, H / bh0);
     outside = (W - bw0 * sc) / 2 / sc >= bw + 14;
   }
   const shift = fr ? (outside ? fr.x1 + 10 : Math.max(fr.x0, fr.x1 - bw)) - left : -left;
@@ -2161,14 +2195,8 @@ function pasteBlock(pogId, to) {
   const toFrame = to.frame || cvBox(to) || cvBox({ items: nI, props: nP }), fromFrame = fB.length ? from.frame || null : null; // 붙일 페이지는 붙이기 전 매대 범위를 틀로
   saveFx(pogId, to.id, 'frame', toFrame, ug); saveFx(pogId, from.id, 'frame', fromFrame, ug);
   saveFx(pogId, to.id, 'blocks', [...(to.blocks || []), nb], ug); saveFx(pogId, to.id, 'itemZ', zTo, ug);
-  let toCut = to.cut || null;
-  if (toCut) { // 붙인 묶음이 다 보이게 자르기 네모를 넓힘
-    const nb2 = cvBox({ items: nI, props: nP });
-    if (nb2) toCut = { x0: Math.min(toCut.x0, nb2.x0), y0: Math.min(toCut.y0, nb2.y0), x1: Math.max(toCut.x1, nb2.x1), y1: Math.max(toCut.y1, nb2.y1) };
-    saveFx(pogId, to.id, 'cut', toCut, ug);
-  }
   Object.assign(from, { items: fI, props: fP, blocks: fB, itemZ: zFrom, frame: fromFrame });
-  Object.assign(to, { items: [...(to.items || []), ...nI], props: [...(to.props || []), ...nP], blocks: [...(to.blocks || []), nb], itemZ: zTo, frame: toFrame, cut: toCut });
+  Object.assign(to, { items: [...(to.items || []), ...nI], props: [...(to.props || []), ...nP], blocks: [...(to.blocks || []), nb], itemZ: zTo, frame: toFrame });
   state.clip = null;
   rebuildPage(from.id, null); rebuildPage(to.id, nb.id);
   toast(`'${displayName(to)}'에 붙였어요. ✥를 끌어 자리를 맞추세요 (Ctrl+Z로 되돌릴 수 있어요)`);
@@ -4686,7 +4714,7 @@ function vwFind(jump = 0) {
   let items = 0;
   for (const f of composeFx(v.fixtures || [])) {
     const blk = v.blocks?.get(f.id); if (!blk) continue;
-    const fxHit = findNorm([displayName(f), f.mdName, f.teamName, f.fixtureType].join('|')).includes(q);
+    const fxHit = findNorm([f.headerName ? f.headerName : [displayName(f), f.mdName].join('|'), f.teamName, f.fixtureType].join('|')).includes(q); // 바꾼 매대명으로 (사용자)
     const its = (f.items || []).filter(it => findNorm(it.name).includes(q) || findNorm(it.code).includes(q));
     if (!fxHit && !its.length) continue;
     vf.hits.push(f.id); items += its.length;
