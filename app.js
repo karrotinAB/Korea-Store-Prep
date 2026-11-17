@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118f';
+const APP_VER = '20261118g';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -5001,6 +5001,62 @@ async function fbDelete(n) {
 }
 $('#fb-pdf').onclick = () => printPages($('#fb-pages'), fb.pog);
 // POG 만들기에서 이 POG의 피드백 보기
+/* 다른 POG에서 메모 가져오기 (사용자: 신규 매장 POG에 예전 매장 POG의 메모·첨부 사진을 매대명으로 짝지어 복사).
+   짝 = 같은 제품코드가 겹치는 정도(70%) + 매대명 비슷한 정도(30%). 메모는 같은 자리에, 지금 메모에 더해서. 사진 파일은 두 POG가 같이 씀(shared). Ctrl+Z로 되돌림 */
+$('#ed-copynotes').onclick = () => { if (state.currentPog) openCopyNotes(state.currentPog); };
+function openCopyNotes(pog) {
+  if (!state.edEditable) { toast(pog.status === 'final' ? '최종 POG예요. 잠금 해제한 뒤 가져올 수 있어요' : '편집 권한이 없어요'); return; }
+  const others = state.pogs.filter(p => p.id !== pog.id).sort((a, b) => (pogTeam(b) === pogTeam(pog)) - (pogTeam(a) === pogTeam(pog)) || pogTitle(a).localeCompare(pogTitle(b), 'ko'));
+  if (!others.length) { alert('가져올 다른 POG가 없어요.'); return; }
+  const sel = h('select', { class: 'se-input' }, h('option', { value: '' }, '원본 POG 고르기'), ...others.map(p => h('option', { value: p.id }, `${pogTitle(p)}${p.status === 'final' ? ' (최종)' : ''}`)));
+  const body = h('div', { class: 'pdl-list' }), info = h('p', { class: 'mut' }), go = h('button', { class: 'btn primary', disabled: true }, '가져오기');
+  let rows = [], src = [];
+  const codes = f => new Set((f.items || []).map(it => code8(String(it.code || '').trim())).filter(Boolean));
+  const names = f => nameWords([f.headerName, f.mdName].filter(Boolean).join(' '));
+  sel.onchange = async () => {
+    body.replaceChildren(); go.disabled = true; if (!sel.value) return;
+    info.textContent = '원본 POG 읽는 중…';
+    try { src = (await getDocs(collection(db, 'pogs', sel.value, 'fixtures'))).docs.map(d => ({ id: d.id, ...d.data() })).filter(f => (f.notes || []).length); }
+    catch (e) { info.textContent = '읽지 못했어요: ' + (e.code || e.message); return; }
+    if (!src.length) { info.textContent = '이 POG에는 메모가 있는 페이지가 없어요.'; return; }
+    const tgt = [...state.edComposed.values()].filter(f => f.kind !== 'free');
+    // 점수: 제품코드 겹침 + 매대명
+    const score = (a, b) => { const A = codes(a), B = codes(b); let n = 0; A.forEach(c => { if (B.has(c)) n++; }); const ov = A.size && B.size ? n / Math.min(A.size, B.size) : 0; return ov * 0.7 + wordSim(names(a), names(b)) * 0.3; };
+    const all = tgt.flatMap(t => src.map(sf => ({ t, sf, s: score(t, sf) }))).sort((a, b) => b.s - a.s), usedT = new Set(), usedS = new Set(), pick = new Map();
+    for (const c of all) { if (c.s < 0.3 || usedT.has(c.t.id) || usedS.has(c.sf.id)) continue; usedT.add(c.t.id); usedS.add(c.sf.id); pick.set(c.t.id, c); }
+    rows = tgt.map(t => {
+      const best = pick.get(t.id), cb = h('input', { type: 'checkbox', checked: !!best });
+      const ss = h('select', { class: 'nb-sel' }, h('option', { value: '' }, '— 가져오지 않음 —'), ...src.map(sf => h('option', { value: sf.id }, `${displayName(sf)} · 메모 ${sf.notes.length}개`)));
+      ss.value = best ? best.sf.id : ''; ss.onchange = () => { cb.checked = !!ss.value; };
+      return { t, cb, ss, el: h('label', { class: 'pdl-row pdl-guess' + (best ? '' : ' none') }, cb, h('span', { class: 'pdl-name' }, displayName(t)), h('span', { class: 'pdl-ref' }, '← '), ss, h('span', { class: 'pdl-score' }, best ? `${Math.round(Math.min(1, best.s) * 100)}%` : '')) };
+    });
+    body.replaceChildren(...rows.map(r => r.el));
+    info.textContent = `이 POG 페이지 ${tgt.length}장 중 ${pick.size}장에 원본 메모 페이지를 짝지었어요 (같은 제품이 겹치는 정도 + 매대명). 틀린 짝은 오른쪽에서 바꾸거나 체크를 빼세요.`;
+    go.disabled = false;
+  };
+  go.onclick = async () => {
+    const todo = rows.filter(r => r.cb.checked && r.ss.value).map(r => ({ t: r.t, sf: src.find(x => x.id === r.ss.value) })).filter(x => x.sf);
+    if (!todo.length) { toast('가져올 페이지를 골라 주세요'); return; }
+    go.disabled = true;
+    try {
+      const ug = undoGroup(), shareSrc = new Map(); let n = 0;
+      for (const { t, sf } of todo) {
+        const fx = state.fixtures.get(t.id); if (!fx) continue;
+        const add = sf.notes.map(nn => ({ ...structuredClone(nn), id: uid(), ...(nn.t === 'img' ? { shared: true } : {}) }));
+        const notes = [...(fx.notes || []), ...add];
+        saveFx(pog.id, fx.id, 'notes', notes, ug); fx.notes = notes; n += add.length;
+        if (sf.notes.some(nn => nn.t === 'img' && !nn.shared)) shareSrc.set(sf.id, sf.notes.map(nn => nn.t === 'img' ? { ...nn, shared: true } : nn));
+        const blk = state.pageEls.get(fx.id); if (blk) { blk._notes = structuredClone(notes); renderNotes(blk); }
+      }
+      // 원본 POG의 사진 메모도 '같이 씀' 표시 (원본에서 지워도 이쪽 사진 파일이 남게)
+      for (const [id, notes] of shareSrc) updateDoc(doc(db, 'pogs', sel.value, 'fixtures', id), { notes }).catch(() => { });
+      close(); toast(`메모 ${n}개를 ${todo.length}장에 가져왔어요 · Ctrl+Z로 되돌릴 수 있어요`);
+    } catch (e) { alert('가져오지 못했어요: ' + (e.code || e.message)); go.disabled = false; }
+  };
+  const close = modal(h('div', { class: 'pdl' }, h('h3', {}, '📋 다른 POG에서 메모 가져오기'),
+    h('p', { class: 'se-help' }, '다른 매장 POG의 메모 상자·글상자·화살표·첨부 사진을, 같은 매대로 보이는 이 POG 페이지의 같은 자리에 복사해요. 지금 있는 메모는 그대로 두고 더해요.'),
+    sel, info, body, h('div', { class: 'modal-act' }, h('span', { class: 'grow' }), go)), { wide: true });
+}
 $('#ed-dwlink').onclick = () => { if (state.currentPog) openPogDwLink(state.currentPog); }; // 툴바 '📐 도면 일괄 연결' (사용자) = 표지의 'POG랑 도면 연결하기'
 
 /* ---------- 찾기 (온라인 POG·온라인 도면) ----------
