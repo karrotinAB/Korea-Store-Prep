@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117l';
+const APP_VER = '20261117m';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1328,10 +1328,18 @@ async function deletePage(pogId, fx) {
 const NOTE_COLORS = ['#e60012', '#f7931e', '#ffd400', '#2e9e5b', '#00a0e9', '#7b4fd6', '#222222', '#ffffff'];
 const uid = () => Math.random().toString(36).slice(2, 9);
 const rgba = (hex, a) => { const n = parseInt((hex || '#000000').slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+// 새 메모는 마지막으로 고른 서식(색·배경·테두리·크기·굵기)을 그대로 씀 (사용자: 서식 유지). 이 컴퓨터 브라우저에 기억
+const NOTE_STYLE_KEYS = { box: ['color', 'fill', 'alpha', 'bw'], text: ['bg', 'color', 'border', 'fs'], arrow: ['color', 'bw'] };
+const noteStyle = (() => { try { return JSON.parse(localStorage.getItem('noteStyle') || '{}') || {}; } catch { return {}; } })();
+function rememberNoteStyle(n) {
+  const keys = NOTE_STYLE_KEYS[n.t]; if (!keys) return;
+  noteStyle[n.t] = Object.fromEntries(keys.filter(k => k in n).map(k => [k, n[k]]));
+  try { localStorage.setItem('noteStyle', JSON.stringify(noteStyle)); } catch { }
+}
 const NOTE_NEW = {
-  box: () => ({ t: 'box', x: 120, y: 320, w: 240, h: 120, color: '#e60012', fill: false, alpha: 0.3, bw: 3 }),
-  text: () => ({ t: 'text', x: 150, y: 360, w: 170, h: 30, text: '메모', bg: '#ffd400', color: '#222222', border: '', fs: 14 }),
-  arrow: () => ({ t: 'arrow', x1: 220, y1: 330, x2: 360, y2: 420, color: '#2e9e5b', bw: 3 }),
+  box: () => ({ t: 'box', x: 120, y: 320, w: 240, h: 120, color: '#e60012', fill: false, alpha: 0.3, bw: 3, ...noteStyle.box }),
+  text: () => ({ t: 'text', x: 150, y: 360, w: 170, h: 30, text: '메모', bg: '#ffffff', color: '#222222', border: '', fs: 14, ...noteStyle.text }), // 글상자 처음 배경 = 흰색 (사용자)
+  arrow: () => ({ t: 'arrow', x1: 220, y1: 330, x2: 360, y2: 420, color: '#2e9e5b', bw: 3, ...noteStyle.arrow }),
 };
 const SVGNS = 'http://www.w3.org/2000/svg';
 const svgEl = (tag, attrs = {}) => { const el = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); return el; };
@@ -1502,7 +1510,7 @@ function renderNoteBar(block) {
   const box = block._bar?.querySelector('.nb-props'); if (!box) return;
   if (box.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return; // 글 쓰는 중
   box.innerHTML = '';
-  const pasteBtn = state.noteClip?.length ? h('button', { class: 'btn small', title: 'Ctrl+V', onclick: () => pasteNotes(block) }, `📋 붙여넣기 (${state.noteClip.length}개)`) : null;
+  const pasteBtn = state.noteClip?.length ? h('button', { class: 'btn small', title: 'Ctrl+V', onclick: () => pasteNotes(block) }, `📋 붙여넣기 (${state.noteClip.length}개)`) : ''; // null이면 'null' 글자가 보였음
   const ids = selIds(block);
   if (ids.length > 1) { // 여러 개 고름
     box.append(h('b', {}, `메모 ${ids.length}개 고름`), h('span', { class: 'mut' }, ' · 하나를 끌면 같이 옮겨져요'), h('span', { class: 'nb-sp' }),
@@ -1513,9 +1521,9 @@ function renderNoteBar(block) {
   }
   const n = block._notes.find(x => x.id === block._sel);
   if (!n) { box.append(h('span', { class: 'mut' }, '메모를 누르면 색·채우기를 바꿀 수 있어요. Shift(또는 Ctrl)+클릭으로 여러 개 골라 복사(Ctrl+C)·붙여넣기(Ctrl+V)해요.'),
-    block._notes.length > 1 ? h('button', { class: 'btn small ghost', onclick: () => { block._msel = new Set(block._notes.map(x => x.id)); block._sel = block._notes.at(-1).id; noteSaveBlock = block; setEdActive(block._fx); renderNotes(block); renderNoteBar(block); } }, `이 페이지 메모 모두 고르기 (${block._notes.length}개)`) : null,
+    block._notes.length > 1 ? h('button', { class: 'btn small ghost', onclick: () => { block._msel = new Set(block._notes.map(x => x.id)); block._sel = block._notes.at(-1).id; noteSaveBlock = block; setEdActive(block._fx); renderNotes(block); renderNoteBar(block); } }, `이 페이지 메모 모두 고르기 (${block._notes.length}개)`) : '',
     pasteBtn); return; }
-  const set = (patch) => { Object.assign(n, patch); saveNotes(block); renderNotes(block); renderNoteBar(block); };
+  const set = (patch) => { Object.assign(n, patch); rememberNoteStyle(n); saveNotes(block); renderNotes(block); renderNoteBar(block); };
   const lab = t => h('span', { class: 'nb-l' }, t);
   const sel = (v, opts, on) => { const s = h('select', { class: 'nb-sel' }, ...opts.map(([k, t]) => h('option', { value: k }, t))); s.value = String(v); s.onchange = () => on(s.value); return s; };
   if (n.t === 'box') box.append(
@@ -1544,7 +1552,7 @@ function renderNoteBar(block) {
   if (n.t === 'text') box.append(h('span', { class: 'mut nb-tip' }, '네 모서리 점을 끌어 상자 크기를 바꿔요. 글이 넘치면 글자가 자동으로 작아져요.'));
   box.append(h('span', { class: 'nb-sp' }),
     n.t !== 'img' ? h('button', { class: 'btn small ghost', onclick: () => { const c = structuredClone(n); delete c.id; if (c.t === 'arrow') { c.x1 += 20; c.y1 += 20; c.x2 += 20; c.y2 += 20; } else { c.x += 20; c.y += 20; } addNote(block, c); } }, '복제') : null,
-    h('button', { class: 'btn small', title: 'Ctrl+C', onclick: () => copyNotes(block) }, '📄 복사'), pasteBtn,
+    h('button', { class: 'btn small', title: 'Ctrl+C', onclick: () => copyNotes(block) }, '📄 복사'), ...(pasteBtn ? [pasteBtn] : []), // 붙여넣을 게 없으면 'null' 글자가 보였음
     h('button', { class: 'btn small ghost danger', onclick: () => removeNote(block, n.id) }, '삭제'));
 }
 function removeSelNotes(block) {
