@@ -103,6 +103,11 @@ service cloud.firestore {
       allow create: if hasLevel(['pog'])
         && request.resource.data.keys().hasOnly(['code', 'name', 'auto', 'updatedAt', 'updatedBy']);
     }
+    // 팀별 담당자 (POG 페이지 머리줄): 직원 모두 읽고, POG팀·관리자가 고침 (사용자)
+    match /settings/{id} {
+      allow read: if anyLevel();
+      allow write: if hasLevel(['admin', 'pog']);
+    }
     // POG 담당자 목록
     match /managers/{id} {
       allow read: if staff();

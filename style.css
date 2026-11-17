@@ -1137,3 +1137,10 @@ nav button { padding: 7px 10px; }
 /* 글상자 안에서 바로 고치기 */
 .nt-text.editing { cursor: text; outline: 2px solid #1e88e5; }
 .nt-text.editing .nt-tx { pointer-events: auto; user-select: text; cursor: text; outline: none; }
+
+/* 팀별 담당자 목록 (사용자) */
+.tm-modal { width: min(900px, 92vw); }
+.tm-list { max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.tm-row { display: grid; grid-template-columns: 1.1fr 2.4fr 1.3fr 32px; gap: 6px; align-items: center; }
+.tm-row input { width: 100%; padding: 4px 6px; border: 1px solid var(--line, #ccc); border-radius: 4px; font: inherit; font-size: 13px; }
+.tm-head { position: sticky; top: 0; background: #fff; font-size: 13px; padding: 4px 0; z-index: 1; }

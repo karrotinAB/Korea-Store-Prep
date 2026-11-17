@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117o';
+const APP_VER = '20261117p';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -108,6 +108,28 @@ function modal(content, { wide = false } = {}) {
   return close;
 }
 const catName = t => (t || '').replace(/^\d+\s*/, '');
+/* 팀별 담당자 (사용자: PPT·PDF 페이지 머리줄 오른쪽에 '팀명 파트담당자(직급) 팀장(팀장)').
+   settings/teamMgrs = { rows: [[팀, 담당파트, 담당자], …] } — POG팀·관리자가 고침. 없으면 아래 기본 목록(담당자 엑셀) */
+const TEAM_MGR_DEFAULT = [["디자인지제", "달력/스케쥴러", "윤석재 팀장"], ["디자인지제", "쇼핑백", "윤석재 팀장"], ["디자인지제", "지함", "윤석재 팀장"], ["디자인지제", "포장지", "윤석재 팀장"], ["디자인지제", "크리스마스 카드/연하장", "윤석재 팀장"], ["디자인지제", "카드/편지지/봉투", "정현영 주임"], ["디자인지제", "스티커", "정현영 주임"], ["디자인지제", "앨범", "정현영 주임"], ["디자인지제", "포장소품", "정현영 주임"], ["디자인지제", "점착메모지", "송민지 MD"], ["디자인지제", "파일", "송민지 MD"], ["디자인지제", "노트/컬러링북/드로잉북", "송민지 MD"], ["디자인지제", "메모수첩, 기타 지제류", "송민지 MD"], ["디자인지제", "아동문구(아동노트, 아동스티커 등)", "송민지 MD"], ["패션잡화", "우산", "이윤희 팀장"], ["패션잡화", "인형/인형키링", "남우송 주임"], ["패션잡화", "목쿠션/방석/담요", "남우송 주임"], ["패션잡화", "양말/스타킹", "남우송 주임"], ["패션잡화", "겨울 시즌용품", "남우송 주임"], ["패션잡화", "X-MAS 시즌용품", "남우송 주임"], ["패션잡화", "SS/FW의류 (유니폼 포함)", "남우송 주임"], ["패션잡화", "필통", "박수현 MD"], ["패션잡화", "파우치", "박수현 MD"], ["패션잡화", "가방/모자", "박수현 MD"], ["패션잡화", "인형소품", "박수현 MD"], ["패션잡화", "여름 시즌용품", "박수현 MD"], ["패션잡화", "할로윈 시즌용품", "박수현 MD"], ["패션잡화", "지갑", "이선아 MD"], ["패션잡화", "사출카드케이스, 포토카드케이스", "이선아 MD"], ["패션잡화", "마스크", "이선아 MD"], ["패션잡화", "여행용품", "이선아 MD"], ["패션잡화", "헤어밴드/수면안대", "이선아 MD"], ["패션잡화", "와펜/뱃지/팔찌", "이선아 MD"], ["패션잡화", "노트북파우치", "이선아 MD"], ["디지털/문화(디지털)", "충전기기", "김원필 팀장"], ["디지털/문화(디지털)", "PC주변기기", "임정은 대리"], ["디지털/문화(디지털)", "이어폰/음향기기", "이준영 MD"], ["디지털/문화(디지털)", "스마트기기/키오스크/가챠기기", "손예원 MD"], ["디지털/문화(디지털)", "모바일/차량용 ACC", "손예원 MD"], ["디지털/문화(디지털)", "카메라/필름/프린터", "손예원 MD"], ["디지털/문화(디지털)", "K-POP", "손예원 MD"], ["홈&라이프", "가습기/ 미니청소기/보풀제거기/기타가전", "대지혜 팀장"], ["홈&라이프", "청소/욕실/정리함(리템,휴지통등)", "대지혜 팀장"], ["홈&라이프", "액자/공병류", "대지혜 팀장"], ["홈&라이프", "시계", "대지혜 팀장"], ["홈&라이프", "슬리퍼", "윤서인 주임"], ["홈&라이프", "프래그런스(디퓨져/방향제/캔들/섬유향수)", "윤서인 주임"], ["홈&라이프", "거울/브러쉬/인솔/라이터", "윤서인 주임"], ["홈&라이프", "헤어가전", "윤서인 주임"], ["홈&라이프", "조명", "홍석현 MD"], ["홈&라이프", "생활/위생소품 (구강/밴드/물티슈)", "홍석현 MD"], ["홈&라이프", "향수", "홍석현 MD"], ["홈&라이프", "마사지/헬스(체중계)/홈트", "홍석현 MD"], ["홈&라이프", "컵류(텀블러/머그/술잔)", "이희원 MD"], ["홈&라이프", "유아식기/기타 주방용품 일체", "이희원 MD"], ["생활잡화", "생활잡화 전반", "권경희 팀장"], ["생활잡화", "개인소품(교통카드, 온수팩, 도어사인 등)", "홍인소 주임"], ["생활잡화", "오락용품(밍싱, 추억의게임)", "홍인소 주임"], ["생활잡화", "아이디어(캔디머신, 심쿵펫, 말하는인형)", "홍인소 주임"], ["생활잡화", "시즌(크리스마스)", "홍인소 주임"], ["생활잡화", "개인소품(전자노트, 디피박스)", "홍인소 주임"], ["생활잡화", "생활소품(품수입, 수비니어)", "홍인소 주임"], ["생활잡화", "품(스티커, 메모지, 편지지, 카드, 봉투, 쇼핑백 등)", "홍인소 주임"], ["생활잡화", "패치매니아", "홍인소 주임"], ["생활잡화", "시즌(감사, 다이어리)", "홍인소 주임"], ["생활잡화", "자동차용품(주차알림판)", "최영규 MD"], ["생활잡화", "생활용품(건전지, 자물쇠, 금고, 공구)", "최영규 MD"], ["생활잡화", "생활소품(마우스패드, 키링/참류, 정리함, 케이스류)", "최영규 MD"], ["생활잡화", "핸드폰ACC(스마트홀더, 케이블바이트, 점착카드케이스)", "최영규 MD"], ["생활잡화", "시즌(여름)", "최영규 MD"], ["생활잡화", "품우산/우비", "성예지 MD"], ["생활잡화", "파티용품", "성예지 MD"], ["생활잡화", "디자인문구(산리오, 포켓몬, 몬치치, 리락쿠마)", "성예지 MD"], ["생활잡화", "아이디어(문답지)", "성예지 MD"], ["생활잡화", "오락용품(술게임)", "성예지 MD"], ["생활잡화", "시즌(할로윈)", "성예지 MD"], ["생활잡화", "디자인문구(산리오, 포켓몬, 몬치치, 리락쿠마 제외)", "권예린 MD"], ["생잡/뷰티&라이프", "화장품류(스킨/헤어/바디/색조) / 릴렉싱 패치", "이윤경 주임"], ["생잡/뷰티&라이프", "뷰티소품", "임지민 MD"], ["생잡/뷰티&라이프", "캐릭터헤어", "임지민 MD"], ["생잡/뷰티&라이프", "PET (애견,애묘)", "임지민 MD"], ["문구", "화방용품(DIY 포함)", "변은지 팀장"], ["문구", "필기구", "윤주원 주임"], ["문구", "필기구", "이유정 MD"], ["문구", "문구 (슬라임, 펀DIY, 데코덴, 레진 포함),오피스용품", "최지예 주임"], ["문구", "문구 (슬라임, 펀DIY, 데코덴, 레진 포함),오피스용품", "김승임 MD"], ["키덜트", "키덜트&식품 전체", "위요요 팀장"], ["키덜트", "각종 콜렉트카드(포켓몬카드 키오스크) / 소니엔젤 / 이치방쿠지", "안수지 주임"], ["키덜트", "굿즈(애니메이션,웹툰,게임 캐릭터etc) / 보드게임 및 각종 미니게임류", "김민지 주임"], ["키덜트", "스퀴시 / 완구(캐치티니핑) / 반프레스토", "권채윤 MD"], ["키덜트", "위탁판매상품 (DIY미니어처(대호 토이즈), 마리모, 제카JEKKA 블럭)", "권채윤 MD"], ["키덜트", "피규어", "권채윤 MD"], ["키덜트", "완구(RC카 / 모형 컬렉션 및 아동완구)", "유수현 MD"], ["키덜트", "위탁판매상품 (하비프러스 리멘트, 콜렉트카드 굿즈, 프라임위너스(adico), JLCC 플레잉카드/마술도구)", "유수현 MD"], ["식품", "롤리폴리 / 시즌식품", "김민지 주임"], ["식품", "일반식품", "박시은 MD"], ["상품개발실", "상품개발실", "이종일 팀장"], ["상품개발실", "상품개발실", "최혜윤 MD"], ["상품개발실", "상품개발실", "이상섭 MD"], ["상품개발실", "상품개발실", "백낙관 MD"], ["상품개발실", "상품개발실", "김현정 MD"], ["상품개발실", "상품개발실", "김영대 MD"], ["상품개발실", "상품개발실", "김영대 MD"]];
+const tmNorm = t => String(t || '').replace(/\(.*?\)/g, '').replace(/&/g, '앤').replace(/[\s\/·.,-]/g, '');
+const tmRows = () => state.teamMgrRows || TEAM_MGR_DEFAULT;
+function teamRowsOf(team) {
+  const k = tmNorm(catName(team)); if (!k) return [];
+  return tmRows().filter(r => { const t = tmNorm(r[0]); return t && (t === k || t.includes(k) || k.includes(t)); });
+}
+const mgrFmt = m => String(m || '').trim().replace(/^(\S+)\s+(.+)$/, '$1($2)'); // '윤서인 주임' → '윤서인(주임)'
+// 이 페이지 담당자: 직접 고른 사람(fx.mdMgr) → 없으면 매대명·품목군과 가장 비슷한 담당파트의 담당자, 그리고 팀장
+function pageMgrs(fx, team) {
+  const rs = teamRowsOf(team); if (!rs.length) return { rs, part: '', lead: '' };
+  const lead = (rs.find(r => /팀장/.test(r[2])) || [])[2] || '';
+  let part = fx.mdMgr && rs.some(r => r[2] === fx.mdMgr) ? fx.mdMgr : '';
+  if (!part && !fx.mdMgr) { let best = null; for (const r of rs) { if (!r[1]) continue; const sc = nameScore(fx, r[1]); if (!best || sc > best.s) best = { s: sc, m: r[2] }; } if (best && best.s >= 0.34) part = best.m; }
+  return { rs, part: fx.mdMgr === '__none' ? '' : part, lead };
+}
+function teamLine(fx, team) {
+  const t = catName(team), { part, lead } = pageMgrs(fx, team);
+  return [t, ...[...new Set([part, lead].filter(Boolean))].map(mgrFmt)].filter(Boolean).join(' ');
+}
 const fmtDate = ts => {
   const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
   return d && !isNaN(d) ? `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}` : '';
@@ -242,6 +264,10 @@ function startListeners() {
   unsubs.push(onSnapshot(collection(db, 'drawings'), s => {
     state.dwMap = new Map(s.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
     renderStores(); renderDwList(); renderFdStores();
+  }, () => { }));
+  unsubs.push(onSnapshot(doc(db, 'settings', 'teamMgrs'), d => { // 팀별 담당자
+    state.teamMgrRows = d.exists() && Array.isArray(d.data().rows) ? d.data().rows.map(r => [r.t || '', r.p || '', r.m || '']) : null;
+    if (state.currentPog) renderEditorPages();
   }, () => { }));
   unsubs.push(onSnapshot(query(collection(db, 'managers'), orderBy('name')), s => {
     state.managers = s.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1016,7 +1042,7 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
       field('headerName', h('input', { class: 'ph-name', placeholder: origName(fx) || '매대명',
         onclick: e => { if (editable && !e.target.value) openHeaderPicker(pog, fx); } })), // 비어 있으면 누를 때 도면이 뜸
       editable ? h('button', { class: 'ph-dw no-print', type: 'button', title: '도면에서 매대를 골라 헤더에 넣어요', onclick: () => openHeaderPicker(pog, fx) }, '📐 도면에서 고르기') : null,
-      h('div', { class: 'ph-cat' }, fx._cat ?? catName(fx.teamName))),
+      h('div', { class: 'ph-cat' }, teamLine(fx, fx._cat ?? fx.teamName))),
     h('div', { class: 'pb' + (fx.infoH ? ' info-h' : '') },
       h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.infoH ? CANVAS_HW : CANVAS_W, fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable && !(fx._parts), noCut: state.crop?.id === fx.id })),
       infoSide(box, field, L, editable)),
@@ -1095,7 +1121,15 @@ function renderHooks(block) {
    저장할 때 shelfPipe 글자도 같이 맞춰 둠 */
 const SP_DEFAULT = ['선반', '파이프'];
 const autoSp = (sh, pi) => [...(sh ? [{ id: 'p0', name: '선반', qty: sh }] : []), ...(pi ? [{ id: 'p1', name: '파이프', qty: pi }] : [])];
+// 선반/파이프 칸: 직접 고치지 않은(가져온 그대로인) 페이지는 그림의 선반·파이프로 다시 셈 → 다시 가져오기 없이 새로고침만으로 (사용자)
+// 맨 아래 선반은 빼고, 파이프는 POG 사이트 옵션(Y)으로. 선반 이름이 있는 데이터만 (없으면 저장된 그대로)
 function spRows(fx) {
+  const raw = spRowsRaw(fx);
+  if (fx.kind === 'free' || JSON.stringify(raw) !== JSON.stringify(autoSp(fx.shelfCount, fx.pipeCount))) return raw;
+  const ps = fx.props || [], sh = ps.filter(isShelf).length; if (!sh) return raw;
+  return autoSp(Math.max(0, sh - 1), ps.some(isPipe) ? ps.filter(isPipe).length : (fx.pipeCount || 0));
+}
+function spRowsRaw(fx) {
   if (Array.isArray(fx.sp)) return structuredClone(fx.sp);
   const t = (fx.shelfPipe || '').trim();
   if (!t) return autoSp(fx.shelfCount, fx.pipeCount);
@@ -1243,7 +1277,7 @@ function buildFreePage(fx, pog, { editable, field, L = LABELS_KO, box, onItem })
       editable ? h('button', { class: 'ph-dw no-print', type: 'button', title: '도면에서 매대를 골라 제목에 넣어요', onclick: () => openHeaderPicker(pog, fx) }, '📐 도면에서 고르기') : null,
       // 팀명(카테고리): 있는 것 중에서만 고름 (사용자) — 사전 '팀명' + 이 POG에 있는 팀명
       editable ? field('teamName', h('select', { class: 'ph-cat ph-cat-sel', title: '팀명(카테고리) 고르기' }, ...teamOptions(fx.teamName).map(t => h('option', { value: t }, t || '팀명 고르기'))))
-        : h('div', { class: 'ph-cat' }, fx._cat ?? catName(fx.teamName))),
+        : h('div', { class: 'ph-cat' }, teamLine(fx, fx._cat ?? fx.teamName))),
     body,
     h('div', { class: 'pf1' }, L.mgr + ' ', h('span', { class: 'pf-mgr' }), editable ? mgrSelect(fx, pog) : null),
     h('div', { class: 'pf2' }, h('span', { class: 'pf-branch' })));
@@ -1641,6 +1675,7 @@ function syncPage(block, fx, pog) {
   $('.pf-mgr', block).textContent = fx.manager || pog.manager || ''; // 페이지마다 다른 담당자를 정할 수 있음 (비우면 POG 담당자)
   const ms = $('.pf-mgr-sel', block); if (ms) fillMgrSelect(ms, fx, pog);
   $('.pf-branch', block).textContent = footStore(pog);
+  { const pc = $('.ph > div.ph-cat', block); if (pc) pc.textContent = teamLine(fx, fx._cat ?? fx.teamName); } // 팀별 담당자
   if (!pendingKey(`${fx.id}|itemZ`)) applyItemZ(block, fx);
   const spBox = block.querySelector('.page .sp-list'), spNow = spRows(fx);
   if (spBox && !spBox.contains(document.activeElement) && !pendingKey(`${fx.id}|sp`) && JSON.stringify(spNow) !== JSON.stringify(block._sp)) {
@@ -1749,7 +1784,7 @@ function openPog(id) {
       return a && a.order === b.order && a.mergedInto === b.mergedInto && JSON.stringify(a.merged || []) === JSON.stringify(b.merged || []); })()) ? new Set(ch.map(c => c.doc.id)) : null;
     fxFirst = false;
     state.fxRaw = new Map(s.docs.map(d => [d.id, d.data()])); // 되돌리기용 서버 원본
-    s.docs.forEach(d => { ids.add(d.id); if (!only || only.has(d.id)) state.fixtures.set(d.id, jjNorm({ id: d.id, ...d.data() })); }); // 줄줄 매대: 판 → 줄 집기
+    s.docs.forEach(d => { ids.add(d.id); if (!only || only.has(d.id)) state.fixtures.set(d.id, jjNorm(dropOutside({ id: d.id, ...d.data() }))); }); // 줄줄 매대: 판 → 줄 집기 · 판 밖 제품 숨김
     [...state.fixtures.keys()].forEach(k => { if (!ids.has(k)) state.fixtures.delete(k); });
     if (only && !only.size) return;
     renderEditorPages(only);
@@ -2332,6 +2367,15 @@ function renderSidePanel() {
     }
     if (ed && !fx.merged?.length && state.clip && state.clip.pogId === pog.id && state.clip.from !== fx.id)
       nodes.push(sec('붙여넣기', h('p', { class: 'se-help' }, free ? `잘라낸 묶음(제품 ${state.clip.n}개)을 이 빈 페이지에 매대로 붙여요.` : `잘라낸 묶음(제품 ${state.clip.n}개)을 이 페이지 오른쪽에 붙여요.`), h('div', { class: 'se-btns' }, btn('📋 여기에 붙여넣기 (Ctrl+V)', () => pasteBlock(pog.id, fx)), btn('잘라내기 취소', () => { state.clip = null; renderSidePanel(); }, 'ghost'))));
+    if (!free) { // 팀별 담당자 (머리줄 오른쪽): 자동 = 매대명·품목군과 비슷한 담당파트
+      const team = fx._cat ?? fx.teamName, pm = pageMgrs(fx, team), people = [...new Set(pm.rs.map(r => r[2]).filter(Boolean))];
+      const sel = h('select', { class: 'se-input', disabled: !ed },
+        h('option', { value: '' }, `자동${pm.part && !fx.mdMgr ? ` (${pm.part})` : ''}`), ...people.map(m => h('option', { value: m }, m)), h('option', { value: '__none' }, '팀장만'));
+      sel.value = fx.mdMgr || '';
+      sel.onchange = () => { saveFx(pog.id, fx.id, 'mdMgr', sel.value, `${fx.id}|mdMgr`); fx.mdMgr = sel.value; const b2 = state.pageEls.get(fx.id); if (b2) syncPage(b2, fx, pog); };
+      nodes.push(sec('팀 담당자 (머리줄 오른쪽)', pm.rs.length ? sel : h('p', { class: 'se-help' }, `'${catName(team) || '팀 없음'}' 팀 담당자가 목록에 없어요.`),
+        canEdit('pog-make') ? h('div', { class: 'se-btns' }, btn('👥 팀별 담당자 목록 고치기', openTeamMgrs, 'ghost')) : null));
+    }
     if (ed) nodes.push(sec('페이지', h('div', { class: 'se-btns' },
       btn('▲ 앞으로', () => moveFollow(pog.id, fx.id, -1), 'ghost'),
       btn('▼ 뒤로', () => moveFollow(pog.id, fx.id, 1), 'ghost'),
@@ -2544,6 +2588,27 @@ $('#ed-ppt').onclick = () => savePpt($('#ed-pages'), state.currentPog);
 $('#fb-ppt').onclick = () => savePpt($('#fb-pages'), fb.pog);
 $('#vw-ppt').onclick = () => savePpt($('#vw-pages'), state.viewer.pog);
 
+/* ---------- 팀별 담당자 목록 (POG팀·관리자가 고침 · 사용자) ---------- */
+function openTeamMgrs() {
+  let rows = tmRows().map(r => [...r]);
+  const body = h('div', { class: 'tm-list' });
+  const paint = () => body.replaceChildren(h('div', { class: 'tm-row tm-head' }, h('b', {}, '팀'), h('b', {}, '담당파트'), h('b', {}, '담당자 (예: 윤서인 주임)'), h('span', {})),
+    ...rows.map((r, i) => h('div', { class: 'tm-row' },
+      ...[0, 1, 2].map(k => { const el = h('input', { value: r[k] || '' }); el.oninput = () => { r[k] = el.value; }; return el; }),
+      h('button', { class: 'btn small ghost danger', title: '이 줄 지우기', onclick: () => { rows.splice(i, 1); paint(); } }, '×'))));
+  paint();
+  const close = modal(h('div', { class: 'tm-modal' }, h('h3', {}, '👥 팀별 담당자'),
+    h('p', { class: 'se-help' }, "POG 페이지 머리줄 오른쪽에 '팀명 파트 담당자 팀장'으로 나와요. 팀장은 담당자에 '팀장'이 들어간 사람이에요. 페이지마다 매대명·제품 품목군과 가장 비슷한 담당파트의 담당자가 자동으로 들어가고, 오른쪽 패널에서 바꿀 수 있어요."),
+    body, h('div', { class: 'modal-act' },
+      h('button', { class: 'btn', onclick: () => { rows.push([rows.at(-1)?.[0] || '', '', '']); paint(); body.scrollTop = body.scrollHeight; } }, '+ 줄 추가'),
+      h('span', { class: 'grow' }),
+      h('button', { class: 'btn primary', onclick: async () => {
+        const clean = rows.map(r => r.map(x => String(x || '').trim())).filter(r => r[0] && r[2]);
+        try { await setDoc(doc(db, 'settings', 'teamMgrs'), { rows: clean.map(([t, p, m]) => ({ t, p, m })), updatedAt: serverTimestamp(), updatedBy: me() }); toast('팀별 담당자를 저장했어요'); close(); }
+        catch (e) { alert('저장하지 못했어요: ' + (e.code || e.message) + '\n(Firebase 규칙을 새로 게시해야 할 수 있어요)'); }
+      } }, '저장'))), { wide: true });
+}
+
 /* ---------- 새 POG 가져오기 ---------- */
 $('#btn-import').onclick = openImport;
 function openImport() {
@@ -2647,6 +2712,16 @@ function splitOutside(items, props, panels = []) {
   return { inside: items.filter(o => !out(o)), outside };
 }
 
+// 이미 가져온 페이지도 회색 판 밖 제품은 안 보이게 (사용자: 다시 가져오기 없이). 붙여넣은 묶음 제품은 그대로
+function dropOutside(fx) {
+  if (!fx || fx.kind === 'free' || !(fx.items || []).length) return fx;
+  const blk = new Set((fx.blocks || []).flatMap(b => (b.items || []).map(String)));
+  const base = fx.items.filter(o => !blk.has(String(o.id)));
+  const { outside } = splitOutside(base, fx.props || [], fx.panels || []);
+  if (!outside.length) return fx;
+  const out = new Set(outside.map(o => String(o.id)));
+  return { ...fx, items: fx.items.filter(o => !out.has(String(o.id))) };
+}
 // 북마클릿이 읽은 매대 한 줄 → POG 페이지 목록 (칸 나누기·매대 밖 제품 빼기). 처음 가져오기·다시 가져오기에서 같이 씀
 // 파이프 = POG 사이트 집기 옵션 'Y'(data-propoption) 또는 이름에 '파이프' (POG 사이트는 선반·파이프 이름이 둘 다 '선반'일 때가 있음 · 사용자: 색이 같게 나왔음)
 const isPipe = p => p.opt === 'Y' || /파이프/.test(p.kind || '');
@@ -3059,7 +3134,7 @@ async function replaceWithGrab(pog, o, pg) {
     itemCount: pg.itemCount, shelfCount: pg.shelfCount, pipeCount: pg.pipeCount,
     itemZ: {}, blocks: [], base: null, frame: null, cut: null,
   };
-  if (JSON.stringify(spRows(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRows(o).length) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; }
+  if (JSON.stringify(spRowsRaw(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRowsRaw(o).length) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; }
   track(pog.id, o.id, Object.keys(patch), undoGroup());
   await updateDoc(doc(db, 'pogs', pog.id, 'fixtures', o.id), { ...patch, regrabbedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: me() });
   const t = catName(pg.teamName); if (t && !(pog.teams || []).includes(t)) updateDoc(doc(db, 'pogs', pog.id), { teams: arrayUnion(t) }).catch(() => { });
@@ -3159,7 +3234,7 @@ async function applyRegrab(pog, plan) {
       regrabbedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: me(),
     };
     // 선반/파이프: 손대지 않았을 때만 새 수로
-    if (JSON.stringify(spRows(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRows(o).length) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; }
+    if (JSON.stringify(spRowsRaw(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRowsRaw(o).length) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; }
     await put(() => b.update(doc(db, 'pogs', pog.id, 'fixtures', o.id), patch));
   }
   // 칸이 늘어난 매대: 그 매대 마지막 페이지 바로 뒤에 끼워 넣기
@@ -4558,7 +4633,7 @@ function openViewer(id) {
   $('#vw-pages').innerHTML = '<div class="mut pad">불러오는 중…</div>';
   renderOnlineList();
   v.unsubPog = onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeViewer(); return; } v.pog = { id: d.id, ...d.data() }; renderViewer(); });
-  v.unsubFx = onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { v.fixtures = s.docs.map(d => ({ id: d.id, ...d.data() })); renderViewer(); });
+  v.unsubFx = onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { v.fixtures = s.docs.map(d => dropOutside({ id: d.id, ...d.data() })); renderViewer(); });
 }
 function renderViewer() {
   const v = state.viewer; if (!v.pog?.status) return;
@@ -4605,7 +4680,7 @@ function openFb(id) {
   $('#fb-pages').innerHTML = '<div class="mut pad">불러오는 중…</div>';
   renderFbList();
   fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; $('#fb-pdf').classList.toggle('hidden', fb.pog.status !== 'final'); $('#fb-ppt').classList.toggle('hidden', !canPpt()); renderFbPages(); })); // PDF = 최종만, PPT = 작성 중만
-  fb.unsubs.push(onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { fb.fixtures = s.docs.map(d => ({ id: d.id, ...d.data() })); renderFbPages(); }));
+  fb.unsubs.push(onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { fb.fixtures = s.docs.map(d => dropOutside({ id: d.id, ...d.data() })); renderFbPages(); }));
   fb.unsubs.push(onSnapshot(collection(db, 'pogs', id, 'feedback'), s => {
     fb.notes = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.at?.toMillis?.() ?? Date.now()) - (b.at?.toMillis?.() ?? Date.now()));
     paintFbCounts(); renderFbSide();
