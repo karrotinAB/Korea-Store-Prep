@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117p';
+const APP_VER = '20261117q';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -680,8 +680,8 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
   for (const p of panels) {
     // 배경판은 POG 사이트 색과 상관없이 연한 회색 (진하게 칠하면 선반·파이프와 구분이 안 됨 · 사용자). 무늬(타공판)가 있으면 그 간격대로 구멍
     const pe = h('div', { class: 'cv-panel', style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${p.h}px` });
-    if (p.bg && isPerfBg(p.bg.img)) holesOn(pe, bgPitch(p.bg), 0, 0, p.bg);
-    else if (p.bg && p.bg.img && !isGridBg(p.bg.img) && !isJuljul(p)) // 그 밖의 매대 판 그림(스페이스월 가로줄 등)은 POG 사이트 그림 그대로
+    if (p.bg && isPerfBg(p.bg.img) && perfFx(fx)) holesOn(pe, bgPitch(p.bg), 0, 0, p.bg);
+    else if (p.bg && p.bg.img && !isPerfBg(p.bg.img) && !isGridBg(p.bg.img) && !isJuljul(p)) // 그 밖의 매대 판 그림(스페이스월 가로줄 등)은 POG 사이트 그림 그대로
       Object.assign(pe.style, { backgroundImage: p.bg.img, backgroundSize: p.bg.size || 'auto', backgroundRepeat: p.bg.rep || 'repeat', backgroundPosition: p.bg.pos || '0 0' });
     layer(p).append(pe);
   }
@@ -747,8 +747,11 @@ function bgPitch(bg) {
 }
 // 타공판 무늬 = POG 사이트 tagongbg… 그림만. canvasbg…는 POG 사이트 화면 바탕 모눈이라 타공이 아님 (사용자: 스페이스월이 타공으로 보였음)
 const isPerfBg = img => /tagong/i.test(img || '');
+// 타공 매대인지: POG 사이트 매대 종류(src.mdtype) B = 타공 (사용자: 타공이 아닌 매대도 타공으로 보였음). 종류를 모르면 무늬만 보고, 매대명·타입에 '타공'이 있으면 타공
+const perfFx = f => !f?.src?.mdtype || f.src.mdtype === 'B' || /타공/.test(`${f.mdName || ''} ${f.fixtureType || ''} ${f.headerName || ''}`);
 const isGridBg = img => /canvasbg/i.test(img || '');
 function perfOf(f, frameW) {
+  if (!perfFx(f)) return null;
   const bd = f.board && !isGridBg(f.board.img) ? f.board : null;
   const b = bd && (bd.holes ? { x: bd.holes.px, y: bd.holes.py } : isPerfBg(bd.img) ? bgPitch(bd) : null);
   if (b) return { ...b, bg: bd };
@@ -2690,7 +2693,17 @@ function splitBays(items, props, expected, panels = []) {
    위아래는 보지 않는다: 파이프에 거는 제품은 집기보다 한참 아래로 내려오고, 쌓아 진열하면 위로 올라감.
    (처음엔 아래쪽도 봤는데, 실제 거는화일 매대에서 24개 중 14개를 잘못 뺐음)
    배경판(panels, 예: 옆의 회색 판)도 매대로 본다. 집기가 없거나 전부 밖으로 판정되면 그대로 둔다. */
-function splitOutside(items, props, panels = []) {
+function splitOutside(items, props, panels = [], src = null) {
+  // POG 사이트 회색 매대 몸통(md-body…)에 조금이라도 걸친 제품만 매대 안 (사용자: 회색 영역에 걸쳐진 제품만, 매대 밖 제품은 가져오지 않음).
+  // 줄줄 매대(제품이 몸통 아래로 늘어짐)는 예전 방식
+  const jj = panels.some(p => /juljul/i.test(p?.bg?.img || '')) || src?.mdtype === 'C';
+  let bodies = panels.filter(p => /^md-body/.test(p.id || '') && p.w > 0 && p.h > 0);
+  if (!bodies.length && src?.bodies?.length) bodies = src.bodies.filter(b => b.w > 0 && b.h > 0).map(b => ({ x: b.left, y: b.top, w: b.w, h: b.h }));
+  if (!jj && bodies.length && items.length) {
+    const hit = o => bodies.some(b => o.x < b.x + b.w + 2 && o.x + (o.w || 0) > b.x - 2 && o.y < b.y + b.h + 2 && o.y + (o.h || 0) > b.y - 2);
+    const inside = items.filter(hit);
+    if (inside.length) return { inside, outside: items.filter(o => !hit(o)) };
+  }
   const ps = [...props, ...panels.filter(p => p.w >= 40)].filter(p => p.w > 0); // 회색 배경판 위 제품은 매대 안
   if (!ps.length || !items.length) return { inside: items, outside: [] };
   const left = Math.min(...ps.map(p => p.x)) - 10, right = Math.max(...ps.map(p => p.x + p.w)) + 10;
@@ -2717,7 +2730,7 @@ function dropOutside(fx) {
   if (!fx || fx.kind === 'free' || !(fx.items || []).length) return fx;
   const blk = new Set((fx.blocks || []).flatMap(b => (b.items || []).map(String)));
   const base = fx.items.filter(o => !blk.has(String(o.id)));
-  const { outside } = splitOutside(base, fx.props || [], fx.panels || []);
+  const { outside } = splitOutside(base, fx.props || [], fx.panels || [], fx.src);
   if (!outside.length) return fx;
   const out = new Set(outside.map(o => String(o.id)));
   return { ...fx, items: fx.items.filter(o => !out.has(String(o.id))) };
@@ -2729,7 +2742,7 @@ const isShelf = p => !isPipe(p) && /선반/.test(p.kind || '');
 const autoShelfPipe = (sh, pi) => [sh ? `선반 ${sh}` : '', pi ? `파이프 ${pi}` : ''].filter(Boolean).join(' / ');
 function pagesFromGrab(f, i) {
   const panels = f.panels || [];
-  const { inside, outside } = splitOutside(f.items || [], f.props || [], panels); // 매대 밖 제품은 버림 (사용자 결정: 아예 안 가져옴)
+  const { inside, outside } = splitOutside(f.items || [], f.props || [], panels, f.src); // 매대 밖 제품은 버림 (사용자 결정: 아예 안 가져옴)
   // 제품이 하나도 없는 칸은 페이지를 만들지 않음 (사용자)
   const bays = splitBays(inside, f.props || [], f.bayCount ?? null, panels).filter(b => b.items.length);
   const shelf = f.shelfCount ?? 0, pipe = f.pipeCount ?? 0;
