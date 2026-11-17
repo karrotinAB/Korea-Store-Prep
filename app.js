@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117e';
+const APP_VER = '20261117f';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -662,7 +662,8 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
     layer(p).append(h('div', { class: 'cv-bay-sep', style: `left:${p.x - x0 + pad - 2}px;top:${top - y0 + pad}px;height:${bot - top}px` }));
   }
   for (const p of props) {
-    const color = p.color && !/rgba\(0, 0, 0, 0\)|transparent/.test(p.color) ? p.color : '#7d7d7d';
+    // 선반 = 진한 회색, 파이프 = 연한 회색 (사용자: POG 사이트처럼 진하기로 구분)
+    const color = /선반/.test(p.kind || '') ? '#5c5c5c' : /파이프/.test(p.kind || '') ? '#bdbdbd' : p.color && !/rgba\(0, 0, 0, 0\)|transparent/.test(p.color) ? p.color : '#7d7d7d';
     const jr = Math.max(1, p.w * 0.12); // 줄줄 매대 줄: 가운데 구멍
     layer(p).append(h('div', { class: 'cv-prop' + (p.jj ? ' cv-strip' : ''), 'data-pid': p.id, title: p.kind || '',
       style: `left:${p.x - x0 + pad}px;top:${p.y - y0 + pad}px;width:${p.w}px;height:${Math.max(p.h || 0, 4)}px;background:${color}` + (p.jj ? `;background-image:radial-gradient(circle, #6f6f6f ${jr}px, transparent ${jr + 0.5}px);background-size:${p.w}px ${p.w * 1.5}px;background-position:center` : '') }));
@@ -2591,7 +2592,9 @@ function pagesFromGrab(f, i) {
   const pages = bays.map((bay, k) => {
     const count = (re, total) => bays.length === 1 ? total
       : kinds ? bay.props.filter(p => re.test(p.kind || '')).length : Math.round(total / bays.length);
-    const sh = count(/선반/, shelf), pi = count(/파이프/, pipe);
+    // 선반 갯수: 맨 아래 선반(바닥)은 빼고 셈 (사용자). 집기 이름이 있으면 그 칸 선반을 직접 세고, 없으면 POG 사이트 숫자에서 하나 뺌
+    const shelves = (bays.length === 1 ? (f.props || []) : bay.props).filter(p => /선반/.test(p.kind || ''));
+    const sh = kinds ? Math.max(0, shelves.length - 1) : Math.max(0, count(/선반/, shelf) - 1), pi = count(/파이프/, pipe);
     return {
       id: bays.length > 1 ? `${base}-${k + 1}` : base,
       mdidx: String(f.mdidx || ''), bayNo: k + 1, bayCount: bays.length,
@@ -3574,7 +3577,7 @@ function renderDwStage() {
   const seq = seqOn && dw.seqMode ? { order: order || [], only: teamSel?.mine, onToggle: dw.seqMode ? g => toggleSeq(g) : null } : null;
   if (teamSel) legend.append(h('span', { class: 'dw-team-bar' }, ` · 팀 '${teamSel.team}' 매대 ${teamSel.mine.size}개만 진하게 (다른 팀은 흐리게)`));
   if (seq && dw.seqMode) legend.append(h('span', { class: 'dw-seq-bar' }, ` · 🔢 ${dw.team ? dw.team + ' 팀 ' : ''}번호 매기는 중: 매대를 누르는 순서대로 1, 2, 3… 번호가 있는 매대를 누르면 번호를 바꾸거나 뺄 수 있어요. `,
-    h('button', { class: 'btn small', title: '도면의 모든 매대에 위에서 아래로, 같은 줄은 왼쪽에서 오른쪽으로 번호를 한 번에 매겨요', onclick: () => autoSeqByPos(v) }, '📐 도면 순서로 자동'), ' ',
+    h('button', { class: 'btn small', title: 'A-1 모듈부터 모듈 번호 순서로(모듈 안은 위에서 아래, 왼쪽에서 오른쪽), 그다음 벽매대 등 나머지를 위에서 아래로 번호를 한 번에 매겨요', onclick: () => autoSeqByPos(v) }, '📐 도면 순서로 자동'), ' ',
     h('span', { id: 'dw-seq-n' }), ' ',
     h('button', { class: 'btn small primary', id: 'dw-seq-save', onclick: () => saveSeq(v) }, '💾 저장'), ' ',
     h('button', { class: 'btn small ghost', onclick: () => { dw.seqDraft = [...(dw.seq || [])]; paintSeq(); } }, '처음대로'), ' ',
@@ -3829,7 +3832,7 @@ function toggleSeq(g) {
 }
 // 도면 순서로 자동 번호 (사용자): 도면의 매대(파란 칸)를 위에서 아래로 줄을 나눠, 같은 줄은 왼쪽에서 오른쪽으로 1, 2, 3…
 // 줄 = 칸 가운데 높이가 비슷한 것끼리 (칸 높이의 절반 안). 안 맞는 매대는 눌러서 번호를 바꾸고 저장
-function autoSeqByPos(v) {
+async function autoSeqByPos(v) {
   const mine = dw.team ? teamGids(v, dw.team) : null;
   const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && (!mine || mine.has(g.id)));
   if (!gs.length) { alert(dw.team ? `'${dw.team}' 팀 매대가 없어요.` : '도면에 매대가 없어요.'); return; }
@@ -3840,9 +3843,13 @@ function autoSeqByPos(v) {
     const r = rows.at(-1);
     if (r && cy(g) - r.cy <= mh * 0.6) r.gs.push(g); else rows.push({ cy: cy(g), gs: [g] });
   }
-  dw.seqDraft = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)).map(g => g.id);
+  const pos = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)); // 위에서 아래, 같은 줄은 왼쪽부터
+  // A-1 모듈부터 (사용자): 도면의 'A-1'·'A-2'… 표시가 있는 중앙 매대 덩어리마다 그 매대들을 모듈 번호 순서로 먼저, 벽매대 등 나머지는 그 뒤에 위 순서대로
+  const an = await dwAnalysis(v), isl = an ? dwIslands(an, pos) : null;
+  if (isl?.order.length) dw.seqDraft = [...isl.order, ...pos.filter(g => !isl.has.has(g.id))].map(g => g.id);
+  else dw.seqDraft = pos.map(g => g.id);
   paintSeq();
-  toast(`${dw.team ? dw.team + ' 팀 · ' : ''}도면 순서로 ${dw.seqDraft.length}개를 매겼어요. 안 맞는 매대는 눌러서 번호를 바꾸고 💾 저장하세요`);
+  toast(`${dw.team ? dw.team + ' 팀 · ' : ''}도면 순서로 ${dw.seqDraft.length}개를 매겼어요${isl?.order.length ? ` (${isl.names[0]} 모듈부터)` : ''}. 안 맞는 매대는 눌러서 번호를 바꾸고 💾 저장하세요`);
 }
 async function saveSeq(v) {
   const order = [...(dw.seqDraft || [])];
@@ -4237,25 +4244,57 @@ function dwModules(rects, dims) {
   }
   return mods;
 }
-const modsCache = new Map();
-async function dwMods(v) { // 예전에 올린 도면은 칸 정보가 없어서 도면 파일을 다시 읽어 봄
-  if (Array.isArray(v.mods)) return v.mods;
-  if (modsCache.has(v.id + v.url)) return modsCache.get(v.id + v.url);
+const anCache = new Map();
+async function dwAnalysis(v) { // { dims, mods } · 예전에 올린 도면은 저장돼 있지 않아서 도면 파일을 다시 읽어 봄
+  if (Array.isArray(v.mods) && Array.isArray(v.dims)) return { dims: v.dims, mods: v.mods };
+  if (anCache.has(v.id + v.url)) return anCache.get(v.id + v.url);
   let out = null;
-  try { const r = await fetch(v.url); if (r.ok) out = (await analyzeSvg(await r.text())).mods; } catch { }
-  modsCache.set(v.id + v.url, out); return out;
+  try { const r = await fetch(v.url); if (r.ok) { const a = await analyzeSvg(await r.text()); out = { dims: a.dims, mods: a.mods }; } } catch { }
+  anCache.set(v.id + v.url, out); return out;
 }
-// 매대명 글씨에서 가장 가까운 칸 → '벽매대 1000' (매대타입 사전에 띄어쓰기만 다른 이름이 있으면 그 이름)
-function dwTypeOf(mods, g) {
-  if (!mods?.length || !g) return '';
+const dwMods = async v => (await dwAnalysis(v))?.mods || null;
+/* 중앙 매대 덩어리(모듈): 벽매대가 아닌 칸끼리 붙어 있는 덩어리 + 그 안의 'A-11' 같은 검은 글씨.
+   매대명 → 가장 가까운 칸 → 그 덩어리의 모듈 번호. 결과 order = 모듈 번호 순서(A-1, A-2…)대로, 모듈 안은 받은 순서(위→아래) */
+const MODULE_RE = /^[A-Za-z]{1,2}-\d{1,3}$/;
+function dwIslands(an, gs) {
+  const ms = (an.mods || []).filter(m => m.type !== '벽매대'), marks = (an.dims || []).filter(d => MODULE_RE.test(String(d.text || '').replace(/\s+/g, '')));
+  if (!ms.length || !marks.length) return null;
+  const par = ms.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const touch = (a, b) => a.x <= b.x + b.w + 2 && b.x <= a.x + a.w + 2 && a.y <= b.y + b.h + 2 && b.y <= a.y + a.h + 2;
+  for (let i = 0; i < ms.length; i++) for (let j = i + 1; j < ms.length; j++) if (touch(ms[i], ms[j])) par[find(i)] = find(j);
+  const box = new Map();
+  ms.forEach((m, i) => { const r = find(i), b = box.get(r) || { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    box.set(r, { x0: Math.min(b.x0, m.x), y0: Math.min(b.y0, m.y), x1: Math.max(b.x1, m.x + m.w), y1: Math.max(b.y1, m.y + m.h) }); });
+  const nameOf = new Map(); // 덩어리 → 'A-11'
+  for (const d of marks) { const cx = d.x + d.w / 2, cy = d.y + d.h / 2;
+    for (const [r, b] of box) if (cx >= b.x0 - 2 && cx <= b.x1 + 2 && cy >= b.y0 - 2 && cy <= b.y1 + 2 && !nameOf.has(r)) { nameOf.set(r, String(d.text).replace(/\s+/g, '')); break; } }
+  if (!nameOf.size) return null;
+  const by = new Map();
+  for (const g of gs) {
+    const m = nearMod(an.mods, g); if (!m || m.type === '벽매대') continue; // 벽매대 쪽이 더 가까우면 모듈 아님
+    const i = ms.indexOf(m); if (i < 0) continue;
+    const nm = nameOf.get(find(i)); if (!nm) continue;
+    if (!by.has(nm)) by.set(nm, []); by.get(nm).push(g);
+  }
+  const names = [...by.keys()].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  const order = names.flatMap(n => by.get(n));
+  return { order, names, has: new Set(order.map(g => g.id)) };
+}
+// 매대명 글씨에서 가장 가까운 칸
+function nearMod(mods, g) {
   let best = null;
   for (const m of mods) {
     const dx = Math.max(0, Math.abs(m.x + m.w / 2 - (g.x + g.w / 2)) - (m.w + g.w) / 2), dy = Math.max(0, Math.abs(m.y + m.h / 2 - (g.y + g.h / 2)) - (m.h + g.h) / 2);
     const dist = Math.hypot(dx, dy), lim = Math.max(Math.min(m.w, m.h) * 1.5, (g.fs || 5) * 3);
     if (dist <= lim && (!best || dist < best.dist || (dist === best.dist && m.w * m.h < best.m.w * best.m.h))) best = { m, dist };
   }
-  if (!best) return '';
-  const name = `${best.m.type} ${best.m.len}`, key = name.replace(/\s+/g, '');
+  return best?.m || null;
+}
+// 매대명 글씨에서 가장 가까운 칸 → '벽매대 1000' (매대타입 사전에 띄어쓰기만 다른 이름이 있으면 그 이름)
+function dwTypeOf(mods, g) {
+  if (!mods?.length || !g) return '';
+  const m = nearMod(mods, g); if (!m) return '';
+  const name = `${m.type} ${m.len}`, key = name.replace(/\s+/g, '');
   return glossaryOf('매대타입').map(x => x.ko).find(x => String(x || '').replace(/\s+/g, '') === key) || name;
 }
 function setFxType(pog, fx, ty, ug, over) {
