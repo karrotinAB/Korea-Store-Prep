@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261116n';
+const APP_VER = '20261117a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2473,7 +2473,8 @@ function openImport() {
 function clusterX(objs) {
   if (!objs.length) return [];
   const ws = objs.map(o => o.w).sort((a, b) => a - b), med = ws[Math.floor(ws.length / 2)];
-  const iv = objs.filter(o => o.w <= med * 1.6).map(o => [o.x, o.x + o.w]).sort((a, b) => a[0] - b[0]);
+  // 여러 칸에 걸친 긴 집기는 뺌. 단 POG 사이트 매대 몸통(md-body…)은 폭이 달라도 그대로 칸 (사용자: 100·1000·130mm 타공매대 3개에서 가운데 넓은 칸이 빠져 반으로 잘렸음)
+  const iv = objs.filter(o => o._body || o.w <= med * 1.6).map(o => [o.x, o.x + o.w]).sort((a, b) => a[0] - b[0]);
   const out = [];
   for (const [a, b] of iv) {
     const last = out[out.length - 1];
@@ -2483,7 +2484,7 @@ function clusterX(objs) {
   return out;
 }
 function splitBays(items, props, expected, panels = []) {
-  const base = [...props, ...panels.filter(p => p.w >= 40)].filter(o => o.w > 0);
+  const base = [...props, ...panels.filter(p => p.w >= 40).map(p => ({ ...p, _body: /^md-body/.test(p.id || '') }))].filter(o => o.w > 0);
   let bays = clusterX(base);
   // 집기로 못 나누면 제품 위치로 (칸 사이가 40px 이상 비어 있을 때만)
   if (bays.length < 2 && expected > 1 && items.length) {
@@ -2502,12 +2503,15 @@ function splitBays(items, props, expected, panels = []) {
   items.forEach(o => groups[at(o)].items.push(o));
   props.forEach(o => groups[at(o)].props.push(o));
   panels.forEach(o => groups[at(o)].panels.push(o));
-  // 제품이 하나도 없는 좁은 조각(옆에 붙은 작은 집기 등)은 옆 칸에 합침
+  // 좁은 조각(옆에 붙은 작은 집기, 넓은 매대 옆의 좁은 측면 타공판 등)은 바로 옆 넓은 칸에 합쳐서 한 페이지로 (사용자: POG 사이트처럼 한 장에)
   const maxW = Math.max(...bays.map(([a, b]) => b - a));
   for (let i = groups.length - 1; i >= 0 && groups.length > 1; i--) {
-    if (groups[i].items.length || bays[i][1] - bays[i][0] >= maxW * 0.4) continue;
-    const j = i > 0 ? i - 1 : 1;
-    groups[j].props.push(...groups[i].props); groups[j].panels.push(...groups[i].panels);
+    if (bays[i][1] - bays[i][0] >= maxW * 0.4) continue;
+    const wide = k => k >= 0 && k < bays.length && k !== i && bays[k][1] - bays[k][0] >= maxW * 0.4;
+    const j = wide(i - 1) ? i - 1 : wide(i + 1) ? i + 1 : (groups[i].items.length ? -1 : (i > 0 ? i - 1 : 1));
+    if (j < 0) continue; // 옆에 넓은 칸이 없고 제품이 있으면 따로 둠
+    groups[j].items.push(...groups[i].items); groups[j].props.push(...groups[i].props); groups[j].panels.push(...groups[i].panels);
+    bays[j] = [Math.min(bays[j][0], bays[i][0]), Math.max(bays[j][1], bays[i][1])];
     groups.splice(i, 1); bays.splice(i, 1);
   }
   return groups;
