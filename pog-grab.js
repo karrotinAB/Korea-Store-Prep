@@ -209,7 +209,7 @@
       if (hi < 0) continue;
       const heads = [...trs[hi].cells].map(c => c.textContent.replace(/\s+/g, ''));
       const col = n => heads.findIndex(x => x === n);
-      const ci = { team: col('팀명'), name: col('매대명'), idx: col('고유번호'), shelf: col('선반'), pipe: col('파이프'), item: col('ITEM'), bays: col('매대수') };
+      const ci = { team: col('팀명'), name: col('매대명'), idx: col('고유번호'), shelf: col('선반'), pipe: col('파이프'), item: col('ITEM'), bays: col('매대수'), note: col('비고') };
       const out = [];
       for (const tr of trs.slice(hi + 1)) {
         const cells = [...tr.cells];
@@ -227,6 +227,7 @@
           mdidx: m[0], teamName: cellVal(cells[ci.team]), mdName: cellVal(cells[ci.name]),
           shelfCount: num(cellVal(cells[ci.shelf])), pipeCount: num(cellVal(cells[ci.pipe])), itemCount: num(cellVal(cells[ci.item])),
           bayCount: ci.bays >= 0 ? num(cellVal(cells[ci.bays])) : null,
+          note: ci.note >= 0 ? cellVal(cells[ci.note]) : '', // 비고 (예: 슬림 → 매대 타입 '슬림 연장 800')
           checked: !!(cb && cb.checked), url,
         });
       }
@@ -374,7 +375,7 @@
     const build = () => targets.map(t => {
       const d = t.data || { items: [], props: [] };
       return {
-        mdidx: t.mdidx, teamName: t.teamName, mdName: t.mdName, bayCount: t.bayCount ?? null,
+        mdidx: t.mdidx, teamName: t.teamName, mdName: t.mdName, note: t.note || '', bayCount: t.bayCount ?? null,
         shelfCount: t.shelfCount ?? d.props.filter(p => p.opt !== 'Y' && /선반/.test(p.kind)).length,
         pipeCount: t.pipeCount ?? d.props.filter(p => p.opt === 'Y' || /파이프/.test(p.kind)).length,
         itemCount: t.itemCount ?? d.items.length,

@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117w';
+const APP_VER = '20261117x';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1822,7 +1822,7 @@ function openPog(id) {
       return a && a.order === b.order && a.mergedInto === b.mergedInto && JSON.stringify(a.merged || []) === JSON.stringify(b.merged || []); })()) ? new Set(ch.map(c => c.doc.id)) : null;
     fxFirst = false;
     state.fxRaw = new Map(s.docs.map(d => [d.id, d.data()])); // 되돌리기용 서버 원본
-    s.docs.forEach(d => { ids.add(d.id); if (!only || only.has(d.id)) state.fixtures.set(d.id, jjNorm(dropOutside({ id: d.id, ...d.data() }))); }); // 줄줄 매대: 판 → 줄 집기 · 판 밖 제품 숨김
+    s.docs.forEach(d => { ids.add(d.id); if (!only || only.has(d.id)) state.fixtures.set(d.id, jjNorm(autoType(dropOutside({ id: d.id, ...d.data() })))); }); // 줄줄 매대: 판 → 줄 집기 · 판 밖 제품 숨김
     [...state.fixtures.keys()].forEach(k => { if (!ids.has(k)) state.fixtures.delete(k); });
     if (only && !only.size) return;
     renderEditorPages(only);
@@ -2764,6 +2764,26 @@ function splitOutside(items, props, panels = [], src = null) {
   return { inside: items.filter(o => !out(o)), outside };
 }
 
+/* 매대 타입 자동 (사용자: 도면이 없거나 연결 안 돼도 POG 사이트 매대 사이즈로) — 매대 타입 칸이 비어 있을 때만, 화면에서만 채움(직접 쓰거나 도면에서 넣으면 그 값).
+   종류 + 폭: POG 사이트 매대 종류 B = 타공, C = 줄줄, 그 밖은 높이 1630 = 연장 · 1500 = 중앙 (사용자). 비고에 '슬림'이 있으면 앞에 슬림. 예: 연장 800, 중앙 400, 타공 210 */
+function siteTypeOf(fx) {
+  const src = fx?.src, bays = src?.bays || []; if (!bays.length) return '';
+  const bodies = src.bodies || [], mine = (fx.panels || []).filter(p => /^md-body/.test(p.id || ''));
+  let bay = null;
+  if (mine.length) { // 이 페이지의 가장 넓은 매대 몸통 → POG 사이트의 몇 번째 매대인지
+    const w = mine.reduce((a, b) => b.w > a.w ? b : a), i = bodies.findIndex(b => Math.abs(b.left - w.x) < 3 && Math.abs(b.w - w.w) < 3);
+    bay = i >= 0 ? bays[i] : null;
+  }
+  if (!bay) bay = bays[Math.max(0, (fx.bayNo || 1) - 1)] || bays[0];
+  const wmm = Math.round(+bay?.wmm || 0), hmm = Math.round(+bay?.hmm || 0); if (!wmm) return '';
+  const t = src.mdtype === 'B' ? '타공' : src.mdtype === 'C' ? '줄줄' : hmm === 1630 ? '연장' : hmm === 1500 ? '중앙' : '';
+  const name = [/슬림/.test(src.note || '') ? '슬림' : '', t, String(wmm)].filter(Boolean).join(' '), key = name.replace(/\s+/g, '');
+  return glossaryOf('매대타입').map(x => x.ko).find(x => String(x || '').replace(/\s+/g, '') === key) || name;
+}
+function autoType(fx) {
+  if (!fx || fx.kind === 'free' || String(fx.fixtureType || '').trim()) return fx;
+  const t = siteTypeOf(fx); return t ? { ...fx, fixtureType: t, _autoType: true } : fx;
+}
 // 이미 가져온 페이지도 회색 판 밖 제품은 안 보이게 (사용자: 다시 가져오기 없이). 붙여넣은 묶음 제품은 그대로
 function dropOutside(fx) {
   if (!fx || fx.kind === 'free' || !(fx.items || []).length) return fx;
@@ -2800,7 +2820,7 @@ function pagesFromGrab(f, i) {
       teamName: f.teamName || '', mdName: f.mdName || '',
       shelfCount: sh, pipeCount: pi,
       itemCount: bays.length > 1 ? bay.items.length : (f.itemCount ?? bay.items.length),
-      items: bay.items, props: bay.props, panels: bay.panels || [], board: f.board || null, src: f.src || null, // src = POG 계산기용 원본 정보 (매대 크기 mm·메모 등)
+      items: bay.items, props: bay.props, panels: bay.panels || [], board: f.board || null, src: f.src || f.note ? { ...(f.src || {}), note: f.note || '' } : null, // src = POG 계산기용 원본 정보 (매대 크기 mm·메모 등) + POG 사이트 매대 목록 '비고'(note, 예: 슬림)
       shelfPipe: autoShelfPipe(sh, pi), sp: autoSp(sh, pi),
     };
   });
@@ -4508,7 +4528,8 @@ function dwTypeOf(mods, g) {
   return glossaryOf('매대타입').map(x => x.ko).find(x => String(x || '').replace(/\s+/g, '') === key) || name;
 }
 function setFxType(pog, fx, ty, ug, over) {
-  if (!ty || (fx.fixtureType && !over) || fx.fixtureType === ty) return;
+  if (!ty || (fx.fixtureType && !fx._autoType && !over) || (fx.fixtureType === ty && !fx._autoType)) return;
+  delete fx._autoType;
   saveFx(pog.id, fx.id, 'fixtureType', ty, ug); fx.fixtureType = ty;
   const si = state.pageEls.get(fx.id)?.querySelector('[data-f="fixtureType"]'); if (si) si.value = ty;
 }
@@ -4688,7 +4709,7 @@ function openViewer(id) {
   $('#vw-pages').innerHTML = '<div class="mut pad">불러오는 중…</div>';
   renderOnlineList();
   v.unsubPog = onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeViewer(); return; } v.pog = { id: d.id, ...d.data() }; renderViewer(); });
-  v.unsubFx = onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { v.fixtures = s.docs.map(d => dropOutside({ id: d.id, ...d.data() })); renderViewer(); });
+  v.unsubFx = onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { v.fixtures = s.docs.map(d => autoType(dropOutside({ id: d.id, ...d.data() }))); renderViewer(); });
 }
 function renderViewer() {
   const v = state.viewer; if (!v.pog?.status) return;
@@ -4735,7 +4756,7 @@ function openFb(id) {
   $('#fb-pages').innerHTML = '<div class="mut pad">불러오는 중…</div>';
   renderFbList();
   fb.unsubs.push(onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeFb(); renderFbList(); return; } fb.pog = { id: d.id, ...d.data() }; $('#fb-pdf').classList.toggle('hidden', fb.pog.status !== 'final'); $('#fb-ppt').classList.toggle('hidden', !canPpt()); renderFbPages(); })); // PDF = 최종만, PPT = 작성 중만
-  fb.unsubs.push(onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { fb.fixtures = s.docs.map(d => dropOutside({ id: d.id, ...d.data() })); renderFbPages(); }));
+  fb.unsubs.push(onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { fb.fixtures = s.docs.map(d => autoType(dropOutside({ id: d.id, ...d.data() }))); renderFbPages(); }));
   fb.unsubs.push(onSnapshot(collection(db, 'pogs', id, 'feedback'), s => {
     fb.notes = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.at?.toMillis?.() ?? Date.now()) - (b.at?.toMillis?.() ?? Date.now()));
     paintFbCounts(); renderFbSide();
