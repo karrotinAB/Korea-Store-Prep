@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117k';
+const APP_VER = '20261117l';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1949,6 +1949,13 @@ function saveBlocks(pogId, fx, list, unbake, keepSel = null) {
   if (list.length && !fx.frame) { const fr = cvBox(fx); saveFx(pogId, fx.id, 'frame', fr, ug); fx.frame = fr; } // 처음 나눌 때의 매대 범위를 기억
   if (!list.length && fx.frame) { saveFx(pogId, fx.id, 'frame', null, ug); fx.frame = null; }
   saveFx(pogId, fx.id, 'blocks', list, ug); fx.blocks = list;
+  if (okCut(fx.cut) && keepSel && keepSel !== BASE) { // 자르기한 페이지: 묶음을 네모 밖으로 옮겨도 보이게 네모를 넓힘 (사용자: 붙인 매대를 따로 돌아다니게)
+    const T = withBlocks(fx), mine = [...T.items, ...T.props].filter(o => o._b === keepSel && o.w > 0);
+    if (mine.length) {
+      const c = fx.cut, nc = { x0: Math.min(c.x0, ...mine.map(o => o.x)), y0: Math.min(c.y0, ...mine.map(o => o.y)), x1: Math.max(c.x1, ...mine.map(o => o.x + o.w)), y1: Math.max(c.y1, ...mine.map(o => o.y + Math.max(o.h || 0, 4))) };
+      if (nc.x0 !== c.x0 || nc.y0 !== c.y0 || nc.x1 !== c.x1 || nc.y1 !== c.y1) { saveFx(pogId, fx.id, 'cut', nc, ug); fx.cut = nc; }
+    }
+  }
   rebuildPage(fx.id, keepSel);
 }
 /* ---------- 매대 자르기 (사용자: 가져온 매대 그림도 자를 수 있게)
@@ -2121,7 +2128,14 @@ function pasteBlock(pogId, to) {
   // 매대 자르기를 한 페이지는 보이는 네모(cut) 안에 붙임 — 밖에 붙으면 잘려서 안 보였음 (사용자: 이 페이지만 붙여넣기가 안 됨)
   const fr = to.cut || to.frame || cvBox(to), mv = [...tI, ...tP];
   const left = Math.min(...mv.map(o => o.x)), bw = Math.max(...mv.map(o => o.x + o.w)) - left, top = Math.min(...mv.map(o => o.y));
-  const shift = fr ? Math.max(fr.x0, fr.x1 - bw) - left : -left;
+  // 기존 매대 오른쪽 바깥에 따로 놓음 (사용자: 매대 안으로 들어가서 따로 움직이기 어려웠음).
+  // 자르기한 페이지는 네모를 넓혀서 보이게, 아니면 그림 칸 오른쪽 빈자리에 들어갈 때만 바깥 (안 들어가면 예전처럼 매대 오른쪽 끝 안쪽)
+  let outside = !!to.cut;
+  if (fr && !outside) {
+    const W = to.infoH ? CANVAS_HW : CANVAS_W, H = to.infoH ? CANVAS_HH : CANVAS_H, bw0 = fr.x1 - fr.x0 + 16, bh0 = fr.y1 - fr.y0 + 16, sc = Math.min(W / bw0, H / bh0);
+    outside = (W - bw0 * sc) / 2 / sc >= bw + 14;
+  }
+  const shift = fr ? (outside ? fr.x1 + 10 : Math.max(fr.x0, fr.x1 - bw)) - left : -left;
   const vshift = fr ? Math.min(Math.max(top, fr.y0), Math.max(fr.y0, fr.y1 - 30)) - top : 0;
   const used = new Set([...(to.items || []), ...(to.props || [])].map(o => String(o.id)));
   const uid = id => { let s = String(id), k = 1; while (used.has(s)) s = `${id}~${k++}`; used.add(s); return s; };
@@ -2581,7 +2595,11 @@ function splitOutside(items, props, panels = []) {
     const top = Math.min(...col.map(p => p.y)), bottom = Math.max(...col.map(p => p.y + (p.h || 0)));
     return o.y + (o.h || 0) < top - 30 || o.y > bottom + 30;
   };
-  const out = o => o.x + (o.w || 0) < left || o.x > right || offV(o);
+  // 회색 판(POG 사이트 매대 몸통·배경판)이 있으면 제품 가운데가 판 안에 있는 것만 매대 안 (사용자: 회색 매대 안에 있는 제품만)
+  const boards = panels.filter(p => p.w >= 40 && (p.h || 0) >= 40);
+  const onBoard = o => { const cx = o.x + (o.w || 0) / 2, cy = o.y + (o.h || 0) / 2; return boards.some(p => cx >= p.x - 5 && cx <= p.x + p.w + 5 && cy >= p.y - 5 && cy <= p.y + p.h + 5); };
+  const useBoard = boards.length && items.filter(onBoard).length >= items.length * 0.5; // 판이 매대 일부만 덮는 경우(작은 판)는 예전 방식
+  const out = o => useBoard ? !onBoard(o) : (o.x + (o.w || 0) < left || o.x > right || offV(o));
   const outside = items.filter(out);
   if (outside.length === items.length) return { inside: items, outside: [] };
   return { inside: items.filter(o => !out(o)), outside };
