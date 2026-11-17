@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117d';
+const APP_VER = '20261117e';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -342,7 +342,7 @@ const savePog = (pogId, f, v) => { track(pogId, '__pog', [f], `__pog|${f}`); que
    drawings/{id}/logs = { vId, gid?, x?, y?(SVG 단위, 도면 확대 구역 거르기용), area: up|dwtr, lang?, field, act?, from, to, by, at }
    같은 칸을 계속 고치면 4초 동안 모아서 한 줄 (처음 값 → 마지막 값). 같으면 안 남김 */
 const LOG_F = {
-  headerName: '매대명', fixtureType: '매대 타입', fixtureSize: '매대 사이즈', hookType: '고리타입', hookCount: '고리 갯수', sp: '선반/파이프', shelfPipe: '선반/파이프',
+  headerName: '매대명', fixtureType: '매대 타입', hookType: '고리타입', hookCount: '고리 갯수', sp: '선반/파이프', shelfPipe: '선반/파이프',
   extras: '이외집기', otherFixtures: '기타 메모', manager: '담당자', notes: '메모 상자', itemZ: '제품 앞뒤', order: '페이지 순서', merged: '매대 붙이기',
   mergedInto: '붙인 곳', drawingRef: '도면 매대 연결', items: '제품', props: '집기', coverTitle: '표지 제목', hooks: '고리타입/갯수', cat: '카테고리',
   memo: '메모', crop: '저장 구역', tr: '번역', groups: '매대명 묶음', outsideItems: '매대 밖 제품', area: '평수',
@@ -1016,9 +1016,7 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
 }
 // 오른쪽 집기 정보 칸 (매대 타입·고리·선반/파이프·이외집기)
 const infoSide = (box, field, L, editable) => h('div', { class: 'pside' },
-  box(L.type, field('fixtureType', h('input', { list: 'dl-fixtureType', placeholder: editable ? '고르거나 직접 입력 (예: 벽매대1000)' : '', title: '목록에서 고르거나 직접 써도 돼요. 새 이름은 집기·고리·매대 등록 매대타입에도 들어가요', onchange: e => { if (editable) addTypeGlossary(e.target.value); } })),
-    // 사이즈 (사용자: 도면에 적힌 매대 사이즈를 연결할 때 같이 넣음, 직접 고쳐도 됨)
-    h('div', { class: 'fx-size-row' }, h('span', { class: 'fx-size-l' }, '사이즈'), field('fixtureSize', h('input', { class: 'fx-size', placeholder: editable ? '도면 연결 시 자동 (예: 1000)' : '' })))),
+  box(L.type, field('fixtureType', h('input', { list: 'dl-fixtureType', placeholder: editable ? '고르거나 직접 입력 (예: 벽매대1000)' : '', title: '목록에서 고르거나 직접 써도 돼요. 새 이름은 집기·고리·매대 등록 매대타입에도 들어가요', onchange: e => { if (editable) addTypeGlossary(e.target.value); } }))),
   box(L.hook, h('div', { class: 'hook-list' })),
   box(L.sp, h('div', { class: 'sp-list' })),
   box(L.other, h('div', { class: 'ex-list' }), field('otherFixtures', h('textarea', { rows: 2, class: 'ex-memo', placeholder: editable ? '기타 메모 (선택)' : '' }))));
@@ -3354,6 +3352,9 @@ async function analyzeSvg(text) {
       }
     });
   });
+  // 매대 칸 네모 (사용자: 도면 매대 타입·사이즈) — 화면 좌표를 도면 좌표로
+  const rects = [];
+  live.querySelectorAll('rect').forEach(el => { const r = el.getBoundingClientRect(); if (r.width > 0 && r.height > 0) rects.push({ x: (r.left - root.left) * k, y: (r.top - root.top) * k, w: r.width * k, h: r.height * k }); });
   host.remove();
   // 바탕(영문 도면용): 검은 글씨만 남기고 나머지 글자를 지움
   const base = svg.cloneNode(true);
@@ -3361,7 +3362,7 @@ async function analyzeSvg(text) {
     const ls = leaves(t), keep = ls.filter((_, li) => dark.has(ti + ':' + li));
     if (!keep.length) t.remove(); else if (keep.length < ls.length) ls.forEach((el, li) => { if (!dark.has(ti + ':' + li)) el.remove(); });
   });
-  return { w: vw, h: vh, clean, base: new XMLSerializer().serializeToString(base), lines: lines.length, darkKept: dark.size, groups: groupLines(lines), dims };
+  return { w: vw, h: vh, clean, base: new XMLSerializer().serializeToString(base), lines: lines.length, darkKept: dark.size, groups: groupLines(lines), dims, mods: dwModules(rects, dims) };
 }
 // 검은색(또는 아주 진한 회색) 글씨인지: Illustrator 검정 #231F20 등
 function isDarkFill(f) {
@@ -3443,7 +3444,7 @@ async function uploadDrawing(file) {
     const url = await getDownloadURL(sRef(st, path));
     if (redo) for (const p of [latest.path, latest.basePath]) if (p) deleteObject(sRef(st, p)).catch(() => { });
     await setDoc(doc(db, 'drawings', id, 'versions', vId), {
-      no, fileName: file.name, url, path, w: an.w, h: an.h, groups: an.groups, dims: an.dims, lineCount: an.lines,
+      no, fileName: file.name, url, path, w: an.w, h: an.h, groups: an.groups, dims: an.dims, mods: an.mods, lineCount: an.lines,
       memo: redo ? (latest.memo || '') : '', exported: false, uploadedAt: serverTimestamp(), uploadedBy: me(), uploadedByName: myName(),
     });
     await setDoc(doc(db, 'drawings', id), { ...dwStoreInfo(store), storeId: id, latestNo: no, latestExported: false, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true });
@@ -4167,7 +4168,7 @@ async function openHeaderPicker(pog, fx, after) {
     const mine = new Set([...used, ...(curG ? [curG.id] : []), ...(v.groups || []).filter(g => g.team === team).map(g => g.id)]);
     order = order.filter(id => mine.has(id) && !others.has(id));
   }
-  const dims = await dwDims(v); // 도면 매대 사이즈 (사용자)
+  const mods = await dwMods(v); // 도면 매대 타입·사이즈 (사용자)
   // 확대·축소 (사용자): － / ＋ 버튼, Ctrl(또는 Alt) + 마우스 휠
   let zoom = 1;
   const view = drawingView(v, { used, others, selId: curG?.id || null, onPick: g => {
@@ -4175,9 +4176,9 @@ async function openHeaderPicker(pog, fx, after) {
       const ug = undoGroup(); saveFx(pog.id, fx.id, 'headerName', g.ko, ug); saveFx(pog.id, fx.id, 'drawingRef', ref, ug);
       const blk = state.pageEls.get(fx.id), inp = blk?.querySelector('[data-f="headerName"]'); if (inp) inp.value = g.ko;
       fx.drawingRef = ref; fx.headerName = g.ko;
-      const size = dwSizeOf(dims, g);
-      if (size) { saveFx(pog.id, fx.id, 'fixtureSize', size, ug); fx.fixtureSize = size; const si = blk?.querySelector('[data-f="fixtureSize"]'); if (si) si.value = size; }
-      close(); toast(`헤더에 '${g.ko}'를 넣었어요${size ? ` · 사이즈 ${size}` : ''}`); after?.();
+      const ty = dwTypeOf(mods, g);
+      if (ty) setFxType(pog, fx, ty, ug, true);
+      close(); toast(`헤더에 '${g.ko}'를 넣었어요${ty ? ` · 매대 타입 ${ty}` : ''}`); after?.();
     }, seq: order.length ? { order } : null });
   const box = h('div', { class: 'hp-zoombox' }, view);
   const zlab = h('span', { class: 'hp-zlab' }, '100%');
@@ -4203,30 +4204,64 @@ async function openHeaderPicker(pog, fx, after) {
    매대명(빨간 글씨) 가장 가까운 것으로 골라 POG 페이지 '사이즈' 칸(fixtureSize)에 넣음.
    예전에 올린 도면은 치수 위치가 저장돼 있지 않아서 도면 파일을 다시 읽어 봄 (안 되면 도면을 다시 올리면 됨) */
 const SIZE_RE = /^(\d{1,2},\d{3}|\d{3,4})$/; // 숫자만 (A-11·B1500 같은 표시는 사이즈가 아님 · 사용자)
-const dimsCache = new Map();
-async function dwDims(v) {
-  if (Array.isArray(v.dims)) return v.dims;
-  if (dimsCache.has(v.id + v.url)) return dimsCache.get(v.id + v.url);
-  let out = null;
-  try { const r = await fetch(v.url); if (r.ok) out = (await analyzeSvg(await r.text())).dims; } catch { }
-  dimsCache.set(v.id + v.url, out); return out;
-}
-function dwSizeOf(dims, g) {
-  if (!dims?.length || !g) return '';
-  const fs = g.fs || g.h || 10, gx = g.x + g.w / 2, gy = g.y + g.h / 2;
-  let best = null;
-  for (const d of dims) {
-    const t = String(d.text || '').replace(/\s+/g, ''); if (!SIZE_RE.test(t)) continue;
-    const dx = Math.max(0, Math.abs(d.x + d.w / 2 - gx) - (d.w + g.w) / 2), dy = Math.max(0, Math.abs(d.y + d.h / 2 - gy) - (d.h + g.h) / 2);
-    const dist = Math.hypot(dx, dy), lim = Math.max(fs, d.h) * 6;
-    if (dist <= lim && (!best || dist < best.dist)) best = { t: t.replace(/,/g, ''), dist };
+/* 도면 매대 칸 → 매대 타입 (사용자 · 전남대점 도면으로 맞춤):
+   - 칸 안에 검은 숫자(1,000·800)가 적혀 있으면 벽매대 + 그 숫자 (예: 벽매대 1000)
+   - 칸 가운데에 얇은 띠(약 40mm)가 있으면 연장 → 슬림 연장 + 길이 (예: 슬림 연장 800)
+   - 나머지 칸은 중앙 + 길이 (예: 중앙 800)
+   길이(mm)는 숫자가 적힌 벽매대 칸의 '숫자 ÷ 칸 길이'로 도면 축척을 구해서 계산 */
+function dwModules(rects, dims) {
+  const num = d => { const t = String(d.text || '').replace(/\s+/g, ''); return SIZE_RE.test(t) ? +t.replace(/,/g, '') : 0; };
+  const nums = (dims || []).map(d => ({ v: num(d), cx: d.x + d.w / 2, cy: d.y + d.h / 2 })).filter(d => d.v >= 300 && d.v <= 3000);
+  const inside = (r, x, y) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h;
+  const L = r => Math.max(r.w, r.h), S = r => Math.min(r.w, r.h);
+  // 축척 (mm / 도면 단위)
+  const ratios = [];
+  for (const d of nums) {
+    const c = rects.filter(r => inside(r, d.cx, d.cy) && L(r) > S(r) * 1.3).sort((a, b) => a.w * a.h - b.w * b.h)[0];
+    if (c) ratios.push(d.v / L(c));
   }
-  return best?.t || '';
+  if (!ratios.length) return [];
+  ratios.sort((a, b) => a - b);
+  const mm = ratios[Math.floor(ratios.length / 2)];
+  const seen = new Set(), mods = [];
+  const strips = rects.filter(r => S(r) * mm < 120 && S(r) * mm > 5);
+  for (const r of rects) {
+    const lm = L(r) * mm, sm = S(r) * mm;
+    if (lm < 300 || lm > 3000 || sm < 200 || sm > 900 || lm < sm * 1.3) continue; // 정사각형에 가까운 네모(기둥·표시)는 매대 칸이 아님
+    const key = [r.x, r.y, r.w, r.h].map(n => Math.round(n)).join(','); if (seen.has(key)) continue; seen.add(key);
+    const d = nums.find(n => inside(r, n.cx, n.cy));
+    const vert = r.h > r.w;
+    const ext = !d && strips.some(t => (t.h > t.w) === vert && Math.abs(L(t) - L(r)) < L(r) * 0.1 && inside(r, t.x + t.w / 2, t.y + t.h / 2));
+    const len = d ? d.v : Math.round(lm / 10) * 10;
+    mods.push({ x: +r.x.toFixed(1), y: +r.y.toFixed(1), w: +r.w.toFixed(1), h: +r.h.toFixed(1), type: d ? '벽매대' : ext ? '슬림 연장' : '중앙', len });
+  }
+  return mods;
 }
-function setFxSize(pog, fx, size, ug, over) {
-  if (!size || (fx.fixtureSize && !over) || fx.fixtureSize === size) return;
-  saveFx(pog.id, fx.id, 'fixtureSize', size, ug); fx.fixtureSize = size;
-  const si = state.pageEls.get(fx.id)?.querySelector('[data-f="fixtureSize"]'); if (si) si.value = size;
+const modsCache = new Map();
+async function dwMods(v) { // 예전에 올린 도면은 칸 정보가 없어서 도면 파일을 다시 읽어 봄
+  if (Array.isArray(v.mods)) return v.mods;
+  if (modsCache.has(v.id + v.url)) return modsCache.get(v.id + v.url);
+  let out = null;
+  try { const r = await fetch(v.url); if (r.ok) out = (await analyzeSvg(await r.text())).mods; } catch { }
+  modsCache.set(v.id + v.url, out); return out;
+}
+// 매대명 글씨에서 가장 가까운 칸 → '벽매대 1000' (매대타입 사전에 띄어쓰기만 다른 이름이 있으면 그 이름)
+function dwTypeOf(mods, g) {
+  if (!mods?.length || !g) return '';
+  let best = null;
+  for (const m of mods) {
+    const dx = Math.max(0, Math.abs(m.x + m.w / 2 - (g.x + g.w / 2)) - (m.w + g.w) / 2), dy = Math.max(0, Math.abs(m.y + m.h / 2 - (g.y + g.h / 2)) - (m.h + g.h) / 2);
+    const dist = Math.hypot(dx, dy), lim = Math.max(Math.min(m.w, m.h) * 1.5, (g.fs || 5) * 3);
+    if (dist <= lim && (!best || dist < best.dist || (dist === best.dist && m.w * m.h < best.m.w * best.m.h))) best = { m, dist };
+  }
+  if (!best) return '';
+  const name = `${best.m.type} ${best.m.len}`, key = name.replace(/\s+/g, '');
+  return glossaryOf('매대타입').map(x => x.ko).find(x => String(x || '').replace(/\s+/g, '') === key) || name;
+}
+function setFxType(pog, fx, ty, ug, over) {
+  if (!ty || (fx.fixtureType && !over) || fx.fixtureType === ty) return;
+  saveFx(pog.id, fx.id, 'fixtureType', ty, ug); fx.fixtureType = ty;
+  const si = state.pageEls.get(fx.id)?.querySelector('[data-f="fixtureType"]'); if (si) si.value = ty;
 }
 // 이 POG 매장의 ★최종본(없으면 마지막으로 내보낸) 도면 버전
 async function pogDrawing(pog) {
@@ -4337,13 +4372,13 @@ async function openPogDwLink(pog) {
       h('label', { class: 'pdl-over' }, over, ' 이미 적어 둔 매대명도 도면 매대 이름으로 바꾸기'),
       h('p', { class: 'mut' }, `연결 안 된 페이지 ${pages.length}장 중 ${hit.length}장에 비슷한 이름의 도면 매대를 찾았어요. 맞는 것만 체크된 채로 두고 '연결하기'를 누르세요. 틀린 건 나중에 '다시 연결'로 바꿀 수 있어요.`),
       list, h('div', { class: 'modal-act' }, h('button', { class: 'btn primary', onclick: async () => {
-        const ug = undoGroup(), dims = await dwDims(v); let n = 0;
+        const ug = undoGroup(), mods = await dwMods(v); let n = 0;
         for (const r of hit) {
           if (!checks.get(r.f.id)?.checked) continue;
           const g = r.best.g, ref = { storeId: st0.id, vId: v.id, vNo: v.no, gid: g.id, ko: g.ko };
           if (!r.f.headerName || over.checked) { saveFx(pog.id, r.f.id, 'headerName', g.ko, ug); r.f.headerName = g.ko; const inp = state.pageEls.get(r.f.id)?.querySelector('[data-f="headerName"]'); if (inp) inp.value = g.ko; }
           saveFx(pog.id, r.f.id, 'drawingRef', ref, ug); r.f.drawingRef = ref; n++;
-          setFxSize(pog, r.f, dwSizeOf(dims, g), ug, false);
+          setFxType(pog, r.f, dwTypeOf(mods, g), ug, false);
         }
         close2(); toast(`${n}장을 연결했어요 (Ctrl+Z로 되돌릴 수 있어요)`); setTimeout(paint, 700);
       } }, '연결하기'))), { wide: true });
@@ -4364,17 +4399,17 @@ async function openPogDwLink(pog) {
   const sizeBtn = h('button', { class: 'btn', onclick: async () => {
     const linked = [...state.edComposed.values()].filter(f => f.drawingRef);
     if (!linked.length) { toast('도면과 연결된 페이지가 없어요'); return; }
-    sizeBtn.disabled = true; const dims = await dwDims(v); sizeBtn.disabled = false;
-    if (!dims) { alert('이 도면에서 사이즈 글씨를 못 읽었어요.\nVMD실에서 도면을 다시 올리면(재업로드) 사이즈도 같이 읽어요.'); return; }
-    const rows = linked.map(f => { const r = f.drawingRef, g = r.vId === v.id ? (v.groups || []).find(x => x.id === r.gid) : (v.groups || []).find(x => x.ko === r.ko); return { f, size: dwSizeOf(dims, g) }; }).filter(r => r.size);
-    if (!rows.length) { alert('연결된 매대 근처에서 사이즈 글씨(예: 1,000 · B1500)를 못 찾았어요.'); return; }
-    const has = rows.filter(r => r.f.fixtureSize && r.f.fixtureSize !== r.size).length;
-    if (!confirm(`연결된 페이지 ${rows.length}장에 도면 사이즈를 넣을까요?${has ? `\n(이미 다른 사이즈가 적힌 ${has}장도 도면 사이즈로 바뀌어요)` : ''}\nCtrl+Z로 되돌릴 수 있어요.`)) return;
-    const ug = undoGroup(); rows.forEach(r => setFxSize(pog, r.f, r.size, ug, true));
-    toast(`${rows.length}장에 사이즈를 넣었어요`);
-  } }, '📏 도면 사이즈 넣기');
+    sizeBtn.disabled = true; const mods = await dwMods(v); sizeBtn.disabled = false;
+    if (!mods?.length) { alert('이 도면에서 매대 칸·사이즈를 못 읽었어요.\nVMD실에서 도면을 다시 올리면(재업로드) 같이 읽어요.'); return; }
+    const rows = linked.map(f => { const r = f.drawingRef, g = r.vId === v.id ? (v.groups || []).find(x => x.id === r.gid) : (v.groups || []).find(x => x.ko === r.ko); return { f, ty: dwTypeOf(mods, g) }; }).filter(r => r.ty);
+    if (!rows.length) { alert('연결된 매대 근처에서 매대 칸을 못 찾았어요.'); return; }
+    const has = rows.filter(r => r.f.fixtureType && r.f.fixtureType !== r.ty).length;
+    if (!confirm(`연결된 페이지 ${rows.length}장의 매대 타입을 도면대로 넣을까요?${has ? `\n(이미 다른 매대 타입이 적힌 ${has}장도 바뀌어요)` : ''}\nCtrl+Z로 되돌릴 수 있어요.`)) return;
+    const ug = undoGroup(); rows.forEach(r => setFxType(pog, r.f, r.ty, ug, true));
+    toast(`${rows.length}장에 매대 타입을 넣었어요`);
+  } }, '📏 도면 매대 타입 넣기');
   modal(h('div', { class: 'pdl' }, h('h3', {}, 'POG랑 도면 연결하기'), info,
-    h('p', { class: 'se-help' }, "각 페이지 옆 '도면 연결하기'를 누르면 도면이 떠요. 매대를 누르면 그 페이지 헤더(매대명)와 연결되고, 도면에 적힌 사이즈(1,000 · B1500 등)도 '사이즈' 칸에 들어가요."),
+    h('p', { class: 'se-help' }, "각 페이지 옆 '도면 연결하기'를 누르면 도면이 떠요. 매대를 누르면 그 페이지 헤더(매대명)와 연결되고, 도면의 매대 칸을 읽어 '매대 타입'(벽매대 1000 · 슬림 연장 800 · 중앙 800)도 들어가요."),
     body, h('div', { class: 'modal-act' }, resetBtn, h('span', { class: 'grow' }), sizeBtn, guessBtn, sortBtn)), { wide: true });
   paint();
 }
