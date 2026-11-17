@@ -74,7 +74,7 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **제품 팀 = 제품추가 창의 팀구분 (사용자: 중분류→대분류→팀구분으로 바꿈)**: 북마크가 상세정보 창에서 바코드·`중분류`·`대분류`(`items[].mid`·`big`)를, '제품추가' 창(`popItemAdd.aspx?god_code=…&checkzero=N`, GET, 400개씩)에서 팀구분(`items[].pteam`, 목록 '홈&라이프 - 슬리퍼 - …'의 맨 앞)을 읽음. 제품리스트 엑셀 B열 '팀' = `it.pteam`. 예전에 가져온 POG는 다시 가져와야 채워짐.
 
-- **집기 칸 위치 세로/가로 (사용자)**: 페이지마다 `fixture.infoH`(true = 그림 위 가로, 그림 `CANVAS_HW`×`CANVAS_HH`). 오른쪽 패널 '집기 칸 위치' + '모든 페이지 같게'. `itemSig`에 들어 있어서 바꾸면 페이지를 다시 그림.
+- **집기 칸 위치 세로/가로 (사용자)**: 페이지마다 `fixture.infoH`(true = 그림 위 가로, 그림 `CANVAS_HW`×`CANVAS_HH`). 가로일 때 집기 칸 높이는 141px로 고정(넘치면 칸 안에서 스크롤) → 편집·잠금·PPT에서 그림 위치가 같아 메모가 안 어긋남. 오른쪽 패널 '집기 칸 위치' + '모든 페이지 같게'. `itemSig`에 들어 있어서 바꾸면 페이지를 다시 그림.
 
 - **메모 여러 개 고르기·복사·붙여넣기 (사용자)**: Shift·Ctrl+클릭으로 여러 개(`block._msel`, `selIds`), 하나를 끌면 같이 옮겨짐, 메모 막대 '📄 복사'·'📋 붙여넣기'·'모두 고르기', Ctrl+C/Ctrl+V(`copyNotes`·`pasteNotes`, `state.noteClip`, `state.lastClip`로 매대 묶음 붙여넣기와 구분). 같은 자리에 붙음. 사진 메모는 파일을 같이 써서 `shared` 표시(지울 때 파일은 남김).
 
