@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118d';
+const APP_VER = '20261118e';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1833,7 +1833,7 @@ function applyPogDoc() {
   $('#ed-title').textContent = `${pogTitle(p)} ${p.storeCode ? '(' + p.storeCode + ')' : ''}`;
   refreshManagerSelect();
   const final = p.status === 'final';
-  $('#ed-pdf').classList.toggle('hidden', !final); $('#ed-ppt').classList.toggle('hidden', !canPpt()); // PDF 저장 = 최종 POG만, PPT 저장 = POG팀·관리자 (작성 중·최종 모두 · 사용자)
+  $('#ed-pdf').classList.toggle('hidden', !final); $('#ed-products').classList.toggle('hidden', !final); // 제품리스트 엑셀 = 최종 POG만 (사용자) $('#ed-ppt').classList.toggle('hidden', !canPpt()); // PDF 저장 = 최종 POG만, PPT 저장 = POG팀·관리자 (작성 중·최종 모두 · 사용자)
   const editable = !final && canEdit('pog-make'); // POG팀·관리자만 편집, 나머지는 보기
   state.edEditable = editable;
   $('#ed-status').textContent = final ? '최종' : canEdit('pog-make') ? '작성 중' : '작성 중 · 보기 전용';
@@ -3083,7 +3083,7 @@ async function exportProducts(pog, fixtures) {
     toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (noMid ? ` · 팀이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
   } catch (e) { toast(e.message); }
 }
-$('#ed-products').onclick = () => exportProducts(state.currentPog, [...state.fixtures.values()]);
+$('#ed-products').onclick = () => { if (state.currentPog?.status !== 'final') { alert('제품리스트 엑셀은 최종 POG 내보내기를 한 뒤에 받을 수 있어요.'); return; } exportProducts(state.currentPog, [...state.fixtures.values()]); };
 $('#vw-products').onclick = () => exportProducts(state.viewer.pog, state.viewer.fixtures);
 // 관리자용: 이 POG 제품 중 바코드 등록이 안 된 제품코드만 엑셀로 (바코드 업로드 양식과 같은 열: 제품코드 · 바코드 · 제품명)
 async function exportNoBarcode(pog, fixtures) {
