@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117c';
+const APP_VER = '20261117d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1526,7 +1526,9 @@ function renderNoteBar(block) {
     const ta = h('textarea', { class: 'nb-text', rows: 2 });
     ta.value = n.text || '';
     ta.addEventListener('input', () => {
-      n.text = ta.value; renderNotes(block); // 상자 크기는 그대로 (넘치면 글자가 작아짐)
+      n.text = ta.value; // 상자 크기는 그대로 (넘치면 글자가 작아짐)
+      const tx = block.querySelector(`.anno .nt[data-id="${n.id}"] .nt-tx`); // 메모 전체를 다시 그리면 버벅여서 그 글만 바꿈 (사용자)
+      if (tx) { tx.textContent = n.text; tx.style.fontSize = (n.fs || 14) + 'px'; fitText(tx, n.fs || 14); } else renderNotes(block);
       saveNotes(block);
     });
     box.append(ta,
@@ -1681,12 +1683,20 @@ function openPog(id) {
     state.currentPog = { id: d.id, ...d.data() }; state.pogRaw = d.data();
     applyPogDoc(); updateUndoBtns();
   });
+  let fxFirst = true;
   state.unsubFx = onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => {
     const ids = new Set();
+    // 글자 하나 고쳐도 모든 페이지를 다시 그려서 입력이 버벅였음 (사용자) → 내용만 바뀐 페이지만 다시 맞춤.
+    // 페이지가 생기거나 지워지거나 순서·붙이기가 바뀌면 전부
+    const ch = fxFirst ? null : s.docChanges();
+    const only = ch && ch.every(c => c.type === 'modified' && (() => { const a = state.fxRaw.get(c.doc.id), b = c.doc.data();
+      return a && a.order === b.order && a.mergedInto === b.mergedInto && JSON.stringify(a.merged || []) === JSON.stringify(b.merged || []); })()) ? new Set(ch.map(c => c.doc.id)) : null;
+    fxFirst = false;
     state.fxRaw = new Map(s.docs.map(d => [d.id, d.data()])); // 되돌리기용 서버 원본
-    s.docs.forEach(d => { ids.add(d.id); state.fixtures.set(d.id, jjNorm({ id: d.id, ...d.data() })); }); // 줄줄 매대: 판 → 줄 집기
+    s.docs.forEach(d => { ids.add(d.id); if (!only || only.has(d.id)) state.fixtures.set(d.id, jjNorm({ id: d.id, ...d.data() })); }); // 줄줄 매대: 판 → 줄 집기
     [...state.fixtures.keys()].forEach(k => { if (!ids.has(k)) state.fixtures.delete(k); });
-    renderEditorPages();
+    if (only && !only.size) return;
+    renderEditorPages(only);
   });
 }
 function applyPogDoc() {
@@ -1710,7 +1720,7 @@ function applyPogDoc() {
   }
   renderEditorPages();
 }
-function renderEditorPages() {
+function renderEditorPages(only = null) { // only = 내용만 바뀐 페이지 id들 (그 페이지만 다시 맞춤)
   const pog = state.currentPog;
   if (!pog || pog.status === undefined) return; // 문서 본체가 아직 안 왔으면 대기
   const wrap = $('#ed-pages');
@@ -1722,17 +1732,20 @@ function renderEditorPages() {
   const shown = new Set(order.map(f => f.id));
   for (const [id, el] of state.pageEls) if (!shown.has(id)) { el.remove(); state.pageEls.delete(id); }
   state.edComposed = new Map(order.map(f => [f.id, f]));
+  const hit = fx => !only || only.has(fx.id) || (fx.merged || []).some(k => only.has(k));
+  const done = [];
   order.forEach((fx, i) => {
     let el = state.pageEls.get(fx.id);
+    if (el && !hit(fx)) { if (wrap.children[i + 1] !== el) wrap.insertBefore(el, wrap.children[i + 1] || null); return; }
     if (el && el._itemSig !== itemSig(fx)) { el.remove(); el = null; }
     if (!el) { el = buildPage(fx, pog, { editable: state.edEditable }); state.pageEls.set(fx.id, el); }
-    syncPage(el, fx, pog);
+    syncPage(el, fx, pog); done.push(el);
     if (wrap.children[i + 1] !== el) wrap.insertBefore(el, wrap.children[i + 1] || null); // 0번은 표지
   });
   edThumbs.sync(slideEntries(state.coverEl, pog, order, fx => state.pageEls.get(fx.id)));
   renderSidePanel();
   if ($('#ed-find')?.value) edFind(); // 다시 그린 뒤에도 찾기 표시 유지
-  requestAnimationFrame(() => state.pageEls.forEach(b => { fitHandles(b); paintCrop(b); }));
+  requestAnimationFrame(() => done.forEach(b => { fitHandles(b); paintCrop(b); }));
 }
 // 묶음·매대가 페이지 밖으로 나가도 '✥' 손잡이와 크기 네모는 페이지 안 보이는 곳에 붙여 둠 (사용자: 밖으로 나가면 잡을 수 없었음)
 function fitHandles(block) {
@@ -2289,6 +2302,9 @@ function mgrSelect(fx, pog) {
 function fillMgrSelect(sel, fx, pog) {
   if (sel === document.activeElement) return;
   const names = [...new Set([...state.managers.map(m => m.name), fx.manager].filter(Boolean))];
+  const sig = [pog.manager || '', ...names].join('\u0001'); // 같으면 다시 만들지 않음 (입력 버벅임 줄이기)
+  if (sel.dataset.sig === sig) { sel.value = fx.manager || ''; return; }
+  sel.dataset.sig = sig;
   sel.replaceChildren(h('option', { value: '' }, pog.manager ? `${pog.manager} (전체)` : '(전체 담당자)'), ...names.map(n => h('option', { value: n }, n))); // 담당자 추가는 관리자만 (계정 관리 화면 · 사용자)
   sel.value = fx.manager || '';
 }
