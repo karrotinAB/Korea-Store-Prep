@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118a';
+const APP_VER = '20261118b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3721,24 +3721,46 @@ async function analyzePdf(file, say = () => { }) {
   const worker = await T.createWorker('kor', 1, { workerPath: base + 'worker.min.js', corePath: base, langPath: base.replace(/\/$/, ''), gzip: true });
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
   const groups = [];
+  // 네모 하나(도면 좌표)를 잘라서 글자 인식 → 줄들 · 점수
+  const clean = t => String(t || '').split('\n').map(l => l.replace(/[|\\`~^_=“”"'‘’]/g, '').replace(/\s+/g, ' ').trim()).filter(l => /[가-힣A-Za-z0-9]/.test(l));
+  const readBox = async b => {
+    const X0 = Math.max(0, Math.floor(b.x0 * SC) - 2), Y0 = Math.max(0, Math.floor(b.y0 * SC) - 2), X1 = Math.min(cw, Math.ceil(b.x1 * SC) + 2), Y1 = Math.min(ch, Math.ceil(b.y1 * SC) + 2);
+    const bw = X1 - X0, bh = Y1 - Y0, Z = 2, pad = 20, c2 = document.createElement('canvas'); c2.width = bw * Z + pad * 2; c2.height = bh * Z + pad * 2;
+    const g2 = c2.getContext('2d'), im = g2.createImageData(bw, bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const v = mask[(Y0 + y) * cw + X0 + x] ? 0 : 255, o = (y * bw + x) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255; }
+    const t = document.createElement('canvas'); t.width = bw; t.height = bh; t.getContext('2d').putImageData(im, 0, 0);
+    g2.fillStyle = '#fff'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(t, pad, pad, bw * Z, bh * Z);
+    const { data } = await worker.recognize(c2);
+    return { lines: clean(data.text), conf: data.confidence };
+  };
+  const r2 = n => +n.toFixed(2);
   try {
     for (let i = 0; i < boxes.length; i++) {
-      const b = boxes[i], X0 = Math.max(0, Math.floor(b.x0 * SC) - 2), Y0 = Math.max(0, Math.floor(b.y0 * SC) - 2), X1 = Math.min(cw, Math.ceil(b.x1 * SC) + 2), Y1 = Math.min(ch, Math.ceil(b.y1 * SC) + 2);
-      const bw = X1 - X0, bh = Y1 - Y0, Z = 2, pad = 20, c2 = document.createElement('canvas'); c2.width = bw * Z + pad * 2; c2.height = bh * Z + pad * 2;
-      const g2 = c2.getContext('2d'), im = g2.createImageData(bw, bh);
-      for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const v = mask[(Y0 + y) * cw + X0 + x] ? 0 : 255, o = (y * bw + x) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255; }
-      const t = document.createElement('canvas'); t.width = bw; t.height = bh; t.getContext('2d').putImageData(im, 0, 0);
-      g2.fillStyle = '#fff'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(t, pad, pad, bw * Z, bh * Z);
-      const { data } = await worker.recognize(c2);
-      const lines = String(data.text || '').split('\n').map(l => l.replace(/[|\\`~^_=“”"'‘’]/g, '').replace(/\s+/g, ' ').trim()).filter(l => /[가-힣A-Za-z0-9]/.test(l));
+      const b = boxes[i], { lines, conf } = await readBox(b);
       const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
-      if (!compact || (data.confidence < 35 && compact.length <= 2)) continue; // 화살표·점 같은 빨간 표시는 뺌
-      const x = +b.x0.toFixed(2), y = +b.y0.toFixed(2), w = +(b.x1 - b.x0).toFixed(2), hh = +(b.y1 - b.y0).toFixed(2), r2 = n => +n.toFixed(2);
-      // 줄마다 조각 (나누기용): 글자 조각을 줄로 묶고, 읽은 줄 수와 같으면 줄마다 이름
+      if (!compact || (conf < 35 && compact.length <= 2)) continue; // 화살표·점 같은 빨간 표시는 뺌
+      const x = r2(b.x0), y = r2(b.y0), w = r2(b.x1 - b.x0), hh = r2(b.y1 - b.y0);
+      // 나누기용 조각 (사용자: 붙은 매대명이 한 묶음이 되면 나눌 수 있게): 줄마다, 같은 줄에서도 글자 하나 넘게 떨어지면 따로 → 조각마다 따로 글자 인식
       const rows = [];
-      for (const c of b.cs.slice().sort((p, q) => (p.y0 + p.y1) - (q.y0 + q.y1))) { const r = rows.at(-1), cy = (c.y0 + c.y1) / 2; if (r && Math.abs(cy - r.cy) < b.fs * 0.6) { r.x0 = Math.min(r.x0, c.x0); r.y0 = Math.min(r.y0, c.y0); r.x1 = Math.max(r.x1, c.x1); r.y1 = Math.max(r.y1, c.y1); } else rows.push({ cy, x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 }); }
-      const parts = rows.length === lines.length && rows.length > 1 ? rows.map((r, k) => ({ text: lines[k], x: r2(r.x0), y: r2(r.y0), w: r2(r.x1 - r.x0), h: r2(r.y1 - r.y0), lh: r2(b.fs) })) : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
-      groups.push({ id: 'g' + groups.length, ko, lines, parts, x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(data.confidence) });
+      for (const c of b.cs.slice().sort((p, q) => p.y0 - q.y0)) { // 줄 = 위아래로 겹치는 조각들 (받침·모음 조각 높이가 달라도 한 줄)
+        const r = rows.find(r => Math.min(r.y1, c.y1) - Math.max(r.y0, c.y0) > Math.min(r.y1 - r.y0, c.y1 - c.y0) * 0.3);
+        if (r) { r.cs.push(c); r.y0 = Math.min(r.y0, c.y0); r.y1 = Math.max(r.y1, c.y1); } else rows.push({ y0: c.y0, y1: c.y1, cs: [c] });
+      }
+      const segs = [];
+      for (const r of rows) {
+        let cur = null; const rh = Math.max(...r.cs.map(c => c.y1)) - Math.min(...r.cs.map(c => c.y0)), gapMax = Math.max(rh, b.fs * 1.5) * 0.8; // 글자 크기 = 줄 높이
+        for (const c of r.cs.sort((p, q) => p.x0 - q.x0)) {
+          if (cur && c.x0 - cur.x1 <= gapMax) { cur.x1 = Math.max(cur.x1, c.x1); cur.y0 = Math.min(cur.y0, c.y0); cur.y1 = Math.max(cur.y1, c.y1); }
+          else segs.push(cur = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 });
+        }
+      }
+      let parts = [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
+      if (segs.length > 1) {
+        const ps = [];
+        for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); if (tx.replace(/\s+/g, '')) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs) }); }
+        if (ps.length > 1) parts = ps;
+      }
+      groups.push({ id: 'g' + groups.length, ko, lines, parts, x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
     }
   } finally { await worker.terminate(); }
