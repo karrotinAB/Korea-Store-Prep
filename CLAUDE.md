@@ -78,7 +78,7 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 
 - **메모 여러 개 고르기·복사·붙여넣기 (사용자)**: Shift·Ctrl+클릭으로 여러 개(`block._msel`, `selIds`), 하나를 끌면 같이 옮겨짐, 메모 막대 '📄 복사'·'📋 붙여넣기'·'모두 고르기', Ctrl+C/Ctrl+V(`copyNotes`·`pasteNotes`, `state.noteClip`, `state.lastClip`로 매대 묶음 붙여넣기와 구분). 같은 자리에 붙음. 사진 메모는 파일을 같이 써서 `shared` 표시(지울 때 파일은 남김).
 
-- **매대 자르기 (사용자: 가져온 매대 그림도 자르기)**: 오른쪽 패널 '매대 자르기'(`cropSection`) → 파란 네모(`.crop-box`, 안을 끌면 옮김·가장자리/모서리 8개로 크기) → '✓ 자르기'(Enter)/취소(Esc)/'자르기 없애기'. 저장 `fixture.cut = {x0,y0,x1,y1}`(그림 좌표 = `withBlocks` 뒤, `frame`과 같은 좌표). `buildCanvas`가 이 네모를 틀로 쓰고 밖은 숨김(`.cv-in` overflow) → 남긴 부분이 칸에 꽉 차게 커짐. 자르는 중(`state.crop`)엔 그 페이지를 `noCut`으로 다시 그림. `itemSig`에 들어 있음. 다시 가져오기(대체)하면 `cut: null`. 코드: `startCrop`·`paintCrop`·`applyCrop`·`clearCrop`·`endCrop`.
+- **매대 자르기 (사용자: 가져온 매대 그림도 자르기)**: 오른쪽 패널 '매대 자르기'(`cropSection`) → 파란 네모(`.crop-box`, 안을 끌면 옮김·가장자리/모서리 8개로 크기) → '✓ 자르기'(Enter)/취소(Esc)/'자르기 없애기'. 저장 `fixture.cut = {x0,y0,x1,y1}`(그림 좌표 = `withBlocks` 뒤, `frame`과 같은 좌표). `buildCanvas`가 이 네모를 틀로 쓰고 밖은 숨김(`.cv-in` overflow) → 남긴 부분이 칸에 꽉 차게 커짐. 자르는 중(`state.crop`)엔 그 페이지를 `noCut`으로 다시 그림. `itemSig`에 들어 있음. 다시 가져오기(대체)하면 `cut: null`. 잘라낸 묶음을 붙여넣으면(`pasteBlock`) cut 안 오른쪽에 붙이고 cut을 묶음까지 넓힘(예전엔 cut 밖에 붙어 안 보였음). 코드: `startCrop`·`paintCrop`·`applyCrop`·`clearCrop`·`endCrop`.
 
 - **매대 가로·세로 따로 크기 (사용자)**: '↔ 매대 위치·크기 조정'·묶음의 오른쪽 아래 손잡이는 가로·세로 따로(Shift = 비율 그대로, `resizeBlock`), 오른쪽 패널에 '가로 %·세로 %' 숫자 칸(`sizeInputs`). `withBlocks`의 `tr`: 판·선반은 `sx`·`sy`로 늘고, **제품은 작은 쪽 비율로 키워 그 자리 가운데**(찌그러지지 않게).
 - **붙은 매대 몸통 사이 흰 세로줄**: `buildCanvas`에서 `md-body…` 판이 붙어 있으면 `.cv-bay-sep`. 칸 나누기(`clusterX`)는 `md-body`를 폭과 상관없이 칸으로, 좁은 칸(가장 넓은 칸의 40% 미만)은 옆 넓은 칸과 한 페이지로(`splitBays`).

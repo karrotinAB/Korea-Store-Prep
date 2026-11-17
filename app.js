@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117j';
+const APP_VER = '20261117k';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2118,7 +2118,8 @@ function pasteBlock(pogId, to) {
   // 붙일 자리: 붙일 페이지 매대 틀 안 오른쪽 끝에 맞춰서 (화면 안에 보여야 끌어서 옮길 수 있음 · 사용자). 높이는 틀 안으로
   const F = withBlocks(from), strip = ({ _b, ...o }) => o;
   const tI = F.items.filter(o => ids.has(String(o.id))).map(strip), tP = F.props.filter(o => pids.has(String(o.id))).map(strip); // 옮긴 자리·크기 반영
-  const fr = to.frame || cvBox(to), mv = [...tI, ...tP];
+  // 매대 자르기를 한 페이지는 보이는 네모(cut) 안에 붙임 — 밖에 붙으면 잘려서 안 보였음 (사용자: 이 페이지만 붙여넣기가 안 됨)
+  const fr = to.cut || to.frame || cvBox(to), mv = [...tI, ...tP];
   const left = Math.min(...mv.map(o => o.x)), bw = Math.max(...mv.map(o => o.x + o.w)) - left, top = Math.min(...mv.map(o => o.y));
   const shift = fr ? Math.max(fr.x0, fr.x1 - bw) - left : -left;
   const vshift = fr ? Math.min(Math.max(top, fr.y0), Math.max(fr.y0, fr.y1 - 30)) - top : 0;
@@ -2138,8 +2139,14 @@ function pasteBlock(pogId, to) {
   const toFrame = to.frame || cvBox(to) || cvBox({ items: nI, props: nP }), fromFrame = fB.length ? from.frame || null : null; // 붙일 페이지는 붙이기 전 매대 범위를 틀로
   saveFx(pogId, to.id, 'frame', toFrame, ug); saveFx(pogId, from.id, 'frame', fromFrame, ug);
   saveFx(pogId, to.id, 'blocks', [...(to.blocks || []), nb], ug); saveFx(pogId, to.id, 'itemZ', zTo, ug);
+  let toCut = to.cut || null;
+  if (toCut) { // 붙인 묶음이 다 보이게 자르기 네모를 넓힘
+    const nb2 = cvBox({ items: nI, props: nP });
+    if (nb2) toCut = { x0: Math.min(toCut.x0, nb2.x0), y0: Math.min(toCut.y0, nb2.y0), x1: Math.max(toCut.x1, nb2.x1), y1: Math.max(toCut.y1, nb2.y1) };
+    saveFx(pogId, to.id, 'cut', toCut, ug);
+  }
   Object.assign(from, { items: fI, props: fP, blocks: fB, itemZ: zFrom, frame: fromFrame });
-  Object.assign(to, { items: [...(to.items || []), ...nI], props: [...(to.props || []), ...nP], blocks: [...(to.blocks || []), nb], itemZ: zTo, frame: toFrame });
+  Object.assign(to, { items: [...(to.items || []), ...nI], props: [...(to.props || []), ...nP], blocks: [...(to.blocks || []), nb], itemZ: zTo, frame: toFrame, cut: toCut });
   state.clip = null;
   rebuildPage(from.id, null); rebuildPage(to.id, nb.id);
   toast(`'${displayName(to)}'에 붙였어요. ✥를 끌어 자리를 맞추세요 (Ctrl+Z로 되돌릴 수 있어요)`);
