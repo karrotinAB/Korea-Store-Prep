@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117y';
+const APP_VER = '20261117z';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3660,24 +3660,110 @@ function makeGroup(ls) {
 // 줄 잇기: '/'로 끝나거나 시작하면 붙이고, 아니면 띄어쓰기
 const joinLabel = ts => ts.reduce((acc, t) => !acc ? t : (acc.endsWith('/') || t.startsWith('/') ? acc + t : acc + ' ' + t), '');
 
+/* PDF·AI 도면 (사용자: 글자가 살아 있는 SVG가 없음 — 매대명이 윤곽선(그림)) → 페이지를 그림으로 그리고, 빨간 글씨 덩어리를 찾아 글자 인식(OCR)으로 매대명을 읽음.
+   AI는 'PDF 호환 파일'이면 PDF로 열림. 도면 그림은 JPEG로 저장. 치수·A-1 같은 검은 글씨는 못 읽음(매대 타입은 POG 사이트 사이즈로 자동). 도구: lib/pdf(pdf.js)·lib/tess(tesseract.js, 한국어) */
+const PDF_URL = 'lib/pdf/pdf.min.js', TESS_URL = 'lib/tess/tesseract.min.js';
+async function analyzePdf(file, say = () => { }) {
+  const pdfjs = await loadScript(PDF_URL, 'pdfjsLib');
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL('lib/pdf/pdf.worker.min.js', location.href).href;
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (String.fromCharCode(...buf.slice(0, 5)) !== '%PDF-') throw new Error("PDF로 열 수 없는 파일이에요. AI 파일은 저장할 때 'PDF 호환 파일 만들기'를 켜 주세요.");
+  const doc = await pdfjs.getDocument({ data: buf }).promise, page = await doc.getPage(1), vp1 = page.getViewport({ scale: 1 });
+  const W = vp1.width, H = vp1.height;
+  const render = async sc => {
+    const vp = page.getViewport({ scale: sc }), cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+    const cx = cv.getContext('2d', { willReadFrequently: true }); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+    await page.render({ canvasContext: cx, viewport: vp }).promise; return cv;
+  };
+  say('도면 그림 만드는 중…');
+  const shot = await render(2.5), image = await new Promise(ok => shot.toBlob(ok, 'image/jpeg', 0.88));
+  say('빨간 매대명 찾는 중…');
+  const SC = 4, cv = await render(SC), cw = cv.width, ch = cv.height, px = cv.getContext('2d').getImageData(0, 0, cw, ch).data;
+  const mask = new Uint8Array(cw * ch);
+  for (let i = 0, j = 0; i < mask.length; i++, j += 4) { const r = px[j], g = px[j + 1], b = px[j + 2]; if (r > 150 && r - g > 80 && r - b > 80) mask[i] = 1; }
+  // 붙어 있는 빨간 점 덩어리 (글자 조각)
+  const seen = new Uint8Array(cw * ch), stack = new Int32Array(cw * ch), comps = [];
+  for (let s0 = 0; s0 < mask.length; s0++) {
+    if (!mask[s0] || seen[s0]) continue;
+    let sp = 0, n = 0, x0 = cw, y0 = ch, x1 = 0, y1 = 0; stack[sp++] = s0; seen[s0] = 1;
+    while (sp) {
+      const k = stack[--sp], x = k % cw, y = (k - x) / cw; n++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue;
+        const q = ny * cw + nx; if (mask[q] && !seen[q]) { seen[q] = 1; stack[sp++] = q; }
+      }
+    }
+    if (n >= 4 && x1 - x0 < 40 * SC && y1 - y0 < 40 * SC) comps.push({ x0: x0 / SC, y0: y0 / SC, x1: (x1 + 1) / SC, y1: (y1 + 1) / SC });
+  }
+  if (!comps.length) return { w: W, h: H, image, groups: [], dims: [], mods: [], lines: 0, darkKept: 0 };
+  // 글자 조각 → 매대명 덩어리 (같은 줄 가까이 · 위아래로 붙은 줄)
+  const hs = comps.map(c => c.y1 - c.y0).sort((a, b) => a - b), med = hs[Math.floor(hs.length / 2)];
+  const par = comps.map((_, i) => i), find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+  const cell = 10, grid = new Map(), key = (gx, gy) => gx + ',' + gy;
+  comps.forEach((c, i) => { for (let gx = Math.floor(c.x0 / cell) - 1; gx <= Math.floor(c.x1 / cell) + 1; gx++) for (let gy = Math.floor(c.y0 / cell) - 1; gy <= Math.floor(c.y1 / cell) + 1; gy++) { const k = key(gx, gy); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); } });
+  comps.forEach((a, i) => {
+    const cand = new Set();
+    for (let gx = Math.floor(a.x0 / cell) - 1; gx <= Math.floor(a.x1 / cell) + 1; gx++) for (let gy = Math.floor(a.y0 / cell) - 1; gy <= Math.floor(a.y1 / cell) + 1; gy++) (grid.get(key(gx, gy)) || []).forEach(j => cand.add(j));
+    for (const j of cand) {
+      if (j <= i) continue; const b = comps[j], lh = Math.max(a.y1 - a.y0, b.y1 - b.y0, med);
+      const hgap = Math.max(b.x0 - a.x1, a.x0 - b.x1, 0), vgap = Math.max(b.y0 - a.y1, a.y0 - b.y1, 0);
+      const same = Math.abs((a.y0 + a.y1) / 2 - (b.y0 + b.y1) / 2) < lh * 0.6;
+      if ((same && hgap < lh * 0.6) || (vgap < lh * 0.45 && hgap < lh * 0.3)) par[find(i)] = find(j);
+    }
+  });
+  const byRoot = new Map(); comps.forEach((c, i) => { const r = find(i); if (!byRoot.has(r)) byRoot.set(r, []); byRoot.get(r).push(c); });
+  const boxes = [...byRoot.values()].map(v => ({ x0: Math.min(...v.map(c => c.x0)), y0: Math.min(...v.map(c => c.y0)), x1: Math.max(...v.map(c => c.x1)), y1: Math.max(...v.map(c => c.y1)), n: v.length, fs: med, cs: v }))
+    .sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  // 글자 인식
+  say(`매대명 ${boxes.length}개 글자 읽는 중… (처음엔 1~2분 걸려요)`);
+  const T = await loadScript(TESS_URL, 'Tesseract'), base = new URL('lib/tess/', location.href).href;
+  const worker = await T.createWorker('kor', 1, { workerPath: base + 'worker.min.js', corePath: base, langPath: base.replace(/\/$/, ''), gzip: true });
+  await worker.setParameters({ tessedit_pageseg_mode: '6' });
+  const groups = [];
+  try {
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i], X0 = Math.max(0, Math.floor(b.x0 * SC) - 2), Y0 = Math.max(0, Math.floor(b.y0 * SC) - 2), X1 = Math.min(cw, Math.ceil(b.x1 * SC) + 2), Y1 = Math.min(ch, Math.ceil(b.y1 * SC) + 2);
+      const bw = X1 - X0, bh = Y1 - Y0, Z = 2, pad = 20, c2 = document.createElement('canvas'); c2.width = bw * Z + pad * 2; c2.height = bh * Z + pad * 2;
+      const g2 = c2.getContext('2d'), im = g2.createImageData(bw, bh);
+      for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const v = mask[(Y0 + y) * cw + X0 + x] ? 0 : 255, o = (y * bw + x) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255; }
+      const t = document.createElement('canvas'); t.width = bw; t.height = bh; t.getContext('2d').putImageData(im, 0, 0);
+      g2.fillStyle = '#fff'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(t, pad, pad, bw * Z, bh * Z);
+      const { data } = await worker.recognize(c2);
+      const lines = String(data.text || '').split('\n').map(l => l.replace(/[|\\`~^_=“”"'‘’]/g, '').replace(/\s+/g, ' ').trim()).filter(l => /[가-힣A-Za-z0-9]/.test(l));
+      const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
+      if (!compact || (data.confidence < 35 && compact.length <= 2)) continue; // 화살표·점 같은 빨간 표시는 뺌
+      const x = +b.x0.toFixed(2), y = +b.y0.toFixed(2), w = +(b.x1 - b.x0).toFixed(2), hh = +(b.y1 - b.y0).toFixed(2), r2 = n => +n.toFixed(2);
+      // 줄마다 조각 (나누기용): 글자 조각을 줄로 묶고, 읽은 줄 수와 같으면 줄마다 이름
+      const rows = [];
+      for (const c of b.cs.slice().sort((p, q) => (p.y0 + p.y1) - (q.y0 + q.y1))) { const r = rows.at(-1), cy = (c.y0 + c.y1) / 2; if (r && Math.abs(cy - r.cy) < b.fs * 0.6) { r.x0 = Math.min(r.x0, c.x0); r.y0 = Math.min(r.y0, c.y0); r.x1 = Math.max(r.x1, c.x1); r.y1 = Math.max(r.y1, c.y1); } else rows.push({ cy, x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 }); }
+      const parts = rows.length === lines.length && rows.length > 1 ? rows.map((r, k) => ({ text: lines[k], x: r2(r.x0), y: r2(r.y0), w: r2(r.x1 - r.x0), h: r2(r.y1 - r.y0), lh: r2(b.fs) })) : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
+      groups.push({ id: 'g' + groups.length, ko, lines, parts, x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(data.confidence) });
+      if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
+    }
+  } finally { await worker.terminate(); }
+  return { w: W, h: H, image, groups, dims: [], mods: [], lines: groups.length, darkKept: 0 };
+}
 async function uploadDrawing(file) {
-  if (!/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') { alert('SVG 파일만 올릴 수 있어요.\n(Illustrator: 파일 → 내보내기 → 다른 이름으로 내보내기 → SVG. 글씨는 윤곽선 만들기 하지 말아주세요)'); return; }
+  const isPdf = /\.(pdf|ai)$/i.test(file.name) || file.type === 'application/pdf';
+  if (!isPdf && !/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') { alert('SVG·PDF·AI 파일만 올릴 수 있어요.\n(Illustrator: 파일 → 내보내기 → 다른 이름으로 내보내기 → SVG. 글씨는 윤곽선 만들기 하지 말아주세요)'); return; }
   const id = dw.id, store = state.stores.find(x => x.id === id);
   let an;
-  try { toast('도면을 읽는 중…'); an = await analyzeSvg(await file.text()); }
+  try { toast('도면을 읽는 중…'); an = isPdf ? await analyzePdf(file, toast) : await analyzeSvg(await file.text()); }
   catch (e) { alert('도면을 읽지 못했어요: ' + e.message); return; }
   if (!an.groups.length && !confirm('도면에서 글자를 하나도 못 읽었어요.\n매대명을 윤곽선 만들기 했다면 POG에서 매대를 고를 수 없어요.\n그래도 올릴까요?')) return;
   const latest = dw.versions.at(-1), redo = latest && !latest.exported; // 아직 안 내보낸 버전이면 그 버전을 바꿈
   const no = redo ? latest.no : (latest?.no || 0) + 1, vId = redo ? latest.id : 'v' + no, ts = Date.now();
-  const path = `drawings/${id}/v${no}_${ts}.svg`;
+  const path = `drawings/${id}/v${no}_${ts}.${an.image ? 'jpg' : 'svg'}`;
   try {
     toast('도면 올리는 중…');
     const typ = { contentType: 'image/svg+xml' };
-    await uploadBytes(sRef(st, path), new Blob([an.clean], { type: 'image/svg+xml' }), typ);
+    if (an.image) await uploadBytes(sRef(st, path), an.image, { contentType: 'image/jpeg' }); // PDF·AI 도면 = 그림
+    else await uploadBytes(sRef(st, path), new Blob([an.clean], { type: 'image/svg+xml' }), typ);
     const url = await getDownloadURL(sRef(st, path));
     if (redo) for (const p of [latest.path, latest.basePath]) if (p) deleteObject(sRef(st, p)).catch(() => { });
     await setDoc(doc(db, 'drawings', id, 'versions', vId), {
-      no, fileName: file.name, url, path, w: an.w, h: an.h, groups: an.groups, dims: an.dims, mods: an.mods, lineCount: an.lines,
+      no, fileName: file.name, url, path, w: an.w, h: an.h, groups: an.groups, dims: an.dims, mods: an.mods, lineCount: an.lines, kind: an.image ? 'pdf' : 'svg',
       memo: redo ? (latest.memo || '') : '', exported: false, uploadedAt: serverTimestamp(), uploadedBy: me(), uploadedByName: myName(),
     });
     await setDoc(doc(db, 'drawings', id), { ...dwStoreInfo(store), storeId: id, latestNo: no, latestExported: false, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true });
@@ -4340,6 +4426,13 @@ function groupEditor(v) {
     save([...groups.filter(x => !picks.has(x.id)), one], `${sel.length}개를 '${one.ko}'로 합쳤어요`);
   };
   const g1 = sel.length === 1 ? sel[0] : null;
+  // 이름 고치기 (사용자: PDF·AI 도면은 글자 인식이라 틀린 글자가 있음)
+  const nameInp = g1 ? h('input', { class: 'se-input', value: g1.ko || '' }) : null;
+  const rename = () => {
+    const t = nameInp.value.trim(); if (!t || t === g1.ko) return;
+    save(groups.map(x => x.id === g1.id ? { ...x, ko: t, lines: [t], parts: (x.parts || []).length === 1 ? [{ ...x.parts[0], text: t }] : x.parts } : x), `'${g1.ko}' → '${t}'로 고쳤어요`);
+  };
+  nameInp?.addEventListener('keydown', e => { if (e.key === 'Enter') rename(); });
   // 고른 매대의 팀 정하기 (사용자: 도면 팀별 보기). 비우면 POG 연결로 자동
   const teams = dwTeamList(v);
   const tsel = h('select', { class: 'nb-sel' }, h('option', { value: '' }, '자동 (그 팀 POG와 연결된 매대)'), ...teams.map(t => h('option', { value: t }, t)), h('option', { value: '__new' }, '+ 다른 팀 이름 쓰기'));
@@ -4363,7 +4456,9 @@ function groupEditor(v) {
       h('button', { class: 'btn small', disabled: !(g1 && (g1.parts?.length || 0) > 1), onclick: split }, '나누기'),
       h('button', { class: 'btn small', disabled: sel.length < 2, onclick: merge }, sel.length >= 2 ? `${sel.length}개 합치기` : '합치기'),
       sel.length ? h('button', { class: 'btn small ghost', onclick: () => { dw.picks = new Set(); paintPicks(); renderDwSide(); } }, '고른 것 지우기') : null),
-    g1 && !g1.parts ? h('div', { class: 'tr-why' }, '예전에 올린 도면이라 나눌 수 없어요. 다시 올리면 돼요.') : null), teamSec);
+    g1 && !g1.parts ? h('div', { class: 'tr-why' }, '예전에 올린 도면이라 나눌 수 없어요. 다시 올리면 돼요.') : null,
+    g1 ? h('div', {}, h('label', { class: 'se-lab' }, '고른 매대 이름 고치기'), h('div', { class: 'se-btns' }, nameInp, h('button', { class: 'btn small', onclick: rename }, '고치기'))) : null,
+    v.kind === 'pdf' ? h('p', { class: 'se-help' }, 'PDF·AI 도면은 빨간 매대명을 글자 인식으로 읽어서 틀린 글자가 있을 수 있어요(예: 1 → ], 덤 → 팀). 칸을 하나 골라 이름을 고치세요.') : null), teamSec);
 }
 $('#dw-side').addEventListener('focusout', () => setTimeout(() => renderDwSide(), 80));
 
