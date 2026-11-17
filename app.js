@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118c';
+const APP_VER = '20261118d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3732,7 +3732,7 @@ async function analyzePdf(file, say = () => { }) {
   // 글자 인식
   say(`매대명 ${boxes.length}개 글자 읽는 중… (처음엔 1~2분 걸려요)`);
   const T = await loadScript(TESS_URL, 'Tesseract'), base = new URL('lib/tess/', location.href).href;
-  const worker = await T.createWorker('kor', 1, { workerPath: base + 'worker.min.js', corePath: base, langPath: base.replace(/\/$/, ''), gzip: true });
+  const worker = await T.createWorker(['kor', 'eng'], 1, { workerPath: base + 'worker.min.js', corePath: base, langPath: base.replace(/\/$/, ''), gzip: true });
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
   const groups = [];
   // 네모 하나(도면 좌표)를 잘라서 글자 인식 → 줄들 · 점수
@@ -3745,14 +3745,20 @@ async function analyzePdf(file, say = () => { }) {
     const t = document.createElement('canvas'); t.width = bw; t.height = bh; t.getContext('2d').putImageData(im, 0, 0);
     g2.fillStyle = '#fff'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(t, pad, pad, bw * Z, bh * Z);
     const { data } = await worker.recognize(c2);
-    return { lines: clean(data.text), conf: data.confidence };
+    let best = { lines: clean(data.text), conf: data.confidence };
+    if (bh > bw * 2.2) for (const a of [-90, 90]) { // 세로로 쓴 매대명 (사용자): 눕혀서도 읽어 보고 더 잘 읽힌 쪽
+      const c3 = document.createElement('canvas'); c3.width = c2.height; c3.height = c2.width; const g3 = c3.getContext('2d');
+      g3.fillStyle = '#fff'; g3.fillRect(0, 0, c3.width, c3.height); g3.translate(c3.width / 2, c3.height / 2); g3.rotate(a * Math.PI / 180); g3.drawImage(c2, -c2.width / 2, -c2.height / 2);
+      const r3 = (await worker.recognize(c3)).data, l3 = clean(r3.text);
+      if (l3.length && r3.confidence > best.conf + 5) best = { lines: l3, conf: r3.confidence };
+    }
+    return best;
   };
-  const r2 = n => +n.toFixed(2);
+  const r2 = n => +n.toFixed(2), skipped = [];
   try {
     for (let i = 0; i < boxes.length; i++) {
-      const b = boxes[i], { lines, conf } = await readBox(b);
-      const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
-      if (!compact || (conf < 35 && compact.length <= 2)) continue; // 화살표·점 같은 빨간 표시는 뺌
+      const b = boxes[i];
+      let { lines, conf } = await readBox(b);
       const x = r2(b.x0), y = r2(b.y0), w = r2(b.x1 - b.x0), hh = r2(b.y1 - b.y0);
       // 나누기용 조각 (사용자: 붙은 매대명이 한 묶음이 되면 나눌 수 있게): 줄마다, 같은 줄에서도 글자 하나 넘게 떨어지면 따로 → 조각마다 따로 글자 인식
       const rows = [];
@@ -3768,17 +3774,19 @@ async function analyzePdf(file, say = () => { }) {
           else segs.push(cur = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 });
         }
       }
-      let parts = [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
-      if (segs.length > 1) {
-        const ps = [];
-        for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); if (tx.replace(/\s+/g, '')) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs) }); }
-        if (ps.length > 1) parts = ps;
-      }
+      let ps = [];
+      if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); if (tx.replace(/\s+/g, '')) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs) }); }
+      // 통째로는 못 읽었는데(사용자: 비스듬히 놓인 두 매대명이 표시선으로 붙어 통째 인식이 비었음) 조각으로 읽히면 조각 글자로
+      if (!joinLabel(lines).replace(/\s+/g, '') && ps.length) { lines = ps.map(p => p.text); conf = 60; }
+      if (!joinLabel(lines).replace(/\s+/g, '') && b.n > 3) { await worker.setParameters({ tessedit_pageseg_mode: '11' }); const rd = await readBox(b); await worker.setParameters({ tessedit_pageseg_mode: '6' }); if (rd.lines.length) { lines = rd.lines; conf = Math.max(conf, rd.conf); } }
+      const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
+      if (!compact || (conf < 35 && compact.length <= 2 && b.n < 4)) { skipped.push({ ko, conf: Math.round(conf), x, y, w, h: hh }); continue; } // 화살표·점 같은 빨간 표시는 뺌
+      const parts = ps.length > 1 ? ps : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
       groups.push({ id: 'g' + groups.length, ko, lines, parts, x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
     }
   } finally { await worker.terminate(); }
-  return { w: W, h: H, image, groups, dims: [], mods: [], lines: groups.length, darkKept: 0 };
+  return { w: W, h: H, image, groups, dims: [], mods: [], lines: groups.length, darkKept: 0, skipped };
 }
 async function uploadDrawing(file) {
   const isPdf = /\.(pdf|ai)$/i.test(file.name) || file.type === 'application/pdf';
