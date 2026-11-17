@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118b';
+const APP_VER = '20261118c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3681,6 +3681,20 @@ async function analyzePdf(file, say = () => { }) {
   const SC = 4, cv = await render(SC), cw = cv.width, ch = cv.height, px = cv.getContext('2d').getImageData(0, 0, cw, ch).data;
   const mask = new Uint8Array(cw * ch);
   for (let i = 0, j = 0; i < mask.length; i++, j += 4) { const r = px[j], g = px[j + 1], b = px[j + 2]; if (r > 150 && r - g > 80 && r - b > 80) mask[i] = 1; }
+  // 가는 빨간 선(치수선·지시선)은 지움 (사용자: 선이 매대명을 이어서 여러 매대명이 한 덩어리가 됐음).
+  // 글자보다 큰 덩어리(선, 또는 선에 붙은 글자)만 골라 그 안에서 굵기 3px 미만(선은 1~2px, 글자 획은 3px 이상)을 지움 → 보통 글자는 그대로
+  { const seen0 = new Uint8Array(cw * ch), st0 = new Int32Array(cw * ch), big = [];
+    for (let s0 = 0; s0 < mask.length; s0++) {
+      if (!mask[s0] || seen0[s0]) continue;
+      let sp = 0, x0 = cw, y0 = ch, x1 = 0, y1 = 0; const pts = []; st0[sp++] = s0; seen0[s0] = 1;
+      while (sp) { const k = st0[--sp], x = k % cw, y = (k - x) / cw; pts.push(k); if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue; const q = ny * cw + nx; if (mask[q] && !seen0[q]) { seen0[q] = 1; st0[sp++] = q; } } }
+      if (x1 - x0 > 12 * SC || y1 - y0 > 12 * SC) big.push(pts);
+    }
+    const run = (k, dx, dy) => { const x = k % cw, y = (k - x) / cw; let n = 1; for (let t = 1; t < 4; t++) { const nx = x + dx * t, ny = y + dy * t; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch || !mask[ny * cw + nx]) break; n++; } for (let t = 1; t < 4; t++) { const nx = x - dx * t, ny = y - dy * t; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch || !mask[ny * cw + nx]) break; n++; } return n; };
+    const kill = [];
+    for (const pts of big) for (const k of pts) if (Math.min(run(k, 1, 0), run(k, 0, 1)) < 3) kill.push(k);
+    for (const k of kill) mask[k] = 0; }
   // 붙어 있는 빨간 점 덩어리 (글자 조각)
   const seen = new Uint8Array(cw * ch), stack = new Int32Array(cw * ch), comps = [];
   for (let s0 = 0; s0 < mask.length; s0++) {
