@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261117v';
+const APP_VER = '20261117w';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1460,7 +1460,7 @@ function renderNotes(block) {
       }
       continue;
     }
-    const st = `left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px;`;
+    const st = `left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px;` + (n.t === 'img' && n.ang ? `transform:rotate(${n.ang}deg);` : ''); // 사진 회전 (사용자: 손잡이로 돌리기)
     let el;
     if (n.t === 'box') el = h('div', { class: 'nt nt-box', style: st + `border:${n.bw || 3}px solid ${n.color};background:${n.fill ? rgba(n.color, n.alpha ?? 0.3) : 'transparent'}` });
     else if (n.t === 'text') el = h('div', { class: 'nt nt-text', style: st + `background:${n.bg || 'transparent'};color:${n.color || '#222'};border:${n.border ? '2px solid ' + n.border : '0'}` },
@@ -1481,6 +1481,7 @@ function renderNotes(block) {
     if (ed) {
       el.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'move'));
       if (n.t === 'text') el.addEventListener('dblclick', e => { e.stopPropagation(); editNoteText(block, n, el); }); // 더블클릭 = 상자 안에서 바로 고치기 (사용자)
+      if (handles && n.t === 'img' && block._cropNote !== n.id) { const hr = h('div', { class: 'nh nh-rot', title: '끌어서 돌리기 (Shift = 15°씩)' }); hr.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'rot')); el.append(hr); }
       if (handles) for (const c of ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w']) { const hd = h('div', { class: 'nh nh-' + c }); hd.addEventListener('pointerdown', e => startNoteDrag(e, block, n, 'r-' + c)); el.append(hd); }
     }
     layer.append(el);
@@ -1516,9 +1517,19 @@ function startNoteDrag(e, block, n, mode) {
   const others = group ? block._notes.filter(x => x !== n && selIds(block).includes(x.id)).map(x => [x, { ...x }]) : [];
   let moved = false;
   block._dragging = true;
+  const ang = n.t === 'img' ? (n.ang || 0) : 0, ra = ang * Math.PI / 180, ca = Math.cos(ra), sa = Math.sin(ra);
+  const ctr = mode === 'rot' ? (() => { const r = e.currentTarget.parentElement.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })() : null;
   const mv = ev => {
-    const dx = (ev.clientX - sx) / z, dy = (ev.clientY - sy) / z;
+    let dx = (ev.clientX - sx) / z, dy = (ev.clientY - sy) / z;
     if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+    if (mode === 'rot') { // 회전: 사진 가운데 기준, Shift = 15°씩, 0·90·180·270 근처는 딱 맞춤
+      let a = Math.atan2(ev.clientY - ctr.y, ev.clientX - ctr.x) * 180 / Math.PI + 90;
+      a = ((a % 360) + 360) % 360;
+      if (ev.shiftKey) a = Math.round(a / 15) * 15; else { const q = Math.round(a / 90) * 90; if (Math.abs(a - q) < 4) a = q; }
+      n.ang = Math.round(a) % 360; if (!n.ang) delete n.ang;
+      renderNotes(block); return;
+    }
+    if (ang && mode.startsWith('r-')) { const lx = ca * dx + sa * dy, ly = -sa * dx + ca * dy; dx = lx; dy = ly; } // 화면 방향 → 사진 방향
     const mvOne = (m, oo) => { if (m.t === 'arrow') { m.x1 = oo.x1 + dx; m.y1 = oo.y1 + dy; m.x2 = oo.x2 + dx; m.y2 = oo.y2 + dy; } else { m.x = Math.round(oo.x + dx); m.y = Math.round(oo.y + dy); } };
     if (mode === 'move') { mvOne(n, o); others.forEach(([m, oo]) => mvOne(m, oo)); }
     else if (mode.startsWith('r-')) { // 네 모서리: 반대쪽 모서리는 그대로
@@ -1537,6 +1548,10 @@ function startNoteDrag(e, block, n, mode) {
       n.w = w; n.h = hh;
       n.x = west ? o.x + o.w - w : o.x;
       n.y = north ? o.y + o.h - hh : o.y;
+      }
+      if (ang) { // 돌린 사진: 가운데가 바뀐 만큼 돌려서 옮김 → 끄는 반대쪽 모서리가 제자리
+        const c0x = o.x + o.w / 2, c0y = o.y + o.h / 2, ddx = n.x + n.w / 2 - c0x, ddy = n.y + n.h / 2 - c0y;
+        n.x = c0x + ca * ddx - sa * ddy - n.w / 2; n.y = c0y + sa * ddx + ca * ddy - n.h / 2;
       }
     }
     else { n['x' + mode[1]] = o['x' + mode[1]] + dx; n['y' + mode[1]] = o['y' + mode[1]] + dy; }
@@ -1644,8 +1659,8 @@ function renderNoteBar(block) {
     };
     const endCropN = () => { block._cropNote = null; if (n.crop && n.crop.x <= 0.001 && n.crop.y <= 0.001 && n.crop.w >= 0.999 && n.crop.h >= 0.999) delete n.crop; saveNotes(block); renderNotes(block); renderNoteBar(block); };
     box.append(on ? h('span', { class: 'mut' }, '✂ 자르는 중: 모서리·변의 점을 안쪽으로 끌면 그만큼 잘려요 (흐린 부분 = 잘려 나가는 곳)') : h('span', { class: 'mut' }, '모서리 점 = 비율 그대로 크기 바꾸기 · 변 가운데 점 = 가로만·세로만 늘리고 줄이기'),
-      on ? '' : h('button', { class: 'btn small', title: '왼쪽으로 90° 돌리기', onclick: () => rotNote(-90) }, '⟲ 회전'),
-      on ? '' : h('button', { class: 'btn small', title: '오른쪽으로 90° 돌리기', onclick: () => rotNote(90) }, '⟳ 회전'),
+      on ? '' : h('span', { class: 'mut' }, `· 위쪽 동그라미를 끌면 돌아가요 (Shift = 15°씩)${n.ang ? ` · 지금 ${n.ang}°` : ''}`),
+      !on && (n.ang || n.rot) ? h('button', { class: 'btn small ghost', onclick: () => { if (n.rot) rotNote(-n.rot); delete n.ang; saveNotes(block); renderNotes(block); renderNoteBar(block); } }, '회전 없애기') : '',
       on ? h('button', { class: 'btn small primary', onclick: endCropN }, '✓ 자르기 끝') : h('button', { class: 'btn small', onclick: () => { if (((n.rot || 0) % 360 + 360) % 360) { toast('사진을 자를 때는 회전을 처음 방향(0°)으로 돌려 주세요'); return; } block._cropNote = n.id; if (!n.crop) n.crop = { x: 0, y: 0, w: 1, h: 1 }; renderNotes(block); renderNoteBar(block); } }, '✂ 사진 자르기'),
       n.crop && !on ? h('button', { class: 'btn small ghost', onclick: () => {
         const c = n.crop, r = ((n.rot || 0) % 360 + 360) % 360;
