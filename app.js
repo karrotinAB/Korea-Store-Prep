@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118o';
+const APP_VER = '20261118p';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3737,6 +3737,21 @@ function groupLines(lines) {
   const groups = [...m.values()].map(makeGroup).sort((a, b) => a.y - b.y || a.x - b.x);
   return groups.map((g, i) => ({ id: 'g' + i, ...g }));
 }
+// 나누기 조각: 조각이 2개 이상이면 그것, 하나뿐이면 글자로 나눔 (사용자: 붙어 있는 매대명이 더 안 나뉨)
+// → 줄마다, 줄 안에서는 띄어쓰기마다. 칸은 글자 수 비율로 나눔(대략). 한 번 더 누르면 더 잘게
+function splitParts(g) {
+  const parts = g.parts || [];
+  if (parts.length > 1) return parts;
+  const p = parts[0] || { x: g.x, y: g.y, w: g.w, h: g.h, lh: g.fs || g.h };
+  const lines = (g.lines || []).length > 1 ? g.lines : [p.text || g.ko || ''];
+  const ls = lines.map(l => String(l).trim()).filter(Boolean); if (!ls.length) return parts;
+  const out = [], lh = p.h / ls.length;
+  ls.forEach((l, i) => {
+    const ws = l.split(/\s+/).filter(Boolean), tot = ws.reduce((a, w) => a + w.length, 0) + (ws.length - 1) * 0.5; let cx = 0;
+    for (const w of ws) { const ww = p.w * w.length / tot; out.push({ text: w, x: +(p.x + p.w * cx / tot).toFixed(2), y: +(p.y + lh * i).toFixed(2), w: +ww.toFixed(2), h: +lh.toFixed(2), lh: +(p.lh || lh).toFixed(2) }); cx += w.length + 0.5; }
+  });
+  return out.length > 1 ? out : parts;
+}
 // 글자 조각들 → 매대명 묶음 하나 (parts = 나누기·합치기용 조각)
 function makeGroup(ls) {
   ls.sort((a, b) => a.y - b.y || a.x - b.x);
@@ -4684,7 +4699,7 @@ function groupEditor(v) {
     catch (e) { alert('저장하지 못했어요: ' + (e.code || e.message)); }
   };
   const split = () => {
-    const g = sel[0], parts = g.parts || [];
+    const g = sel[0], parts = splitParts(g);
     const pieces = parts.map((p, i) => ({ id: i ? nextId() : g.id, ...makeGroup([{ ...p }]) }));
     save(groups.flatMap(x => x.id === g.id ? pieces : [x]), `'${g.ko}'를 ${pieces.length}개로 나눴어요`);
   };
@@ -4724,7 +4739,7 @@ function groupEditor(v) {
     h('p', { class: 'se-help' }, '도면에서 파란 칸을 누르거나, 빈 곳을 끌어 네모로 여러 칸을 한 번에 고르세요. 한 매대인 글자들을 골라 [합치기]하면 한 묶음(매대 하나)이 되고, POG에는 \'글자1/글자2\'처럼 /로 이어져 들어가요. 한 칸에 여러 매대가 들어갔으면 [나누기].'),
     sel.length ? h('div', { class: 'dw-glist' }, ...sel.map(g => h('div', { class: 'dw-gi on', onclick: () => togglePick(g.id) }, h('span', { class: 'ko' }, g.ko), h('span', { class: 'en' }, '×')))) : null,
     h('div', { class: 'se-btns' },
-      h('button', { class: 'btn small', disabled: !(g1 && (g1.parts?.length || 0) > 1), onclick: split }, '나누기'),
+      h('button', { class: 'btn small', disabled: !(g1 && splitParts(g1).length > 1), onclick: split }, '나누기'),
       h('button', { class: 'btn small', disabled: sel.length < 2, onclick: merge }, sel.length >= 2 ? `${sel.length}개 합치기` : '합치기'),
       sel.length ? h('button', { class: 'btn small ghost', onclick: () => { dw.picks = new Set(); paintPicks(); renderDwSide(); } }, '고른 것 지우기') : null),
     g1 && !g1.parts ? h('div', { class: 'tr-why' }, '예전에 올린 도면이라 나눌 수 없어요. 다시 올리면 돼요.') : null,
