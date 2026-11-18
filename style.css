@@ -1177,3 +1177,7 @@ nav button { padding: 7px 10px; }
 .brand-panda { height: 40px; width: auto; margin-left: 8px; pointer-events: none; user-select: none; -webkit-user-drag: none; }
 @media (max-width: 760px) { .brand-panda { height: 30px; margin-left: 6px; } }
 .link-brand > b { margin-left: .3em; }
+/* 위쪽 막대 ARTBOX 글자 = 로고 그림 (사용자: 빨간 바탕을 뺀 로고) */
+.brand-logo { height: 38px; width: auto; display: block; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.link-brand > .brand-logo + b { margin-left: 10px; }
+@media (max-width: 760px) { .brand-logo { height: 30px; } .link-brand > .brand-logo + b { margin-left: 7px; } }

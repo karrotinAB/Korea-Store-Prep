@@ -126,3 +126,4 @@ Global Opening Prep의 CLAUDE.md 8장을 보면 된다. 여기서는 **국내판
 - **제품리스트 같은 코드는 한 줄 (사용자: POG에 같은 코드가 여러 번 진열되면 엑셀에도 여러 번 들어감)**: `exportProducts`가 제품코드(`code8`)로 처음 나온 줄만 남기고(`seenCode`), 그 제품이 있는 페이지를 모두 페이지 칸에 '3, 7'로. 코드가 없는 제품은 그대로. 합계·알림에 합친 개수.
 - **처음 화면 = 캐릭터 (사용자)**: 홈(`#v-home`)의 가운데 메뉴 칸(타일 6개)을 빼고 로그인 화면 캐릭터(`img/login-ufo.png`·`login-pandas.png`, `.home-chars`)를 가운데에. 우주선은 누르면 둥실(로그인 화면과 같은 `.login-ufo` 처리). 메뉴는 왼쪽(휴대폰은 위) 막대로.
 - **위쪽 막대 캐릭터 (사용자)**: 'ARTBOX 국내 POG' 옆에 `img/brand-ufo.png`(로그인 우주선에서 'STAFF ONLY' 표지를 뺀 것, 빛 아래쪽은 점점 투명. 판다 오려 낸 `brand-panda.png`는 사용자가 이상하다고 해서 안 씀) `.brand-panda` 40px(휴대폰 30px).
+- **위쪽 막대 ARTBOX 로고 (사용자)**: 'ARTBOX' 글자 대신 `img/brand-logo.png`(사용자가 준 빨간 바탕 로고에서 바탕을 뺀 것: 흰 글자·검은 화살표, 가장자리는 바탕색을 덜어 내 반투명) `.brand-logo` 38px(휴대폰 30px). 로그인 화면 글자는 그대로.
