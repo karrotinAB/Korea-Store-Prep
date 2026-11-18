@@ -1185,3 +1185,6 @@ nav button { padding: 7px 10px; }
 .link-brand > .brand-logo + b { font-size: 21.5px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
 .link-brand .brand-panda { height: 26px; }
 @media (max-width: 760px) { .brand-logo { height: 13px; } .link-brand > .brand-logo + b { font-size: 14.5px; margin-left: 6px; } .link-brand .brand-panda { height: 17px; margin-left: 5px; } }
+/* '국내 POG' 0.9배 + 가장 굵은 Noto Sans KR 900 (로고 글꼴과 비슷하게 · 사용자) */
+.link-brand > .brand-logo + b { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 19.5px; font-weight: 900; letter-spacing: -.3px; }
+@media (max-width: 760px) { .link-brand > .brand-logo + b { font-size: 13px; } }
