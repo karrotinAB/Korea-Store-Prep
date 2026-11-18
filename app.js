@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118k';
+const APP_VER = '20261118l';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3751,11 +3751,52 @@ function makeGroup(ls) {
 // 줄 잇기: '/'로 끝나거나 시작하면 붙이고, 아니면 띄어쓰기
 const joinLabel = ts => ts.reduce((acc, t) => !acc ? t : (acc.endsWith('/') || t.startsWith('/') ? acc + t : acc + ' ' + t), '');
 
+// 매대명 글자 인식 오타 고치기 (사용자: 오타가 많음). 자주 쓰는 매대명 낱말(전남대점 도면 등) + 그 매장 POG 매대명 낱말과 자모가 거의 같으면 그 낱말로.
+// 예: 아통완구 → 아동완구, 필봉3 → 필통3, 문구] → 문구1. 처음 읽은 글자는 groups[].ocrKo에 남김
+const MD_WORDS = '미니게임 상단 마리모 데코덴 ACC ART ART페인팅 BT마이크 BT스피커 BT이어폰 PEN RC카 TALE USB 가계부 가습기 가정용 건전지 게이밍 게임 게임굿즈 겨울 계산기 고데기 고데기집기 공병 공유기 구강 구슬꿰기 금고 기획매대 나노블럭 노트 노트북 다마고치 단어장 단우산 담곰이 델가드 드라이기 드론 디바이스 디제 디지털 딘토 레고 렌케 롤리폴리 롬앤 리락쿠마 리필심 릴렉싱 립밤 마니또 마라 마사지 마스크팩 마우스 말랑이 말하는인형 맥세이프 머그컵 머니건 멀티탭 메모수첩 메신저백 모나미 모카돌 목쿠션 몬치치 몬콜레 무드등 문구 문답카드 미니가방 미니게임류 미니청소기 미니카 미니편지지 미쓰비시 미피 민트 밍싱 바스볼 반프레스토 방송용 배터리 백팩 밴드 뱃지 보드게임 보석 보석자수 보조 봉투 부시로드 뷰티 브러쉬 사입랜덤 산리오 삼각대 생잡 생잡미니카 생잡인형 샥즈 섬유향수 세주인형 세트펜 셀카봉 소니엔젤 손거울 쇼핑백 수능시계 수면안대 수비니어 술게임 술잔 스마트 스마트홀더 스미스키 스케쥴러 스퀴시 스타킹 스타핑 스탑워치 스탠드 스터디플래너 스테들러 스티커 스티커북 스프링노트 슬라임 슬리퍼 식품 실바니안 심쿵펫 십자수 쌀알피규어 씰스티커 아동 아동노트 아동문구 아동수저 아동완구 아이러브 아크릴 애견 애니굿즈 애플존 앨범 양말 에어팟 에코백 여행 여행용 연인문답 오락실 오타마톤 온수팩 와와일공구 와펜 용지 우비 웹툰 위너스 이어폰 인솔 인형 인형소품 자동차블럭 자동차완구 자물쇠 자바라거치대 장우산 저금통 전자노트 점착메모 정리함 제브라 제작게임 지갑 지함 짱구 차량용 참류 추억의 카드 카드게임 카드지갑 카드케이스 카메라 캐릭터 캐릭터문구 캐릭터인형 캔디머신 컬렉션카드 케이블 케이스 케이팝 쿠모모 키덜트 키덜트키링 키링 키보드 키캡 키캡키링 타공판 타포린 탁상거울 탁상시계 탱글엔젤 텀블러 토미카 파버 파우치 파우치키링 파이롯트 파티 팔찌 패치 퍼글러 퍼즐 페인팅 펜텔 편지지 포맥스 포장지 포카 포켓몬 포켓몬카드 폰케이스 품수입 품스티커 프라임 프래그런스 플레잉 피규어 필통 하비굿즈 하비랜덤 한정 핫팩 핸드워시 핸드크림 향수 향수공병 허브리더기 헤드셋 헤드폰 헤어 헤어밴드 헬로굿스마일 형태펜 홀더 홈플레잉 화일 화장소품 화장품 화투'.split(' ');
+const JAMO_C = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', JAMO_V = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ', JAMO_T = ' ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ';
+const jamo = s => { let o = ''; for (const ch of s) { const c = ch.charCodeAt(0) - 0xAC00; if (c >= 0 && c < 11172) o += JAMO_C[Math.floor(c / 588)] + JAMO_V[Math.floor(c % 588 / 28)] + (c % 28 ? JAMO_T[c % 28] : ''); else o += ch.toLowerCase(); } return o; };
+const editDist = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, i) => i); for (let i = 1; i <= a.length; i++) { let p = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; } } return d[b.length]; };
+function mdLexicon(extra = []) {
+  const m = new Map();
+  for (const w of [...MD_WORDS, ...extra]) { const k = String(w).replace(/[^가-힣A-Za-z]/g, ''); if (k.length >= 2) m.set(k.toLowerCase(), { w: k, j: jamo(k) }); }
+  return [...m.values()];
+}
+function fixMdWord(core, lex) {
+  if (core.length < 2 || !/[가-힣]/.test(core) || lex.some(x => x.w === core)) return core;
+  const jc = jamo(core); let best = null, bd = 99, tie = false;
+  for (const x of lex) {
+    if (Math.abs(x.w.length - core.length) > 1 || !/[가-힣]/.test(x.w)) continue;
+    const d = editDist(jc, x.j); if (d < bd) { bd = d; best = x; tie = false; } else if (d === bd && best && x.w !== best.w) tie = true;
+  }
+  const lim = best && (best.w.length !== core.length || core.length === 2) ? 1 : Math.min(4, Math.max(1, Math.floor(Math.max(jc.length, best?.j.length || 0) * 0.3))); // 글자 수가 다르면 자모 하나 차이까지만
+  return best && !tie && bd <= lim ? best.w : core;
+}
+// 읽은 줄들 가운데 자주 쓰는 매대명 낱말과 똑같은 낱말 비율 (어느 읽기가 나은지 고를 때)
+function lexHit(lines, lex) {
+  const ws = lines.join(' ').split(/[\s\/,()]+/).map(w => w.replace(/\d+$/, '').replace(/[^가-힣A-Za-z]/g, '')).filter(w => w.length >= 2);
+  return ws.length ? ws.filter(w => lex.some(x => x.w === w)).length / ws.length : 0;
+}
+function fixMdLabel(text, lex) {
+  let t = String(text || '').replace(/[、。·•]/g, ' ').replace(/^[.,·\-]+/, '').replace(/(^|\s)(81|87|8T|B1|61|BI)(?=스피커|이어폰|마이크|헤드폰)/g, '$1BT').replace(/([가-힣0-9])[.,;:]+(?=$|\s)/g, '$1').replace(/\s+/g, ' ').trim().replace(/([가-힣])\s*[\]\|ㅣlI!](?=$|[\s\/,)])/g, '$11'); // 끝의 ] | ㅣ → 1
+  let toks = t.split(/(\s+|\/|,|:|\(|\))/);
+  toks = toks.map(tok => { const m = tok.match(/^([가-힣A-Za-z]+)(\d*)$/); return m ? fixMdWord(m[1], lex) + m[2] : tok; });
+  // 앞에 붙은 짧은 영어·숫자 부스러기(4 인형, XE 포장지) 빼기 — 자주 쓰는 낱말(ART, PEN, USB…)은 그대로
+  const known = w => lex.some(x => x.w.toLowerCase() === w.toLowerCase().replace(/[^a-z]/g, ''));
+  for (;;) {
+    const i = toks.findIndex(x => x.trim()), j = toks.findIndex((x, k) => k > i && x.trim());
+    if (i < 0 || j < 0 || !/^[A-Za-z0-9.?%;:]{1,4}$/.test(toks[i]) || !/[가-힣]/.test(toks[j]) || known(toks[i])) break;
+    toks = toks.slice(j);
+  }
+  return toks.join('').trim();
+}
+
 /* PDF·AI 도면 (사용자: 글자가 살아 있는 SVG가 없음 — 매대명이 윤곽선(그림)) → 페이지를 그림으로 그리고, 빨간 글씨 덩어리를 찾아 글자 인식(OCR)으로 매대명을 읽음.
    AI는 'PDF 호환 파일'이면 PDF로 열림. 도면 그림은 JPEG로 저장. 치수·A-1 같은 검은 글씨는 못 읽음(매대 타입은 POG 사이트 사이즈로 자동). 도구: lib/pdf(pdf.js)·lib/tess(tesseract.js, 한국어) */
 const PDF_URL = 'lib/pdf/pdf.min.js', TESS_URL = 'lib/tess/tesseract.min.js';
 const isImgFile = f => /\.(jpe?g|png)$/i.test(f.name) || /^image\/(jpeg|png)$/.test(f.type);
-async function analyzePdf(file, say = () => { }) {
+async function analyzePdf(file, say = () => { }, words = []) {
+  const lex = mdLexicon(words);
   let W, H, render;
   if (isImgFile(file)) { // JPG·PNG 도면 (사용자): 긴 쪽을 A4(1190)로 맞춰 PDF와 같은 크기 기준으로 읽음
     const bmp = await createImageBitmap(file), k = 1190 / Math.max(bmp.width, bmp.height);
@@ -3784,6 +3825,20 @@ async function analyzePdf(file, say = () => { }) {
   const SC = 4, cv = await render(SC), cw = cv.width, ch = cv.height, px = cv.getContext('2d').getImageData(0, 0, cw, ch).data;
   const mask = new Uint8Array(cw * ch);
   for (let i = 0, j = 0; i < mask.length; i++, j += 4) { const r = px[j], g = px[j + 1], b = px[j + 2]; if ((r > 150 && r - g > 80 && r - b > 80) || (r >= 90 && g <= r * 0.55 && b <= r * 0.6)) mask[i] = 1; } // 빨간 글씨 = 밝은 빨강 + 어두운 빨강 (사용자: 파랑·초록·보라 바탕 위 매대명은 빨강이 어둡게 섞여서 못 읽었음)
+  // 매대명 위를 지나가는 검은 선 메우기 (사용자: 오타가 많음 — 검은 선이 글자를 가로질러 획이 끊겨 '앨범'을 '르므'로 읽었음).
+  // 어두운 점이 좌우(또는 위아래)로 5px 안에 빨간 점 사이에 끼어 있으면 빨강으로
+  { const add = [], G = 5, dark = k => { const j = k * 4; return px[j] + px[j + 1] + px[j + 2] < 330; };
+    for (let y = 1; y < ch - 1; y++) for (let x = 1; x < cw - 1; x++) {
+      const k = y * cw + x; if (mask[k] || !dark(k)) continue;
+      let l = 0, r = 0, u = 0, d = 0;
+      for (let t = 1; t <= G && x - t >= 0; t++) { const q = k - t; if (mask[q]) { l = 1; break; } if (!dark(q)) break; }
+      if (l) for (let t = 1; t <= G && x + t < cw; t++) { const q = k + t; if (mask[q]) { r = 1; break; } if (!dark(q)) break; }
+      if (!(l && r)) { for (let t = 1; t <= G && y - t >= 0; t++) { const q = k - t * cw; if (mask[q]) { u = 1; break; } if (!dark(q)) break; }
+        if (u) for (let t = 1; t <= G && y + t < ch; t++) { const q = k + t * cw; if (mask[q]) { d = 1; break; } if (!dark(q)) break; } }
+      if ((l && r) || (u && d)) add.push(k);
+    }
+    for (const k of add) mask[k] = 1; }
+  const killed = new Uint8Array(cw * ch), SOFT = true;
   // 가는 빨간 선(치수선·지시선)은 지움 (사용자: 선이 매대명을 이어서 여러 매대명이 한 덩어리가 됐음).
   // 글자보다 큰 덩어리(선, 또는 선에 붙은 글자)만 골라 그 안에서 굵기 3px 미만(선은 1~2px, 글자 획은 3px 이상)을 지움 → 보통 글자는 그대로
   { const seen0 = new Uint8Array(cw * ch), st0 = new Int32Array(cw * ch), big = [];
@@ -3797,7 +3852,7 @@ async function analyzePdf(file, say = () => { }) {
     const run = (k, dx, dy) => { const x = k % cw, y = (k - x) / cw; let n = 1; for (let t = 1; t < 4; t++) { const nx = x + dx * t, ny = y + dy * t; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch || !mask[ny * cw + nx]) break; n++; } for (let t = 1; t < 4; t++) { const nx = x - dx * t, ny = y - dy * t; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch || !mask[ny * cw + nx]) break; n++; } return n; };
     const kill = [];
     for (const pts of big) for (const k of pts) if (Math.min(run(k, 1, 0), run(k, 0, 1)) < 3) kill.push(k);
-    for (const k of kill) mask[k] = 0; }
+    for (const k of kill) { mask[k] = 0; killed[k] = 1; } }
   // 붙어 있는 빨간 점 덩어리 (글자 조각)
   const seen = new Uint8Array(cw * ch), stack = new Int32Array(cw * ch), comps = [];
   for (let s0 = 0; s0 < mask.length; s0++) {
@@ -3844,7 +3899,16 @@ async function analyzePdf(file, say = () => { }) {
     const X0 = Math.max(0, Math.floor(b.x0 * SC) - 2), Y0 = Math.max(0, Math.floor(b.y0 * SC) - 2), X1 = Math.min(cw, Math.ceil(b.x1 * SC) + 2), Y1 = Math.min(ch, Math.ceil(b.y1 * SC) + 2);
     const bw = X1 - X0, bh = Y1 - Y0, pad = 20;
     const t = document.createElement('canvas'), tg = t.getContext('2d'), im = tg.createImageData(bw, bh); t.width = bw; t.height = bh;
-    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const v = mask[(Y0 + y) * cw + X0 + x] ? 0 : 255, o = (y * bw + x) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255; }
+    // 글자 테두리를 부드럽게: 빨간 점 근처(1칸)는 '얼마나 빨간지'로 진하기를 정함 (딱 잘라 흑백이면 테두리가 울퉁불퉁 → 비슷한 글자로 헷갈림)
+    const red = k => { const j = k * 4, r = px[j], g = px[j + 1], b = px[j + 2]; return r - Math.max(g, b); }, rs = [];
+    for (let y = 0; y < bh; y += 2) for (let x = 0; x < bw; x += 2) { const k = (Y0 + y) * cw + X0 + x; if (mask[k]) rs.push(red(k)); }
+    rs.sort((a, b) => a - b); const ref = Math.max(60, rs[Math.floor(rs.length * 0.5)] || 120);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      const k = (Y0 + y) * cw + X0 + x, o = (y * bw + x) * 4; let v = 255;
+      if (mask[k]) v = 0;
+      else if (SOFT && !killed[k]) { let nb = 0; for (let dy = -1; dy <= 1 && !nb; dy++) for (let dx = -1; dx <= 1; dx++) { const q = k + dy * cw + dx; if (q >= 0 && q < mask.length && mask[q]) { nb = 1; break; } } if (nb) v = Math.round(255 * (1 - Math.min(1, Math.max(0, red(k)) / ref))); }
+      im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255;
+    }
     t.getContext('2d').putImageData(im, 0, 0);
     const mk = (Z, bl) => { const c = document.createElement('canvas'); c.width = Math.round(bw * Z) + pad * 2; c.height = Math.round(bh * Z) + pad * 2; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); if (bl) g.filter = `blur(${bl}px)`; g.drawImage(t, pad, pad, Math.round(bw * Z), Math.round(bh * Z)); return c; };
     let c2 = mk(2, 0), data = (await worker.recognize(c2)).data;
@@ -3868,6 +3932,26 @@ async function analyzePdf(file, say = () => { }) {
       const b = boxes[i];
       let { lines, conf } = await readBox(b);
       const x = r2(b.x0), y = r2(b.y0), w = r2(b.x1 - b.x0), hh = r2(b.y1 - b.y0);
+      // 줄마다 따로 '한 줄' 모드로도 읽음 (사용자: 오타가 많음 — 여러 줄을 한꺼번에 읽으면 '앨범'을 '앨버 르므'로 읽었음). 받침만 따로 떨어진 낮은 줄은 위 줄에 붙임
+      const lr = [];
+      for (const c of b.cs.slice().sort((p, q) => p.y0 - q.y0)) {
+        const r = lr.find(r => Math.min(r.y1, c.y1) - Math.max(r.y0, c.y0) > Math.min(r.y1 - r.y0, c.y1 - c.y0) * 0.3);
+        if (r) { r.x0 = Math.min(r.x0, c.x0); r.x1 = Math.max(r.x1, c.x1); r.y0 = Math.min(r.y0, c.y0); r.y1 = Math.max(r.y1, c.y1); } else lr.push({ x0: c.x0, x1: c.x1, y0: c.y0, y1: c.y1 });
+      }
+      lr.sort((p, q) => p.y0 - q.y0);
+      for (let k = 1; k < lr.length; k++) { const p = lr[k - 1], q = lr[k]; if (q.y1 - q.y0 < (p.y1 - p.y0) * 0.6 && q.y0 - p.y1 < b.fs * 0.35 && q.x0 >= p.x0 - b.fs * 0.3 && q.x1 <= p.x1 + b.fs * 0.3) { p.x0 = Math.min(p.x0, q.x0); p.x1 = Math.max(p.x1, q.x1); p.y1 = Math.max(p.y1, q.y1); lr.splice(k--, 1); } }
+      // 작은 글씨는 받침 줄이 위 글자와 높이가 같아 따로 줄이 되기도 함 → 딱 붙은 줄을 합친 것도 읽어 보고 더 잘 읽힌 쪽
+      const lr2 = []; for (const r of lr) { const p = lr2.at(-1); if (p && r.y0 - p.y1 < b.fs * 0.15 && Math.min(p.x1, r.x1) - Math.max(p.x0, r.x0) > Math.min(p.x1 - p.x0, r.x1 - r.x0) * 0.5) { p.x0 = Math.min(p.x0, r.x0); p.x1 = Math.max(p.x1, r.x1); p.y1 = Math.max(p.y1, r.y1); } else lr2.push({ ...r }); }
+      if (lr.length && lr.length <= 5 && !(hh > w * 2.2)) {
+        await worker.setParameters({ tessedit_pageseg_mode: '7' });
+        for (const cand of lr2.length < lr.length ? [lr, lr2] : [lr]) {
+          const rr = []; for (const r of cand) rr.push(await readBox(r));
+          const rl = rr.map(z => z.lines.join(' ')).filter(Boolean), rc = rr.reduce((a, z) => a + z.conf, 0) / rr.length;
+          const nk = l => jamo(l.join('').replace(/[^가-힣A-Za-z0-9]/g, '')).length; // 글자가 많이 빠진 읽기는 안 씀 (줄 하나를 통째로 놓친 것)
+          if (rl.length && nk(rl) >= nk(lines) * 0.6 && rc + lexHit(rl, lex) * 15 >= conf + lexHit(lines, lex) * 15) { lines = rl; conf = rc; }
+        }
+        await worker.setParameters({ tessedit_pageseg_mode: '6' });
+      }
       // 나누기용 조각 (사용자: 붙은 매대명이 한 묶음이 되면 나눌 수 있게): 줄마다, 같은 줄에서도 글자 하나 넘게 떨어지면 따로 → 조각마다 따로 글자 인식
       const rows = [];
       for (const c of b.cs.slice().sort((p, q) => p.y0 - q.y0)) { // 줄 = 위아래로 겹치는 조각들 (받침·모음 조각 높이가 달라도 한 줄)
@@ -3883,25 +3967,37 @@ async function analyzePdf(file, say = () => { }) {
         }
       }
       let ps = [];
+      if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '7' }); // 조각 = 한 줄
       if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); if (tx.replace(/\s+/g, '')) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs) }); }
+      if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '6' });
       // 통째로는 못 읽었는데(사용자: 비스듬히 놓인 두 매대명이 표시선으로 붙어 통째 인식이 비었음) 조각으로 읽히면 조각 글자로
       if (!joinLabel(lines).replace(/\s+/g, '') && ps.length) { lines = ps.map(p => p.text); conf = 60; }
       if (!joinLabel(lines).replace(/\s+/g, '') && b.n > 3) { await worker.setParameters({ tessedit_pageseg_mode: '11' }); const rd = await readBox(b); await worker.setParameters({ tessedit_pageseg_mode: '6' }); if (rd.lines.length) { lines = rd.lines; conf = Math.max(conf, rd.conf); } }
+      const raw = joinLabel(lines); lines = lines.map(l => fixMdLabel(l, lex)).filter(Boolean);
+      if (lines.some(l => /[가-힣]/.test(l))) lines = lines.filter(l => /[가-힣]/.test(l) || lexHit([l], lex) > 0 || /^\/?[A-Za-z][A-Za-z0-9./&-]{2,}/.test(l) && l.length > 3); // 한글 줄이 있으면 'A'·'PES' 같은 짧은 부스러기 줄은 뺌 ps.forEach(q => { q.text = fixMdLabel(q.text, lex); }); // 오타 고치기
       const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
       if (!compact || (conf < 35 && compact.length <= 2 && b.n < 4) || Math.max(w, hh) < b.fs * 1.5) { skipped.push({ ko, conf: Math.round(conf), x, y, w, h: hh }); continue; } // 화살표·점 같은 빨간 표시는 뺌
       const parts = ps.length > 1 ? ps : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
-      groups.push({ id: 'g' + groups.length, ko, lines, parts, x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
+      groups.push({ id: 'g' + groups.length, ko, lines, parts, ...(raw !== ko ? { ocrKo: raw } : {}), x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
     }
   } finally { await worker.terminate(); }
   return { w: W, h: H, image, groups, dims: [], mods: [], lines: groups.length, darkKept: 0, skipped };
+}
+// 그 매장 POG 매대명 낱말 (도면 글자 인식 오타 고치기에 씀). POG가 없으면 빈 목록
+async function storeMdWords(st) {
+  if (!st) return [];
+  const ps = state.pogs.filter(p => p.storeId === st.id || (st.code && String(p.storeCode || '').trim() === String(st.code).trim())), out = new Set();
+  const lists = await Promise.all(ps.map(p => getDocs(collection(db, 'pogs', p.id, 'fixtures')).then(x => x.docs.map(d => d.data())).catch(() => [])));
+  for (const f of lists.flat()) for (const n of [f.headerName, f.mdName]) for (const w of nameWords(String(n || '').replace(/^\s*\d+[.)]\s*/, ''))) if (w.length >= 2) out.add(w.replace(/\d+$/, ''));
+  return [...out];
 }
 async function uploadDrawing(file) {
   const isPdf = /\.(pdf|ai)$/i.test(file.name) || file.type === 'application/pdf' || isImgFile(file); // JPG·PNG도 같은 방법(그림에서 빨간 글씨 읽기)
   if (!isPdf && !/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') { alert('SVG·PDF·AI·JPG 파일만 올릴 수 있어요.\n(Illustrator: 파일 → 내보내기 → 다른 이름으로 내보내기 → SVG. 글씨는 윤곽선 만들기 하지 말아주세요)'); return; }
   const id = dw.id, store = state.stores.find(x => x.id === id);
   let an;
-  try { toast('도면을 읽는 중…'); an = isPdf ? await analyzePdf(file, toast) : await analyzeSvg(await file.text()); }
+  try { toast('도면을 읽는 중…'); an = isPdf ? await analyzePdf(file, toast, await storeMdWords(store)) : await analyzeSvg(await file.text()); }
   catch (e) { alert('도면을 읽지 못했어요: ' + e.message); return; }
   if (!an.groups.length && !confirm('도면에서 글자를 하나도 못 읽었어요.\n매대명을 윤곽선 만들기 했다면 POG에서 매대를 고를 수 없어요.\n그래도 올릴까요?')) return;
   const latest = dw.versions.at(-1), redo = latest && !latest.exported; // 아직 안 내보낸 버전이면 그 버전을 바꿈
