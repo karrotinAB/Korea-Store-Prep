@@ -1188,3 +1188,4 @@ nav button { padding: 7px 10px; }
 /* '국내 POG' 0.9배 + 가장 굵은 Noto Sans KR 900 (로고 글꼴과 비슷하게 · 사용자) */
 .link-brand > .brand-logo + b { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 19.5px; font-weight: 900; letter-spacing: -.3px; }
 @media (max-width: 760px) { .link-brand > .brand-logo + b { font-size: 13px; } }
+.link-brand > .brand-logo + b { color: #111; } /* '국내 POG' 검정 (사용자) */
