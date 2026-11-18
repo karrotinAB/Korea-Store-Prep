@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118r';
+const APP_VER = '20261118s';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3125,21 +3125,24 @@ async function exportProducts(pog, fixtures) {
       return p.length >= 4 && p.slice(-3).every(s => /^\d+(\.\d+)?$/.test(s)) ? [p.slice(0, -3).join('_'), p.slice(-3).join('×')] : [g || '', ''];
     };
     const pages = composeFx([...fixtures].sort((a, b) => a.order - b.order));
-    const body = [];
+    const body = [], seenCode = new Map(); // 같은 제품코드가 여러 번 진열돼도 한 줄만 (사용자). 페이지 칸에 나온 페이지를 모두 '3, 7'로
     pages.forEach((pg, i) => {
       const no = i + 2; // 1번은 표지 (PDF 페이지 번호와 같게)
       for (const f of pg._parts || [pg]) { // 붙인 페이지는 매대마다 따로 계산
         if (!(f.items || []).length) continue;
         for (const r of productRows(cutVisible(f))) { // 매대 자르기로 잘라 낸(안 보이는) 제품은 뺌 (사용자)
-          const it = r.it, [cat, size] = grp(it.group || it.data?.groupname);
+          const it = r.it, [cat, size] = grp(it.group || it.data?.groupname), cd = code8(String(it.code || it.data?.item || '').trim());
+          if (cd && seenCode.has(cd)) { const row = seenCode.get(cd); if (!row._pages.includes(no)) row._pages.push(no); continue; }
           body.push([body.length + 1, no, displayName(f), r.lv ? r.lv + '단' : '', r.order, // 맨 앞 = 순번 (칸·선반/걸이 열은 뺌 · 사용자)
             code8(String(it.code || it.data?.item || '').trim()), it.name || '',
             Number(it.price || it.data?.amtk) || '', METHOD[it.data?.displaymethod] || '', cat, size,
-            it.pteam || '']); // 맨 끝 = 팀 = POG 사이트 '제품추가' 창의 팀구분 (예: 홈&라이프 · 사용자). 아래에서 B열로 옮김
+            it.pteam || '']); if (cd) { body.at(-1)._pages = [no]; seenCode.set(cd, body.at(-1)); } // 맨 끝 = 팀 = POG 사이트 '제품추가' 창의 팀구분 (예: 홈&라이프 · 사용자). 아래에서 B열로 옮김
         }
       }
     });
     if (!body.length) { toast('이 POG에 제품이 없어요'); return; }
+    const dupN = body.filter(r => (r._pages || []).length > 1).length;
+    body.forEach(r => { if ((r._pages || []).length > 1) r[1] = r._pages.join(', '); }); // 여러 페이지에 있는 제품 = 페이지 '3, 7'
     // 바코드 (바코드 등록에서 제품코드로 찾음, 한 제품에 여러 개면 쉼표로) → 제품코드 앞 열 (사용자)
     const codes = [...new Set(body.map(r => r[5]).filter(Boolean))], bcOf = new Map(), siteBc = new Map(); // siteBc = POG 사이트에서 같이 가져온 바코드 (먼저 씀)
     pages.forEach(pg => (pg._parts || [pg]).forEach(f => (f.items || []).forEach(it => { if (it.barcode) siteBc.set(code8(String(it.code || '').trim()), String(it.barcode)); })));
@@ -3152,7 +3155,7 @@ async function exportProducts(pog, fixtures) {
     } catch { toast('바코드를 읽지 못해서 바코드 칸은 비워 둘게요'); }
     body.forEach(r => r.splice(5, 0, siteBc.get(r[5]) || (bcOf.get(r[5]) || []).sort().join(', ')));
     body.forEach(r => r.splice(1, 0, r.pop())); // B열 = 팀 (제품 팀구분)
-    const noMid = body.filter(r => !r[1]).length, pageN = new Set(body.map(r => r[2])).size;
+    const noMid = body.filter(r => !r[1]).length, pageN = new Set(body.flatMap(r => r._pages || [r[2]])).size;
     // 열 순서 (사용자): 순번 · 팀구분 · 코드번호 · 제품명 · 판매가 · 분류 · 사이즈 · 바코드 · 페이지 — 단·순서·진열방식·매대명은 뺌
     const ORDER = [0, 1, 7, 8, 9, 11, 12, 6, 2];
     body.forEach((r, i) => { body[i] = ORDER.map(k => r[k]); });
@@ -3171,7 +3174,7 @@ async function exportProducts(pog, fixtures) {
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, ws, '제품리스트');
     X.writeFile(wb, `제품리스트_${pogTitle(pog)}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`.replace(/[\\/:*?"<>|]/g, ''));
-    toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (noMid ? ` · 팀이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
+    toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (dupN ? ` · 여러 페이지에 있는 제품 ${dupN}개는 한 줄로 합쳤어요` : '') + (noMid ? ` · 팀이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
   } catch (e) { toast(e.message); }
 }
 $('#ed-products').onclick = () => { if (state.currentPog?.status !== 'final') { alert('제품리스트 엑셀은 최종 POG 내보내기를 한 뒤에 받을 수 있어요.'); return; } exportProducts(state.currentPog, [...state.fixtures.values()]); };
