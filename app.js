@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118s';
+const APP_VER = '20261118t';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -202,8 +202,7 @@ $('#login-form').addEventListener('submit', async e => {
 });
 $('#logout').onclick = () => signOut(auth);
 // 로그인 화면 우주선: 누르면 둥실
-const ufo = $('.login-ufo');
-if (ufo) {
+for (const ufo of $$('.login-ufo')) { // 로그인 화면·처음 화면 둘 다
   ufo.onclick = () => { ufo.classList.remove('fly'); void ufo.offsetWidth; ufo.classList.add('fly'); };
   ufo.onanimationend = e => { if (e.animationName === 'ufo-fly') ufo.classList.remove('fly'); };
 }
