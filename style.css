@@ -1171,3 +1171,9 @@ nav button { padding: 7px 10px; }
 .home-chars .home-ufo { position: static; height: 170px; margin: 0 0 0 -150px; }
 .home-pandas { height: 340px; width: auto; display: block; pointer-events: none; user-select: none; -webkit-user-drag: none; }
 @media (max-width: 760px) { .home-chars .home-ufo { height: 110px; margin-left: -90px; } .home-pandas { height: 220px; } }
+
+/* 위쪽 막대 '국내 POG' 옆 캐릭터 (사용자) */
+.link-brand { display: inline-flex; align-items: center; }
+.brand-panda { height: 40px; width: auto; margin-left: 8px; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+@media (max-width: 760px) { .brand-panda { height: 30px; margin-left: 6px; } }
+.link-brand > b { margin-left: .3em; }
