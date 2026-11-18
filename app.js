@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118g';
+const APP_VER = '20261118h';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -624,7 +624,7 @@ function retryBroken(root = document, force = false) {
 setInterval(() => { if (document.visibilityState === 'visible') retryBroken(); }, 20000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') retryBroken(); });
 window.addEventListener('online', () => retryBroken(document, true));
-function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = false } = {}) {
+function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = false, noBlockCut = null } = {}) {
   fx = withBlocks(jjNorm(fx));
   const cut = !noCut && okCut(fx.cut) ? fx.cut : null; // 매대 자르기 (사용자): 이 네모 밖은 안 보이게
   const items = fx.items || [], hasBlocks = !!fx._blocks;
@@ -659,7 +659,8 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
   const baseEl = clipEl || inner;
   // 매대 나누기로 만든 묶음이 있으면: 묶음마다·나머지마다 그 제품·집기를 감싸는 곳만 회색 바탕 (사용자). 묶음은 따로 한 층(.cv-bgrp)이라 끌어서 옮길 수 있음
   const grpOf = new Map(); // 묶음 id → 층
-  const layer = o => (o._b && grpOf.get(o._b)) || baseEl;
+  const clipOf = new Map(); // 묶음 자르기: 묶음 id → 잘린 네모 안 층
+  const layer = o => (o._b && (clipOf.get(o._b) || grpOf.get(o._b))) || baseEl;
   if (hasBlocks) {
     const sets = [{ id: null }, ...fx._blocks];
     for (const b of sets) {
@@ -667,9 +668,18 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
       if (b.id) { const gEl = h('div', { class: 'cv-bgrp', 'data-b': b.id }); grpOf.set(b.id, gEl); (b.base ? baseEl : inner).append(gEl); }
       if (!mem.length) continue;
       const bx0 = Math.min(...mem.map(o => o.x)), by0 = Math.min(...mem.map(o => o.y)), bx1 = Math.max(...mem.map(o => o.x + o.w)), by1 = Math.max(...mem.map(o => o.y + Math.max(o.h || 0, 4)));
-      const back = h('div', { class: 'cv-back', style: `left:${bx0 - x0 + pad - 4}px;top:${by0 - y0 + pad - 4}px;width:${bx1 - bx0 + 8}px;height:${by1 - by0 + 8}px` });
-      (b.id ? grpOf.get(b.id) : baseEl).append(back);
-      if (b.id && blockUI) grpOf.get(b.id).append(h('div', { class: 'cv-blk no-print', 'data-b': b.id, style: `left:${bx0 - x0 + pad - 4}px;top:${by0 - y0 + pad - 4}px;width:${bx1 - bx0 + 8}px;height:${by1 - by0 + 8}px` },
+      // 옮겨 온 매대(묶음)도 따로 자르기 (사용자): b.cut = 묶음 범위에서 남길 부분 비율 → 그 네모 밖은 숨김 (PPT도 되게 overflow로)
+      const bc = b.id && !b.base && b.cut && b.id !== noBlockCut ? b.cut : null;
+      let fx0 = bx0, fy0 = by0, fx1 = bx1, fy1 = by1;
+      if (bc) {
+        fx0 = bx0 + (bx1 - bx0) * bc.l; fx1 = bx0 + (bx1 - bx0) * bc.r; fy0 = by0 + (by1 - by0) * bc.t; fy1 = by0 + (by1 - by0) * bc.b;
+        const L = fx0 - x0 + pad, T = fy0 - y0 + pad, inB = h('div', { style: `position:absolute;left:${-L}px;top:${-T}px;width:${bw}px;height:${bh}px` });
+        grpOf.get(b.id).append(h('div', { class: 'cv-bclip', style: `position:absolute;left:${L}px;top:${T}px;width:${fx1 - fx0}px;height:${fy1 - fy0}px;overflow:hidden` }, inB));
+        clipOf.set(b.id, inB);
+      }
+      const back = h('div', { class: 'cv-back', style: bc ? `left:${fx0 - x0 + pad}px;top:${fy0 - y0 + pad}px;width:${fx1 - fx0}px;height:${fy1 - fy0}px` : `left:${bx0 - x0 + pad - 4}px;top:${by0 - y0 + pad - 4}px;width:${bx1 - bx0 + 8}px;height:${by1 - by0 + 8}px` });
+      (b.id ? (clipOf.get(b.id) || grpOf.get(b.id)) : baseEl).append(back);
+      if (b.id && blockUI) grpOf.get(b.id).append(h('div', { class: 'cv-blk no-print', 'data-b': b.id, style: `left:${fx0 - x0 + pad - 4}px;top:${fy0 - y0 + pad - 4}px;width:${fx1 - fx0 + 8}px;height:${fy1 - fy0 + 8}px` },
         h('span', { class: 'cv-blk-h', 'data-b': b.id, title: b.base ? '끌어서 원래 매대 옮기기 · 누르면 선택' : '끌어서 옮기기 · 누르면 선택 (Ctrl+X로 잘라내기)' }, b.base ? '✥ 매대' : `✥ 묶음 ${fx._blocks.filter(x => !x.base).indexOf(b) + 1}`),
         h('span', { class: 'cv-blk-r', 'data-b': b.id, title: '끌어서 크기 조절' })));
     }
@@ -1053,7 +1063,7 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
       editable ? h('button', { class: 'ph-dw no-print', type: 'button', title: '도면에서 매대를 골라 헤더에 넣어요', onclick: () => openHeaderPicker(pog, fx) }, '📐 도면에서 고르기') : null,
       h('div', { class: 'ph-cat' }, teamLine(fx, fx._cat ?? fx.teamName))),
     h('div', { class: 'pb' + (fx.infoH ? ' info-h' : '') },
-      h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.infoH ? CANVAS_HW : CANVAS_W, fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable && !(fx._parts), noCut: state.crop?.id === fx.id })),
+      h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.infoH ? CANVAS_HW : CANVAS_W, fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable && !(fx._parts), noCut: state.crop?.id === fx.id && !state.crop.bid, noBlockCut: state.crop?.id === fx.id ? state.crop.bid || null : null })),
       infoSide(box, field, L, editable)),
     h('div', { class: 'pf1' }, L.mgr + ' ', h('span', { class: 'pf-mgr' }), editable ? mgrSelect(fx, pog) : null),
     h('div', { class: 'pf2' }, h('span', { class: 'pf-branch' })));
@@ -1277,7 +1287,7 @@ function buildFreePage(fx, pog, { editable, field, L = LABELS_KO, box, onItem })
   const hasCv = (fx.items || []).length || (fx.props || []).length;
   const body = hasCv || fx.info
     ? h('div', { class: 'pb' + (fx.info && fx.infoH ? ' info-h' : '') },
-      hasCv ? h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.info ? (fx.infoH ? CANVAS_HW : CANVAS_W) : CANVAS_W + 208, fx.info && fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable, noCut: state.crop?.id === fx.id })) : h('div', { class: 'pcanvas free-blank' }),
+      hasCv ? h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.info ? (fx.infoH ? CANVAS_HW : CANVAS_W) : CANVAS_W + 208, fx.info && fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable, noCut: state.crop?.id === fx.id && !state.crop.bid, noBlockCut: state.crop?.id === fx.id ? state.crop.bid || null : null })) : h('div', { class: 'pcanvas free-blank' }),
       fx.info ? infoSide(box, field, L, editable) : null)
     : h('div', { class: 'pb free-body' });
   const page = h('div', { class: 'page free' },
@@ -1976,6 +1986,12 @@ function splitSection(pog, fx, block) {
       fx.base ? btn('처음 상태로', () => resetBase(pog.id, fx), 'ghost') : null) : null,
     sel ? h('div', { class: 'se-kid' }, h('span', {}, '선택한 묶음: ', h('b', {}, `묶음 ${bl.indexOf(sel) + 1}`), ` · 제품 ${(sel.items || []).length}개 · 크기 ${pct(sel)}`)) : null,
     sel ? sizeInputs(pog, fx, sel.id, sel) : null,
+    sel && state.crop?.bid === sel.id ? h('div', { class: 'se-btns' }, h('p', { class: 'se-help' }, '파란 네모 안만 남아요. 다 맞추면 [✓ 자르기] (Enter), 그만두려면 Esc.'),
+      h('button', { class: 'btn small primary', onclick: () => applyCrop(pog.id, fx) }, '✓ 자르기'),
+      sel.cut ? h('button', { class: 'btn small ghost', onclick: () => clearCrop(pog.id, fx, sel.id) }, '자르기 없애기') : null,
+      h('button', { class: 'btn small ghost', onclick: () => endCrop(fx.id) }, '취소'))
+      : sel ? h('div', { class: 'se-btns' }, h('button', { class: 'btn small', onclick: () => startCrop(fx, sel.id) }, sel.cut ? '⬚ 이 매대 자르기 고치기' : '⬚ 이 매대만 자르기'),
+        sel.cut ? h('button', { class: 'btn small ghost', onclick: () => clearCrop(pog.id, fx, sel.id) }, '자르기 없애기') : null) : null,
     sel ? h('div', { class: 'se-btns' }, btn('✂ 잘라내기 (Ctrl+X)', () => cutBlock(pog.id, fx, sel)), btn('제자리로', () => saveGroup(pog.id, fx, sel.id, { dx: 0, dy: 0 }), 'ghost'),
       btn('원래 크기', () => saveGroup(pog.id, fx, sel.id, { s: 1, sx: 1, sy: 1 }), 'ghost'),
       btn('묶음 풀기', () => saveBlocks(pog.id, fx, bl.filter(b => b.id !== sel.id), sel), 'ghost')) : null);
@@ -2083,21 +2099,37 @@ function saveBlocks(pogId, fx, list, unbake, keepSel = null) {
    fx.cut = { x0, y0, x1, y1 } (그림 좌표 = 묶음 위치를 반영한 뒤, cvBox·frame과 같음). 이 네모만 보이고 그 안을 페이지 칸에 꽉 차게 그림.
    자르는 중(state.crop)에는 그 페이지를 자르기 전 그림으로 다시 그리고 파란 네모(.crop-box)를 올림. 네모 안을 끌면 옮기고, 가장자리·모서리를 끌면 크기 */
 const okCut = c => !!c && c.x1 - c.x0 > 4 && c.y1 - c.y0 > 4;
-function startCrop(fx) {
+function startCrop(fx, bid = null) { // bid = 옮겨 온 매대(묶음) 자르기
   state.split = null;
-  state.crop = { id: fx.id, box: null };
-  rebuildPage(fx.id, null); renderSidePanel();
+  state.crop = { id: fx.id, box: null, bid };
+  rebuildPage(fx.id, bid); renderSidePanel(); // 묶음 자르기는 그 묶음을 고른 채로 (오른쪽 패널에 ✓ 자르기)
 }
 function endCrop(id) { state.crop = null; rebuildPage(id, null); renderSidePanel(); }
+// 묶음의 지금 범위 (그림 좌표)
+function blockBox(fx, bid) {
+  const T = withBlocks(fx), mem = [...(T.panels || []), ...(T.props || []), ...(T.items || [])].filter(o => o._b === bid && o.w > 0);
+  if (!mem.length) return null;
+  return { x0: Math.min(...mem.map(o => o.x)), y0: Math.min(...mem.map(o => o.y)), x1: Math.max(...mem.map(o => o.x + o.w)), y1: Math.max(...mem.map(o => o.y + Math.max(o.h || 0, 4))) };
+}
 function applyCrop(pogId, fx) {
   const c = state.crop; if (!c?.box) return;
+  if (c.bid) { // 옮겨 온 매대: 묶음 범위에 대한 비율로 저장 (옮기거나 키워도 같은 부분이 남게)
+    const bb = blockBox(fx, c.bid), g = (fx.blocks || []).find(x => x.id === c.bid); if (!bb || !g) { endCrop(fx.id); return; }
+    const W = bb.x1 - bb.x0 || 1, H = bb.y1 - bb.y0 || 1, cl = v => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+    const cut = { l: cl((c.box.x0 - bb.x0) / W), t: cl((c.box.y0 - bb.y0) / H), r: cl((c.box.x1 - bb.x0) / W), b: cl((c.box.y1 - bb.y0) / H) };
+    if (cut.r - cut.l < 0.02 || cut.b - cut.t < 0.02) { toast('자를 네모가 너무 작아요'); return; }
+    state.crop = null;
+    saveGroup(pogId, fx, c.bid, { cut: cut.l <= 0 && cut.t <= 0 && cut.r >= 1 && cut.b >= 1 ? null : cut }, c.bid); renderSidePanel();
+    toast('옮겨 온 매대를 잘랐어요 (Ctrl+Z로 되돌릴 수 있어요)'); return;
+  }
   const r = v => Math.round(v * 10) / 10, b = { x0: r(c.box.x0), y0: r(c.box.y0), x1: r(c.box.x1), y1: r(c.box.y1) };
   if (!okCut(b)) { toast('자를 네모가 너무 작아요'); return; }
   saveFx(pogId, fx.id, 'cut', b); fx.cut = b;
   endCrop(fx.id);
   toast('매대 그림을 잘랐어요. 다시 넓히려면 ‘매대 자르기’를 다시 누르세요 (Ctrl+Z로 되돌릴 수 있어요)');
 }
-function clearCrop(pogId, fx) {
+function clearCrop(pogId, fx, bid = state.crop?.bid) {
+  if (bid) { state.crop = null; saveGroup(pogId, fx, bid, { cut: null }, bid); renderSidePanel(); toast('옮겨 온 매대 자르기를 없앴어요'); return; }
   if (fx.cut) { saveFx(pogId, fx.id, 'cut', null); fx.cut = null; }
   endCrop(fx.id);
   toast('자르기를 없앴어요. 원래 매대 그림 그대로 보여요');
@@ -2109,7 +2141,14 @@ function paintCrop(block) {
   const sc = inn._sc, L = parseFloat(inn.style.left) || 0, p = inn._pad;
   const toPx = (x, y) => ({ x: L + (x - inn._x0 + p) * sc, y: (y - inn._y0 + p) * sc });
   const fromPx = (x, y) => ({ x: (x - L) / sc + inn._x0 - p, y: y / sc + inn._y0 - p });
-  if (!c.box) { const fx = state.fixtures.get(block._fx); c.box = okCut(fx?.cut) ? { ...fx.cut } : { x0: inn._x0 - p, y0: inn._y0 - p, x1: inn._x1 + p, y1: inn._y1 + p }; }
+  if (!c.box) {
+    const fx = state.fixtures.get(block._fx);
+    if (c.bid) { // 옮겨 온 매대: 지금 자른 부분(없으면 묶음 전체)부터
+      const bb = fx && blockBox(fx, c.bid), g = fx && (fx.blocks || []).find(x => x.id === c.bid); if (!bb) return;
+      const k = g?.cut, W = bb.x1 - bb.x0, H = bb.y1 - bb.y0;
+      c.box = k ? { x0: bb.x0 + W * k.l, y0: bb.y0 + H * k.t, x1: bb.x0 + W * k.r, y1: bb.y0 + H * k.b } : { ...bb };
+    } else c.box = okCut(fx?.cut) ? { ...fx.cut } : { x0: inn._x0 - p, y0: inn._y0 - p, x1: inn._x1 + p, y1: inn._y1 + p };
+  }
   const lo = fromPx(0, 0), hi = fromPx(cv.clientWidth, cv.clientHeight); // 그림 칸 밖으로는 못 나가게
   const el = h('div', { class: 'crop-box no-print', title: '안을 끌면 옮겨지고, 가장자리·모서리를 끌면 크기가 바뀌어요' },
     ...['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(k => h('span', { class: 'crop-h crop-' + k, 'data-k': k })));
@@ -2146,6 +2185,7 @@ document.addEventListener('keydown', e => {
 function cropSection(pog, fx, block) {
   const btn = (t, fn, cls = '') => h('button', { class: 'btn small ' + cls, onclick: fn }, t);
   const sec = (t, ...k) => h('section', { class: 'se-sec' }, h('h4', {}, t), ...k);
+  if (state.crop?.id === fx.id && state.crop.bid) return sec('매대 자르기', h('p', { class: 'se-help' }, '옮겨 온 매대를 자르는 중이에요. 위쪽 고른 묶음 칸에서 [✓ 자르기]를 누르세요.'));
   if (state.crop?.id === fx.id) return sec('매대 자르기',
     h('p', { class: 'se-help' }, '파란 네모 안만 남아요. 네모 안을 끌면 옮겨지고, 가장자리·모서리의 작은 네모를 끌면 크기가 바뀌어요. 다 맞추면 [✓ 자르기] (Enter), 그만두려면 Esc.'),
     h('div', { class: 'se-btns' }, btn('✓ 자르기', () => applyCrop(pog.id, fx), 'primary'),
@@ -2996,9 +3036,11 @@ $('#vw-nobc').onclick = () => exportNoBarcode(state.viewer.pog, state.viewer.fix
 // 순서: 페이지 → 칸 → 단(위에서부터, 선반·파이프를 같이 셈) → 왼쪽부터. 줄줄이처럼 선반이 없는 매대는 위에서부터
 // 매대 자르기(cut) 밖으로 잘려 안 보이는 제품은 뺀 페이지 (붙여넣은 묶음 제품은 자르지 않으니 그대로)
 function cutVisible(f) {
-  if (!okCut(f.cut)) return f;
-  const T = withBlocks(f), c = f.cut;
-  const keep = new Set(T.items.filter(o => (o._b && o._b !== BASE) || ((o.x + o.w / 2) >= c.x0 && (o.x + o.w / 2) <= c.x1 && (o.y + (o.h || 0) / 2) >= c.y0 && (o.y + (o.h || 0) / 2) <= c.y1)).map(o => String(o.id)));
+  const bcut = (f.blocks || []).filter(b => b.cut);
+  if (!okCut(f.cut) && !bcut.length) return f;
+  const T = withBlocks(f), c = okCut(f.cut) ? f.cut : null, inR = (o, r) => { const cx = o.x + o.w / 2, cy = o.y + (o.h || 0) / 2; return cx >= r.x0 && cx <= r.x1 && cy >= r.y0 && cy <= r.y1; };
+  const rOf = new Map(bcut.map(b => { const bb = blockBox(f, b.id); if (!bb) return [b.id, null]; const W = bb.x1 - bb.x0, H = bb.y1 - bb.y0; return [b.id, { x0: bb.x0 + W * b.cut.l, y0: bb.y0 + H * b.cut.t, x1: bb.x0 + W * b.cut.r, y1: bb.y0 + H * b.cut.b }]; }));
+  const keep = new Set(T.items.filter(o => o._b && o._b !== BASE ? (!rOf.get(o._b) || inR(o, rOf.get(o._b))) : (!c || inR(o, c))).map(o => String(o.id)));
   return { ...f, items: (f.items || []).filter(o => keep.has(String(o.id))) };
 }
 function productRows(f) {
