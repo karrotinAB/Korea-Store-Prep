@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118l';
+const APP_VER = '20261118m';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3757,10 +3757,13 @@ const MD_WORDS = '미니게임 상단 마리모 데코덴 ACC ART ART페인팅 B
 const JAMO_C = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', JAMO_V = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ', JAMO_T = ' ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ';
 const jamo = s => { let o = ''; for (const ch of s) { const c = ch.charCodeAt(0) - 0xAC00; if (c >= 0 && c < 11172) o += JAMO_C[Math.floor(c / 588)] + JAMO_V[Math.floor(c % 588 / 28)] + (c % 28 ? JAMO_T[c % 28] : ''); else o += ch.toLowerCase(); } return o; };
 const editDist = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, i) => i); for (let i = 1; i <= a.length; i++) { let p = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; } } return d[b.length]; };
+const MD_PHRASES = '키링/참류 공병/렌케 금고/저금통 밴드/패치 와펜/뱃지 품/우비 뷰티/마사지 화투/플레잉 머그컵/술잔 제작게임/카드게임 추억의 게임/술게임 공병/렌케/구강 핸드크림/롬앤 브러쉬/에어롤 에어팟 케이스/애플존 파티/애견 메모수첩/스프링노트 디지털 케이블/멀티탭 캐릭터 인형/생잡인형 단우산/장우산'.split(' ').filter(x => x.includes('/'));
 function mdLexicon(extra = []) {
   const m = new Map();
   for (const w of [...MD_WORDS, ...extra]) { const k = String(w).replace(/[^가-힣A-Za-z]/g, ''); if (k.length >= 2) m.set(k.toLowerCase(), { w: k, j: jamo(k) }); }
-  return [...m.values()];
+  const out = [...m.values()];
+  out.phrases = [...new Set([...MD_PHRASES, ...extra.filter(w => /^[가-힣A-Za-z]+\/[가-힣A-Za-z]+$/.test(w))])].map(p => { const [a, b] = p.split('/'); return { a, b, ja: jamo(a), jb: jamo(b) }; });
+  return out;
 }
 function fixMdWord(core, lex) {
   if (core.length < 2 || !/[가-힣]/.test(core) || lex.some(x => x.w === core)) return core;
@@ -3781,6 +3784,13 @@ function fixMdLabel(text, lex) {
   let t = String(text || '').replace(/[、。·•]/g, ' ').replace(/^[.,·\-]+/, '').replace(/(^|\s)(81|87|8T|B1|61|BI)(?=스피커|이어폰|마이크|헤드폰)/g, '$1BT').replace(/([가-힣0-9])[.,;:]+(?=$|\s)/g, '$1').replace(/\s+/g, ' ').trim().replace(/([가-힣])\s*[\]\|ㅣlI!](?=$|[\s\/,)])/g, '$11'); // 끝의 ] | ㅣ → 1
   let toks = t.split(/(\s+|\/|,|:|\(|\))/);
   toks = toks.map(tok => { const m = tok.match(/^([가-힣A-Za-z]+)(\d*)$/); return m ? fixMdWord(m[1], lex) + m[2] : tok; });
+  // 'A/B' 낱말 묶음: 한쪽이 똑같고 다른 쪽이 거의 같으면 자주 쓰는 묶음으로 (사용자: 키링/참류 → 키링/참으로 읽힘)
+  for (let k = 0; k + 2 < toks.length; k++) {
+    if (toks[k + 1] !== '/') continue;
+    const A = toks[k].match(/^([가-힣A-Za-z]+)(\d*)$/), B = toks[k + 2].match(/^([가-힣A-Za-z]+)(\d*)$/); if (!A || !B) continue;
+    const hit = (lex.phrases || []).find(p => (p.a === A[1] && p.b !== B[1] && editDist(jamo(B[1]), p.jb) <= 2 && p.b.startsWith(B[1].slice(0, 1))) || (p.b === B[1] && p.a !== A[1] && editDist(jamo(A[1]), p.ja) <= 2 && p.a.endsWith(A[1].slice(-1))));
+    if (hit) { toks[k] = hit.a + A[2]; toks[k + 2] = hit.b + B[2]; }
+  }
   // 앞에 붙은 짧은 영어·숫자 부스러기(4 인형, XE 포장지) 빼기 — 자주 쓰는 낱말(ART, PEN, USB…)은 그대로
   const known = w => lex.some(x => x.w.toLowerCase() === w.toLowerCase().replace(/[^a-z]/g, ''));
   for (;;) {
@@ -3990,6 +4000,7 @@ async function storeMdWords(st) {
   const ps = state.pogs.filter(p => p.storeId === st.id || (st.code && String(p.storeCode || '').trim() === String(st.code).trim())), out = new Set();
   const lists = await Promise.all(ps.map(p => getDocs(collection(db, 'pogs', p.id, 'fixtures')).then(x => x.docs.map(d => d.data())).catch(() => [])));
   for (const f of lists.flat()) for (const n of [f.headerName, f.mdName]) for (const w of nameWords(String(n || '').replace(/^\s*\d+[.)]\s*/, ''))) if (w.length >= 2) out.add(w.replace(/\d+$/, ''));
+  for (const f of lists.flat()) for (const n of [f.headerName, f.mdName]) for (const m of String(n || '').matchAll(/([가-힣A-Za-z]+)\d*\s*\/\s*([가-힣A-Za-z]+)/g)) out.add(m[1] + '/' + m[2]); // 'A/B' 묶음
   return [...out];
 }
 async function uploadDrawing(file) {
