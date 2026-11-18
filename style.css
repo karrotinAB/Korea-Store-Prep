@@ -1156,3 +1156,12 @@ nav button { padding: 7px 10px; }
 /* 사진 회전 손잡이 (사용자) */
 .nh.nh-rot { left: calc(50% - 7px); top: -30px; width: 14px; height: 14px; border-radius: 50%; cursor: grab; background: #0a84ff; border-color: #fff; }
 .nh.nh-rot::after { content: ''; position: absolute; left: 4px; top: 12px; width: 2px; height: 16px; background: #0a84ff; }
+
+/* 매대·옮겨 온 매대를 고르면 네 변 가운데 검은 막대 = 끌어서 바로 자르기 (사용자) */
+.cv-blk-c { position: absolute; display: none; pointer-events: auto; background: #111; border: 1.5px solid #fff; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.3); z-index: 2; }
+.cv-blk.on .cv-blk-c { display: block; }
+.cv-blk-c-n, .cv-blk-c-s { left: calc(50% - 11px); width: 22px; height: 7px; cursor: ns-resize; }
+.cv-blk-c-n { top: -5px; } .cv-blk-c-s { bottom: -5px; }
+.cv-blk-c-e, .cv-blk-c-w { top: calc(50% - 11px); width: 7px; height: 22px; cursor: ew-resize; }
+.cv-blk-c-e { right: -5px; } .cv-blk-c-w { left: -5px; }
+.page-block .pcanvas .cv-bgrp:has(> .cv-blk) .cv-item { cursor: move; }

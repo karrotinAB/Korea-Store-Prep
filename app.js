@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118h';
+const APP_VER = '20261118j';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -648,13 +648,15 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
     x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y);
     x1 = Math.max(x1, o.x + o.w); y1 = Math.max(y1, o.y + Math.max(o.h || 0, 4));
   }
-  if (cut) ({ x0, y0, x1, y1 } = cut);
-  const pad = cut ? 0 : 8, bw = x1 - x0 + pad * 2, bh = y1 - y0 + pad * 2;
+  // 묶음이 있는 페이지는 자르기 해도 그림 크기(틀)를 그대로 두고 원래 매대만 그 자리에서 잘라 숨김 (사용자: 마우스로 자를 때 그림 전체가 확대돼 옮겨 온 매대가 밖으로 밀렸음)
+  const cutFrame = !!cut && !(hasBlocks && fx.frame);
+  if (cutFrame) ({ x0, y0, x1, y1 } = cut);
+  const pad = cutFrame ? 0 : 8, bw = x1 - x0 + pad * 2, bh = y1 - y0 + pad * 2;
   const sc = Math.min(W / bw, H / bh);
   const inner = h('div', { class: 'cv-in', style: `width:${bw}px;height:${bh}px;left:${(W - bw * sc) / 2}px;transform:scale(${sc})` });
   inner._sc = sc; inner._x0 = x0; inner._y0 = y0; inner._x1 = x1; inner._y1 = y1; inner._pad = pad;
   // 매대 자르기: 원래 매대만 네모 안으로 자르고, 붙여넣은 묶음은 자르지 않음 → 그림 칸 어디든 따로 옮길 수 있음 (사용자)
-  const clipEl = cut ? h('div', { class: 'cv-cut', style: `position:absolute;left:0;top:0;width:${bw}px;height:${bh}px;overflow:hidden` }) : null;
+  const clipEl = cutFrame ? h('div', { class: 'cv-cut', style: `position:absolute;left:0;top:0;width:${bw}px;height:${bh}px;overflow:hidden` }) : null;
   if (clipEl) inner.append(clipEl);
   const baseEl = clipEl || inner;
   // 매대 나누기로 만든 묶음이 있으면: 묶음마다·나머지마다 그 제품·집기를 감싸는 곳만 회색 바탕 (사용자). 묶음은 따로 한 층(.cv-bgrp)이라 끌어서 옮길 수 있음
@@ -669,10 +671,12 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
       if (!mem.length) continue;
       const bx0 = Math.min(...mem.map(o => o.x)), by0 = Math.min(...mem.map(o => o.y)), bx1 = Math.max(...mem.map(o => o.x + o.w)), by1 = Math.max(...mem.map(o => o.y + Math.max(o.h || 0, 4)));
       // 옮겨 온 매대(묶음)도 따로 자르기 (사용자): b.cut = 묶음 범위에서 남길 부분 비율 → 그 네모 밖은 숨김 (PPT도 되게 overflow로)
-      const bc = b.id && !b.base && b.cut && b.id !== noBlockCut ? b.cut : null;
+      const bf = b.id && !b.base && b.cut && b.id !== noBlockCut ? b.cut : null, baseCut = b.base && cut && !cutFrame;
+      const bc = bf || baseCut;
       let fx0 = bx0, fy0 = by0, fx1 = bx1, fy1 = by1;
       if (bc) {
-        fx0 = bx0 + (bx1 - bx0) * bc.l; fx1 = bx0 + (bx1 - bx0) * bc.r; fy0 = by0 + (by1 - by0) * bc.t; fy1 = by0 + (by1 - by0) * bc.b;
+        if (bf) { fx0 = bx0 + (bx1 - bx0) * bf.l; fx1 = bx0 + (bx1 - bx0) * bf.r; fy0 = by0 + (by1 - by0) * bf.t; fy1 = by0 + (by1 - by0) * bf.b; }
+        else { fx0 = Math.max(bx0, cut.x0); fy0 = Math.max(by0, cut.y0); fx1 = Math.max(fx0 + 4, Math.min(bx1, cut.x1)); fy1 = Math.max(fy0 + 4, Math.min(by1, cut.y1)); } // 원래 매대 자르기 (그림 좌표)
         const L = fx0 - x0 + pad, T = fy0 - y0 + pad, inB = h('div', { style: `position:absolute;left:${-L}px;top:${-T}px;width:${bw}px;height:${bh}px` });
         grpOf.get(b.id).append(h('div', { class: 'cv-bclip', style: `position:absolute;left:${L}px;top:${T}px;width:${fx1 - fx0}px;height:${fy1 - fy0}px;overflow:hidden` }, inB));
         clipOf.set(b.id, inB);
@@ -681,7 +685,8 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
       (b.id ? (clipOf.get(b.id) || grpOf.get(b.id)) : baseEl).append(back);
       if (b.id && blockUI) grpOf.get(b.id).append(h('div', { class: 'cv-blk no-print', 'data-b': b.id, style: `left:${fx0 - x0 + pad - 4}px;top:${fy0 - y0 + pad - 4}px;width:${fx1 - fx0 + 8}px;height:${fy1 - fy0 + 8}px` },
         h('span', { class: 'cv-blk-h', 'data-b': b.id, title: b.base ? '끌어서 원래 매대 옮기기 · 누르면 선택' : '끌어서 옮기기 · 누르면 선택 (Ctrl+X로 잘라내기)' }, b.base ? '✥ 매대' : `✥ 묶음 ${fx._blocks.filter(x => !x.base).indexOf(b) + 1}`),
-        h('span', { class: 'cv-blk-r', 'data-b': b.id, title: '끌어서 크기 조절' })));
+        h('span', { class: 'cv-blk-r', 'data-b': b.id, title: '끌어서 크기 조절' }),
+        ...['n', 's', 'e', 'w'].map(k => h('span', { class: 'cv-blk-c cv-blk-c-' + k, 'data-b': b.id, 'data-k': k, title: '안쪽으로 끌면 잘라내고, 바깥으로 끌면 다시 넓혀요' }))));
     }
   }
   // 매대 뒤 회색 바탕: 선반·파이프·배경판의 가로 범위 × 전체 높이 (붙인 매대는 매대마다 따로). 줄줄 매대는 판을 깔지 않음 (줄만 그림)
@@ -1263,9 +1268,14 @@ function finishBlock(fx, pog, page, editable) {
     if (rz) { resizeBlock(e, block, rz.dataset.b); return; }
     const hd = e.target.closest('.cv-blk-h');
     if (hd) { dragBlock(e, block, hd.dataset.b); return; }
+    const ce = e.target.closest('.cv-blk-c'); // 변 가운데 막대 = 바로 자르기 (사용자: 버튼 없이 마우스로)
+    if (ce) { cropEdge(e, block, ce.dataset.b, ce.dataset.k); return; }
     selectNote(block, null);
     const item = e.target.closest('.cv-item');
     selectItem(block, item ? item.dataset.id : null);
+    // 매대·옮겨 온 매대 그림 안을 누르면 그 매대를 고르고, 끌면 옮김 (사용자: 그림처럼 마우스로)
+    const grp = e.target.closest('.pcanvas .cv-bgrp');
+    if (grp && !state.crop && grp.querySelector(':scope > .cv-blk')) dragBlock(e, block, grp.dataset.b, false);
   });
   renderNotes(block);
   return block;
@@ -2252,8 +2262,40 @@ function resizeBlock(e, block, bid) {
   };
   window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
 }
+// 변 가운데 막대를 끌어 바로 자르기: 원래 매대 = fx.cut(그림 좌표), 옮겨 온 매대 = blocks[].cut(묶음 범위 비율). 바깥으로 끌면 원래 범위까지 다시 넓힘
+function cropEdge(e, block, bid, k) {
+  e.preventDefault(); e.stopPropagation();
+  const fx = state.fixtures.get(block._fx); if (!fx) return;
+  const cvIn = block.querySelector('.pcanvas .cv-in'), sc = (cvIn?._sc || 1) * ZP(), frame = cvIn?.querySelector(`.cv-blk[data-b="${CSS.escape(bid)}"]`);
+  const bb = blockBox(fx, bid); if (!frame || !bb) return;
+  block._selBlock = bid; paintBlockSel(block);
+  let s0;
+  if (bid === BASE) { const c = okCut(fx.cut) ? fx.cut : null; s0 = c ? { x0: Math.max(bb.x0, c.x0), y0: Math.max(bb.y0, c.y0), x1: Math.min(bb.x1, c.x1), y1: Math.min(bb.y1, c.y1) } : { ...bb }; }
+  else { const g = (fx.blocks || []).find(x => x.id === bid), q = g?.cut, W = bb.x1 - bb.x0, H = bb.y1 - bb.y0; s0 = q ? { x0: bb.x0 + W * q.l, y0: bb.y0 + H * q.t, x1: bb.x0 + W * q.r, y1: bb.y0 + H * q.b } : { ...bb }; }
+  const f0 = { l: parseFloat(frame.style.left), t: parseFloat(frame.style.top), w: parseFloat(frame.style.width), h: parseFloat(frame.style.height) };
+  const sx = e.clientX, sy = e.clientY, min = 10, cl = (v, a, b) => Math.min(b, Math.max(a, v)); let r = { ...s0 };
+  const mv = ev => {
+    const dx = (ev.clientX - sx) / sc, dy = (ev.clientY - sy) / sc; r = { ...s0 };
+    if (k === 'w') r.x0 = cl(s0.x0 + dx, bb.x0, s0.x1 - min); if (k === 'e') r.x1 = cl(s0.x1 + dx, s0.x0 + min, bb.x1);
+    if (k === 'n') r.y0 = cl(s0.y0 + dy, bb.y0, s0.y1 - min); if (k === 's') r.y1 = cl(s0.y1 + dy, s0.y0 + min, bb.y1);
+    Object.assign(frame.style, { left: f0.l + (r.x0 - s0.x0) + 'px', top: f0.t + (r.y0 - s0.y0) + 'px', width: f0.w + (r.x1 - r.x0) - (s0.x1 - s0.x0) + 'px', height: f0.h + (r.y1 - r.y0) - (s0.y1 - s0.y0) + 'px' });
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
+    if (['x0', 'y0', 'x1', 'y1'].every(q => Math.abs(r[q] - s0[q]) < 0.5)) return;
+    const full = r.x0 <= bb.x0 + 0.5 && r.y0 <= bb.y0 + 0.5 && r.x1 >= bb.x1 - 0.5 && r.y1 >= bb.y1 - 0.5, pogId = state.currentPog.id;
+    if (bid === BASE) {
+      const rd = v => Math.round(v * 10) / 10, nc = full ? null : { x0: rd(r.x0), y0: rd(r.y0), x1: rd(r.x1), y1: rd(r.y1) };
+      saveFx(pogId, fx.id, 'cut', nc); fx.cut = nc; rebuildPage(fx.id, bid); renderSidePanel();
+    } else {
+      const W = bb.x1 - bb.x0 || 1, H = bb.y1 - bb.y0 || 1, c3 = v => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+      saveGroup(pogId, fx, bid, { cut: full ? null : { l: c3((r.x0 - bb.x0) / W), t: c3((r.y0 - bb.y0) / H), r: c3((r.x1 - bb.x0) / W), b: c3((r.y1 - bb.y0) / H) } }, bid);
+    }
+  };
+  window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+}
 // 묶음 끌어 옮기기 (그림 위 ✥). 살짝만 누르면 선택
-function dragBlock(e, block, bid) {
+function dragBlock(e, block, bid, toggle = true) { // toggle = ✥를 다시 누르면 고르기 풀기 (그림 안을 누를 땐 늘 고름)
   e.preventDefault(); e.stopPropagation();
   const fx = state.fixtures.get(block._fx), b = fx && groupOf(fx, bid); if (!b) return;
   const cvIn = block.querySelector('.pcanvas .cv-in'), g = cvIn?.querySelector(`.cv-bgrp[data-b="${CSS.escape(bid)}"]`), sc = (cvIn?._sc || 1) * ZP();
@@ -2261,7 +2303,7 @@ function dragBlock(e, block, bid) {
   const mv = ev => { ddx = (ev.clientX - sx) / sc; ddy = (ev.clientY - sy) / sc; if (Math.abs(ddx) + Math.abs(ddy) > 2) moved = true; if (g) g.style.transform = `translate(${ddx}px, ${ddy}px)`; };
   const up = () => {
     window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
-    if (!moved) { block._selBlock = block._selBlock === bid ? null : bid; paintBlockSel(block); renderSidePanel(); return; }
+    if (!moved) { block._selBlock = toggle && block._selBlock === bid ? null : bid; paintBlockSel(block); renderSidePanel(); return; }
     saveGroup(state.currentPog.id, fx, bid, { dx: Math.round((b.dx || 0) + ddx), dy: Math.round((b.dy || 0) + ddy) });
   };
   window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
