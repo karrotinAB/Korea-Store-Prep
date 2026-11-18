@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118n';
+const APP_VER = '20261118o';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3834,7 +3834,7 @@ async function analyzePdf(file, say = () => { }, words = []) {
   say('빨간 매대명 찾는 중…');
   const SC = 4, cv = await render(SC), cw = cv.width, ch = cv.height, px = cv.getContext('2d').getImageData(0, 0, cw, ch).data;
   const mask = new Uint8Array(cw * ch);
-  for (let i = 0, j = 0; i < mask.length; i++, j += 4) { const r = px[j], g = px[j + 1], b = px[j + 2]; if ((r > 150 && r - g > 80 && r - b > 80) || (r >= 90 && g <= r * 0.55 && b <= r * 0.6)) mask[i] = 1; } // 빨간 글씨 = 밝은 빨강 + 어두운 빨강 (사용자: 파랑·초록·보라 바탕 위 매대명은 빨강이 어둡게 섞여서 못 읽었음)
+  for (let i = 0, j = 0; i < mask.length; i++, j += 4) { const r = px[j], g = px[j + 1], b = px[j + 2]; if (((r > 150 && r - g > 80 && r - b > 80) || (r >= 90 && g <= r * 0.55 && b <= r * 0.6)) && !(g > r * 0.5 && g > b + 50)) mask[i] = 1; } // 주황(초록이 많고 파랑이 적음) 바탕은 빨강 아님 (사용자: 대구신매점 주황 바탕 매대명이 잘림) // 빨간 글씨 = 밝은 빨강 + 어두운 빨강 (사용자: 파랑·초록·보라 바탕 위 매대명은 빨강이 어둡게 섞여서 못 읽었음)
   // 매대명 위를 지나가는 검은 선 메우기 (사용자: 오타가 많음 — 검은 선이 글자를 가로질러 획이 끊겨 '앨범'을 '르므'로 읽었음).
   // 어두운 점이 좌우(또는 위아래)로 5px 안에 빨간 점 사이에 끼어 있으면 빨강으로
   { const add = [], G = 5, dark = k => { const j = k * 4; return px[j] + px[j + 1] + px[j + 2] < 330; };
