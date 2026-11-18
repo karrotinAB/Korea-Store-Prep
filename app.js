@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118p';
+const APP_VER = '20261118q';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3918,7 +3918,7 @@ async function analyzePdf(file, say = () => { }, words = []) {
   const wOpt = { workerPath: base + 'worker.min.js', corePath: base, langPath: base.replace(/\/$/, ''), gzip: true };
   const worker = await T.createWorker(['kor', 'eng'], 1, wOpt);
   // 한국어만 읽는 도구 (사용자: 텀블러1을 BED, 무드등을 PES로 읽음 — 한국어+영어로 읽으면 깨끗한 한글도 영어로 맞히는 때가 있음). 필요할 때만 만듦
-  let korW = null; const kor = async () => { if (!korW) { korW = await T.createWorker(['kor'], 1, wOpt); await korW.setParameters({ tessedit_pageseg_mode: '7' }); } return korW; };
+  let korW = null, engW = null; const kor = async () => { if (!korW) { korW = await T.createWorker(['kor'], 1, wOpt); await korW.setParameters({ tessedit_pageseg_mode: '7' }); } return korW; };
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
   const groups = [];
   // 네모 하나(도면 좌표)를 잘라서 글자 인식 → 줄들 · 점수
@@ -4016,8 +4016,78 @@ async function analyzePdf(file, say = () => { }, words = []) {
       groups.push({ id: 'g' + groups.length, ko, lines, parts, ...(raw !== ko ? { ocrKo: raw } : {}), x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
     }
-  } finally { await worker.terminate(); if (korW) await korW.terminate(); }
-  return { w: W, h: H, image, groups, dims: [], mods: [], lines: groups.length, darkKept: 0, skipped };
+    say('A-1 같은 모듈 찾는 중…');
+    var modOut = await pdfModules();
+  } finally { await worker.terminate(); if (korW) await korW.terminate(); if (engW) await engW.terminate(); }
+  return { w: W, h: H, image, groups, dims: modOut?.dims || [], mods: modOut?.mods || [], lines: groups.length, darkKept: 0, skipped };
+  // 중앙 매대 모듈 (사용자: PDF·JPG 도면도 A-1 모듈부터 번호): 검은 선 덩어리(가운데 막대 + 칸 + 'A-5' 동그라미가 한 덩어리로 이어짐) 안에서
+  // 'A-5' 같은 검은 글씨를 읽음 → mods(덩어리 범위, type '모듈') + dims('A-5' 자리). 번호 매기기(dwIslands)가 그대로 씀
+  async function pdfModules() {
+    const U = SC, dk = new Uint8Array(cw * ch);
+    for (let i = 0, j = 0; i < dk.length; i++, j += 4) if (Math.max(px[j], px[j + 1], px[j + 2]) < 110) dk[i] = 1;
+    // ① 검은 선 덩어리(가운데 막대 + 칸 + 동그라미) = 모듈 범위 후보
+    const seen2 = new Uint8Array(cw * ch), st2 = new Int32Array(cw * ch), cand = [];
+    for (let s0 = 0; s0 < dk.length; s0++) {
+      if (!dk[s0] || seen2[s0]) continue;
+      let sp = 0, x0 = cw, y0 = ch, x1 = 0, y1 = 0; st2[sp++] = s0; seen2[s0] = 1;
+      while (sp) { const k = st2[--sp], x = k % cw, y = (k - x) / cw; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue; const q = ny * cw + nx; if (dk[q] && !seen2[q]) { seen2[q] = 1; st2[sp++] = q; } } }
+      const w = (x1 - x0) / U, h = (y1 - y0) / U;
+      if (Math.max(w, h) >= 40 && Math.min(w, h) >= 12 && w < W * 0.5 && h < H * 0.5) cand.push({ x0, y0, x1, y1 });
+    }
+    // ② 긴 곧은 선은 지움(선이 'A-5' 글씨·동그라미를 가로지름) → 남은 점 덩어리 중 굽은 조각(동그라미 조각)
+    const L = 12 * U, keep = new Uint8Array(cw * ch);
+    { const vr = new Uint16Array(cw * ch);
+      for (let x = 0; x < cw; x++) { let y = 0; while (y < ch) { if (!dk[y * cw + x]) { y++; continue; } let e = y; while (e < ch && dk[e * cw + x]) e++; for (let t = y; t < e; t++) vr[t * cw + x] = Math.min(65535, e - y); y = e; } }
+      for (let y = 0; y < ch; y++) { let x = 0; while (x < cw) { if (!dk[y * cw + x]) { x++; continue; } let e = x; while (e < cw && dk[y * cw + e]) e++; if (e - x < L) for (let t = x; t < e; t++) if (vr[y * cw + t] < L) keep[y * cw + t] = 1; x = e; } } }
+    const lab = new Int32Array(cw * ch), stk = []; let nl = 0; let arcs = [];
+    for (let i = 0; i < keep.length; i++) { if (!keep[i] || lab[i]) continue; nl++; let x0 = cw, y0 = ch, x1 = 0, y1 = 0, n = 0; stk.push(i); lab[i] = nl;
+      while (stk.length) { const k = stk.pop(), x = k % cw, y = (k - x) / cw; n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue; const q = ny * cw + nx; if (keep[q] && !lab[q]) { lab[q] = nl; stk.push(q); } } }
+      const w = (x1 - x0) / U, h = (y1 - y0) / U; if (w >= 6 && w <= 70 && h >= 4 && h <= 40 && n < (x1 - x0) * (y1 - y0) * 0.3) arcs.push({ x0, y0, x1, y1 }); }
+    // 선에 끊긴 동그라미 조각(반쪽·4분의 1)을 이어 붙임
+    for (let again = true; again;) { again = false;
+      for (let i = 0; i < arcs.length && !again; i++) for (let j = i + 1; j < arcs.length; j++) { const a2 = arcs[i], b2 = arcs[j], gp = 16 * U;
+        if (a2.x0 <= b2.x1 + gp && b2.x0 <= a2.x1 + gp && a2.y0 <= b2.y1 + gp && b2.y0 <= a2.y1 + gp) { const m2 = { x0: Math.min(a2.x0, b2.x0), y0: Math.min(a2.y0, b2.y0), x1: Math.max(a2.x1, b2.x1), y1: Math.max(a2.y1, b2.y1) };
+          if ((m2.x1 - m2.x0) / U > 75 || (m2.y1 - m2.y0) / U > 45) continue; arcs[i] = m2; arcs.splice(j, 1); again = true; break; } } }
+    const rings = arcs.filter(r => { const w = (r.x1 - r.x0) / U, h = (r.y1 - r.y0) / U; return w >= 18 && w <= 75 && h >= 9 && h <= 45 && w > h * 1.2; });
+    if (!rings.length) return null;
+    // ③ 동그라미 윗줄('A-5')만 잘라 영어만 읽는 도구로 (큰 글자만 남김: 곡선·끊긴 '-'는 뺌)
+    if (!engW) { engW = await T.createWorker(['eng'], 1, wOpt); await engW.setParameters({ tessedit_pageseg_mode: '7' }); }
+    const marks = [];
+    for (const rg of rings) {
+      const rw = rg.x1 - rg.x0, rh = rg.y1 - rg.y0, X0 = Math.round(rg.x0 + rw * 0.03), X1 = Math.round(rg.x1 - rw * 0.03), Y0 = Math.round(rg.y0 + rh * 0.04), Y1 = Math.round(rg.y0 + rh * 0.58);
+      const cw3 = X1 - X0, ch3 = Y1 - Y0, c3 = document.createElement('canvas'); c3.width = cw3 + 40; c3.height = ch3 + 40; const g3 = c3.getContext('2d'), im3 = g3.createImageData(c3.width, c3.height);
+      for (let y = 0; y < c3.height; y++) for (let x = 0; x < c3.width; x++) { const lx = X0 + x - 20, ly = Y0 + y - 20, o = (y * c3.width + x) * 4, ex = (lx - (rg.x0 + rg.x1) / 2) / (rw / 2), ey = (ly - (rg.y0 + rg.y1) / 2) / (rh / 2);
+        const v = lx >= X0 && ly >= Y0 && lx < X1 && ly < Y1 && keep[ly * cw + lx] && ex * ex + ey * ey < 0.72 ? 0 : 255; im3.data[o] = im3.data[o + 1] = im3.data[o + 2] = v; im3.data[o + 3] = 255; }
+      { const seen3 = new Uint8Array(c3.width * c3.height);
+        for (let i = 0; i < seen3.length; i++) { if (im3.data[i * 4] || seen3[i]) continue; const pts = [i]; seen3[i] = 1; let y0 = c3.height, y1 = 0;
+          for (let q = 0; q < pts.length; q++) { const k = pts[q], x = k % c3.width, y = (k - x) / c3.width; if (y < y0) y0 = y; if (y > y1) y1 = y;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= c3.width || ny >= c3.height) continue; const r = ny * c3.width + nx; if (!im3.data[r * 4] && !seen3[r]) { seen3[r] = 1; pts.push(r); } } }
+          if (y1 - y0 < ch3 * 0.45) for (const k of pts) im3.data[k * 4] = im3.data[k * 4 + 1] = im3.data[k * 4 + 2] = 255; } }
+      g3.putImageData(im3, 0, 0);
+      const raw3 = String((await engW.recognize(c3)).data.text || '').replace(/[\s\-–—.]+/g, ''), mm = raw3.match(/^([A-Za-z]{1,2}?)([0-9lIiT|OoSsZzgqB]{1,3})$/);
+      const dig = mm ? mm[2].replace(/[lIiT|]/g, '1').replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Zz]/g, '2').replace(/[gq]/g, '9').replace(/B/g, '8') : '';
+      if (mm && /^[1-9]\d*$/.test(dig) && mm[1].toUpperCase() !== 'O') marks.push({ t: mm[1].toUpperCase() + '-' + dig, rg });
+    }
+    if (!marks.length) return null;
+    // ④ 모듈 범위: 동그라미가 들어 있는 검은 선 덩어리. 없으면(선이 회색) 동그라미에서 위아래·좌우로 막대를 따라가 길이를 잼
+    const ink = (x, y) => { if (x < 0 || y < 0 || x >= cw || y >= ch) return false; const j = (y * cw + x) * 4; return Math.max(px[j], px[j + 1], px[j + 2]) < 235 && !mask[y * cw + x]; };
+    const run = (cx, cy, dx, dy, half) => { let t = 0, gap = 0, last = 0; for (t = 1; t < 400 * U && gap < 6 * U; t++) { const x = cx + dx * t, y = cy + dy * t; let hit = false; for (let o = -half; o <= half && !hit; o += 2) hit = ink(x + dy * o, y + dx * o); if (hit) { gap = 0; last = t; } else gap++; } return last; };
+    const mods = [], dims = [];
+    for (const { t, rg } of marks) {
+      const cx = Math.round((rg.x0 + rg.x1) / 2), cy = Math.round((rg.y0 + rg.y1) / 2), rw = rg.x1 - rg.x0, rh = rg.y1 - rg.y0;
+      let box = cand.filter(c => cx >= c.x0 && cx <= c.x1 && cy >= c.y0 && cy <= c.y1).sort((a, b) => (a.x1 - a.x0) * (a.y1 - a.y0) - (b.x1 - b.x0) * (b.y1 - b.y0))[0];
+      if (!box) {
+        const half = Math.round(2 * U), up = run(cx, rg.y0, 0, -1, half), dn = run(cx, rg.y1, 0, 1, half), lf = run(rg.x0, cy, -1, 0, half), rt = run(rg.x1, cy, 1, 0, half);
+        const side = Math.max(rw * 0.55, 18 * U);
+        box = up + dn >= lf + rt ? { x0: cx - side, x1: cx + side, y0: rg.y0 - up, y1: rg.y1 + dn } : { x0: rg.x0 - lf, x1: rg.x1 + rt, y0: cy - side, y1: cy + side };
+      }
+      mods.push({ x: r2(box.x0 / U), y: r2(box.y0 / U), w: r2((box.x1 - box.x0) / U), h: r2((box.y1 - box.y0) / U), type: '모듈', lim: 2 });
+      dims.push({ text: t, x: r2(rg.x0 / U), y: r2(rg.y0 / U), w: r2(rw / U), h: r2(rh / U) });
+    }
+    return { mods, dims };
+  }
 }
 // 그 매장 POG 매대명 낱말 (도면 글자 인식 오타 고치기에 씀). POG가 없으면 빈 목록
 async function storeMdWords(st) {
@@ -4897,7 +4967,7 @@ function nearMod(mods, g) {
   let best = null;
   for (const m of mods) {
     const dx = Math.max(0, Math.abs(m.x + m.w / 2 - (g.x + g.w / 2)) - (m.w + g.w) / 2), dy = Math.max(0, Math.abs(m.y + m.h / 2 - (g.y + g.h / 2)) - (m.h + g.h) / 2);
-    const dist = Math.hypot(dx, dy), lim = Math.max(Math.min(m.w, m.h) * 1.5, (g.fs || 5) * 3);
+    const dist = Math.hypot(dx, dy), lim = m.lim ?? Math.max(Math.min(m.w, m.h) * 1.5, (g.fs || 5) * 3);
     if (dist <= lim && (!best || dist < best.dist || (dist === best.dist && m.w * m.h < best.m.w * best.m.h))) best = { m, dist };
   }
   return best?.m || null;
@@ -4905,7 +4975,7 @@ function nearMod(mods, g) {
 // 매대명 글씨에서 가장 가까운 칸 → '벽매대 1000' (매대타입 사전에 띄어쓰기만 다른 이름이 있으면 그 이름)
 function dwTypeOf(mods, g) {
   if (!mods?.length || !g) return '';
-  const m = nearMod(mods, g); if (!m) return '';
+  const m = nearMod(mods, g); if (!m || m.type === '모듈') return ''; // PDF 도면의 모듈 칸은 사이즈 모름
   const name = `${m.type} ${m.len}`, key = name.replace(/\s+/g, '');
   return glossaryOf('매대타입').map(x => x.ko).find(x => String(x || '').replace(/\s+/g, '') === key) || name;
 }
