@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261119c';
+const APP_VER = '20261119d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2859,8 +2859,9 @@ function siteTypeOf(fx) {
   const wmm = Math.round(+bay?.wmm || 0), hmm = Math.round(+bay?.hmm || 0); if (!wmm) return '';
   // 기본 매대: 비고에 '슬림'이 있으면 슬림, 없으면 중앙 · 높이 1630이면 뒤에 '/연장' (사용자) → 슬림 800 · 슬림/연장 800 · 중앙 800 · 중앙/연장 800
   // 높이 1850 이상 = 벽매대 → '벽800'·'벽1000' (사용자)
-  const t = hmm >= 1850 ? '벽' : src.mdtype === 'B' ? '타공' : src.mdtype === 'C' ? '줄줄' : (/슬림/.test(src.note || '') ? '슬림' : '중앙') + (hmm === 1630 ? '/연장' : '');
-  const name = t === '벽' ? `벽${wmm}` : `${t} ${wmm}`, key = name.replace(/\s+/g, '');
+  // POG 사이트 매대 종류 B(타공) = 높이와 상관없이 '타공450'·'타공786' (사용자)
+  const t = src.mdtype === 'B' ? '타공' : hmm >= 1850 ? '벽' : src.mdtype === 'C' ? '줄줄' : (/슬림/.test(src.note || '') ? '슬림' : '중앙') + (hmm === 1630 ? '/연장' : '');
+  const name = t === '벽' || t === '타공' ? `${t}${wmm}` : `${t} ${wmm}`, key = name.replace(/\s+/g, '');
   return glossaryOf('매대타입').map(x => x.ko).find(x => String(x || '').replace(/\s+/g, '') === key) || name;
 }
 function autoType(fx) {
