@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118j';
+const APP_VER = '20261118k';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3549,7 +3549,7 @@ function renderDwList() {
       h('div', { class: 'pi-sub' }, `${st.code} · ${sub}`)));
   }
   $('#dw-empty').replaceChildren(...(dw.tab === 'up'
-    ? [h('div', { class: 'upload-rule' }, h('b', {}, '업로드 파일은 SVG 파일'), ' · ', h('b', {}, '글씨는 윤곽선 만들기 하지 말아주세요'),
+    ? [h('div', { class: 'upload-rule' }, h('b', {}, '업로드 파일은 SVG · PDF · AI · JPG'), ' · ', h('b', {}, 'PDF·AI·JPG는 빨간 글씨를 매대명으로 읽어요'),
         h('div', { class: 'mut' }, '매대명이 글자로 남아 있어야 POG에서 매대를 고를 수 있어요.')),
        h('div', {}, '왼쪽에서 매장을 고르세요.')]
     : [h('div', {}, '볼 매장을 고르세요.'), h('div', { class: 'mut' }, 'VMD실이 내보낸 도면만 나와요. 팀별로 보거나 팀 번호를 매기려면 도면 업로드 화면에서 해요.')]));
@@ -3754,24 +3754,36 @@ const joinLabel = ts => ts.reduce((acc, t) => !acc ? t : (acc.endsWith('/') || t
 /* PDF·AI 도면 (사용자: 글자가 살아 있는 SVG가 없음 — 매대명이 윤곽선(그림)) → 페이지를 그림으로 그리고, 빨간 글씨 덩어리를 찾아 글자 인식(OCR)으로 매대명을 읽음.
    AI는 'PDF 호환 파일'이면 PDF로 열림. 도면 그림은 JPEG로 저장. 치수·A-1 같은 검은 글씨는 못 읽음(매대 타입은 POG 사이트 사이즈로 자동). 도구: lib/pdf(pdf.js)·lib/tess(tesseract.js, 한국어) */
 const PDF_URL = 'lib/pdf/pdf.min.js', TESS_URL = 'lib/tess/tesseract.min.js';
+const isImgFile = f => /\.(jpe?g|png)$/i.test(f.name) || /^image\/(jpeg|png)$/.test(f.type);
 async function analyzePdf(file, say = () => { }) {
-  const pdfjs = await loadScript(PDF_URL, 'pdfjsLib');
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL('lib/pdf/pdf.worker.min.js', location.href).href;
-  const buf = new Uint8Array(await file.arrayBuffer());
-  if (String.fromCharCode(...buf.slice(0, 5)) !== '%PDF-') throw new Error("PDF로 열 수 없는 파일이에요. AI 파일은 저장할 때 'PDF 호환 파일 만들기'를 켜 주세요.");
-  const doc = await pdfjs.getDocument({ data: buf }).promise, page = await doc.getPage(1), vp1 = page.getViewport({ scale: 1 });
-  const W = vp1.width, H = vp1.height;
-  const render = async sc => {
-    const vp = page.getViewport({ scale: sc }), cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
-    const cx = cv.getContext('2d', { willReadFrequently: true }); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
-    await page.render({ canvasContext: cx, viewport: vp }).promise; return cv;
-  };
+  let W, H, render;
+  if (isImgFile(file)) { // JPG·PNG 도면 (사용자): 긴 쪽을 A4(1190)로 맞춰 PDF와 같은 크기 기준으로 읽음
+    const bmp = await createImageBitmap(file), k = 1190 / Math.max(bmp.width, bmp.height);
+    W = bmp.width * k; H = bmp.height * k;
+    render = async sc => {
+      const cv = document.createElement('canvas'); cv.width = Math.round(W * sc); cv.height = Math.round(H * sc);
+      const cx = cv.getContext('2d', { willReadFrequently: true }); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+      cx.imageSmoothingQuality = 'high'; cx.drawImage(bmp, 0, 0, cv.width, cv.height); return cv;
+    };
+  } else {
+    const pdfjs = await loadScript(PDF_URL, 'pdfjsLib');
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL('lib/pdf/pdf.worker.min.js', location.href).href;
+    const buf = new Uint8Array(await file.arrayBuffer());
+    if (String.fromCharCode(...buf.slice(0, 5)) !== '%PDF-') throw new Error("PDF로 열 수 없는 파일이에요. AI 파일은 저장할 때 'PDF 호환 파일 만들기'를 켜 주세요.");
+    const doc = await pdfjs.getDocument({ data: buf }).promise, page = await doc.getPage(1), vp1 = page.getViewport({ scale: 1 });
+    W = vp1.width; H = vp1.height;
+    render = async sc => {
+      const vp = page.getViewport({ scale: sc }), cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+      const cx = cv.getContext('2d', { willReadFrequently: true }); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+      await page.render({ canvasContext: cx, viewport: vp }).promise; return cv;
+    };
+  }
   say('도면 그림 만드는 중…');
   const shot = await render(2.5), image = await new Promise(ok => shot.toBlob(ok, 'image/jpeg', 0.88));
   say('빨간 매대명 찾는 중…');
   const SC = 4, cv = await render(SC), cw = cv.width, ch = cv.height, px = cv.getContext('2d').getImageData(0, 0, cw, ch).data;
   const mask = new Uint8Array(cw * ch);
-  for (let i = 0, j = 0; i < mask.length; i++, j += 4) { const r = px[j], g = px[j + 1], b = px[j + 2]; if (r > 150 && r - g > 80 && r - b > 80) mask[i] = 1; }
+  for (let i = 0, j = 0; i < mask.length; i++, j += 4) { const r = px[j], g = px[j + 1], b = px[j + 2]; if ((r > 150 && r - g > 80 && r - b > 80) || (r >= 90 && g <= r * 0.55 && b <= r * 0.6)) mask[i] = 1; } // 빨간 글씨 = 밝은 빨강 + 어두운 빨강 (사용자: 파랑·초록·보라 바탕 위 매대명은 빨강이 어둡게 섞여서 못 읽었음)
   // 가는 빨간 선(치수선·지시선)은 지움 (사용자: 선이 매대명을 이어서 여러 매대명이 한 덩어리가 됐음).
   // 글자보다 큰 덩어리(선, 또는 선에 붙은 글자)만 골라 그 안에서 굵기 3px 미만(선은 1~2px, 글자 획은 3px 이상)을 지움 → 보통 글자는 그대로
   { const seen0 = new Uint8Array(cw * ch), st0 = new Int32Array(cw * ch), big = [];
@@ -3830,13 +3842,18 @@ async function analyzePdf(file, say = () => { }) {
   const clean = t => String(t || '').split('\n').map(l => l.replace(/[|\\`~^_=“”"'‘’]/g, '').replace(/\s+/g, ' ').trim()).filter(l => /[가-힣A-Za-z0-9]/.test(l));
   const readBox = async b => {
     const X0 = Math.max(0, Math.floor(b.x0 * SC) - 2), Y0 = Math.max(0, Math.floor(b.y0 * SC) - 2), X1 = Math.min(cw, Math.ceil(b.x1 * SC) + 2), Y1 = Math.min(ch, Math.ceil(b.y1 * SC) + 2);
-    const bw = X1 - X0, bh = Y1 - Y0, Z = 2, pad = 20, c2 = document.createElement('canvas'); c2.width = bw * Z + pad * 2; c2.height = bh * Z + pad * 2;
-    const g2 = c2.getContext('2d'), im = g2.createImageData(bw, bh);
+    const bw = X1 - X0, bh = Y1 - Y0, pad = 20;
+    const t = document.createElement('canvas'), tg = t.getContext('2d'), im = tg.createImageData(bw, bh); t.width = bw; t.height = bh;
     for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const v = mask[(Y0 + y) * cw + X0 + x] ? 0 : 255, o = (y * bw + x) * 4; im.data[o] = im.data[o + 1] = im.data[o + 2] = v; im.data[o + 3] = 255; }
-    const t = document.createElement('canvas'); t.width = bw; t.height = bh; t.getContext('2d').putImageData(im, 0, 0);
-    g2.fillStyle = '#fff'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(t, pad, pad, bw * Z, bh * Z);
-    const { data } = await worker.recognize(c2);
+    t.getContext('2d').putImageData(im, 0, 0);
+    const mk = (Z, bl) => { const c = document.createElement('canvas'); c.width = Math.round(bw * Z) + pad * 2; c.height = Math.round(bh * Z) + pad * 2; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); if (bl) g.filter = `blur(${bl}px)`; g.drawImage(t, pad, pad, Math.round(bw * Z), Math.round(bh * Z)); return c; };
+    let c2 = mk(2, 0), data = (await worker.recognize(c2)).data;
     let best = { lines: clean(data.text), conf: data.confidence };
+    // 잘 안 읽히면 (빨간 글씨를 뽑아 낸 글자가 거칠어서 — 색 바탕 위 매대명) 부드럽게·작게도 읽어 보고 가장 잘 읽힌 것
+    if (best.conf < 70) for (const [Z, bl] of [[2, 1.2], [1, 0.5]]) {
+      const c = mk(Z, bl), d = (await worker.recognize(c)).data, l = clean(d.text);
+      if (l.length && (d.confidence > best.conf + 5 || !best.lines.length)) { best = { lines: l, conf: d.confidence }; c2 = c; }
+    }
     if (bh > bw * 2.2) for (const a of [-90, 90]) { // 세로로 쓴 매대명 (사용자): 눕혀서도 읽어 보고 더 잘 읽힌 쪽
       const c3 = document.createElement('canvas'); c3.width = c2.height; c3.height = c2.width; const g3 = c3.getContext('2d');
       g3.fillStyle = '#fff'; g3.fillRect(0, 0, c3.width, c3.height); g3.translate(c3.width / 2, c3.height / 2); g3.rotate(a * Math.PI / 180); g3.drawImage(c2, -c2.width / 2, -c2.height / 2);
@@ -3871,7 +3888,7 @@ async function analyzePdf(file, say = () => { }) {
       if (!joinLabel(lines).replace(/\s+/g, '') && ps.length) { lines = ps.map(p => p.text); conf = 60; }
       if (!joinLabel(lines).replace(/\s+/g, '') && b.n > 3) { await worker.setParameters({ tessedit_pageseg_mode: '11' }); const rd = await readBox(b); await worker.setParameters({ tessedit_pageseg_mode: '6' }); if (rd.lines.length) { lines = rd.lines; conf = Math.max(conf, rd.conf); } }
       const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
-      if (!compact || (conf < 35 && compact.length <= 2 && b.n < 4)) { skipped.push({ ko, conf: Math.round(conf), x, y, w, h: hh }); continue; } // 화살표·점 같은 빨간 표시는 뺌
+      if (!compact || (conf < 35 && compact.length <= 2 && b.n < 4) || Math.max(w, hh) < b.fs * 1.5) { skipped.push({ ko, conf: Math.round(conf), x, y, w, h: hh }); continue; } // 화살표·점 같은 빨간 표시는 뺌
       const parts = ps.length > 1 ? ps : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
       groups.push({ id: 'g' + groups.length, ko, lines, parts, x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
@@ -3880,8 +3897,8 @@ async function analyzePdf(file, say = () => { }) {
   return { w: W, h: H, image, groups, dims: [], mods: [], lines: groups.length, darkKept: 0, skipped };
 }
 async function uploadDrawing(file) {
-  const isPdf = /\.(pdf|ai)$/i.test(file.name) || file.type === 'application/pdf';
-  if (!isPdf && !/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') { alert('SVG·PDF·AI 파일만 올릴 수 있어요.\n(Illustrator: 파일 → 내보내기 → 다른 이름으로 내보내기 → SVG. 글씨는 윤곽선 만들기 하지 말아주세요)'); return; }
+  const isPdf = /\.(pdf|ai)$/i.test(file.name) || file.type === 'application/pdf' || isImgFile(file); // JPG·PNG도 같은 방법(그림에서 빨간 글씨 읽기)
+  if (!isPdf && !/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') { alert('SVG·PDF·AI·JPG 파일만 올릴 수 있어요.\n(Illustrator: 파일 → 내보내기 → 다른 이름으로 내보내기 → SVG. 글씨는 윤곽선 만들기 하지 말아주세요)'); return; }
   const id = dw.id, store = state.stores.find(x => x.id === id);
   let an;
   try { toast('도면을 읽는 중…'); an = isPdf ? await analyzePdf(file, toast) : await analyzeSvg(await file.text()); }
@@ -4002,8 +4019,8 @@ function drawingView(v, { onPick, onPickMany, used, others, selId, picks, plain,
 function renderDwStage() {
   const box = $('#dw-stage'), v = curVersion(); if (!box) return;
   if (!v) {
-    box.replaceChildren(h('div', { class: 'upload-rule' }, h('b', {}, '업로드 파일은 SVG 파일'), ' · ', h('b', {}, '글씨는 윤곽선 만들기 하지 말아주세요'),
-      h('div', { class: 'mut' }, !canEdit('drawing') ? 'VMD실이 아직 도면을 올리지 않았어요.' : dw.tab === 'up' ? "평수를 적고, 한글 도면 SVG 파일을 여기에 끌어다 놓거나 위의 '도면 파일 올리기'를 눌러주세요."
+    box.replaceChildren(h('div', { class: 'upload-rule' }, h('b', {}, '업로드 파일은 SVG · PDF · AI · JPG'), ' · ', h('b', {}, 'PDF·AI·JPG는 빨간 글씨를 매대명으로 읽어요'),
+      h('div', { class: 'mut' }, !canEdit('drawing') ? 'VMD실이 아직 도면을 올리지 않았어요.' : dw.tab === 'up' ? "평수를 적고, 한글 도면 파일(SVG·PDF·AI·JPG)을 여기에 끌어다 놓거나 위의 '도면 파일 올리기'를 눌러주세요."
         : '아직 내보낸 도면이 없어요.')));
     return;
   }
