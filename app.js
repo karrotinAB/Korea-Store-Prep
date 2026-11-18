@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118m';
+const APP_VER = '20261118n';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3900,12 +3900,15 @@ async function analyzePdf(file, say = () => { }, words = []) {
   // 글자 인식
   say(`매대명 ${boxes.length}개 글자 읽는 중… (처음엔 1~2분 걸려요)`);
   const T = await loadScript(TESS_URL, 'Tesseract'), base = new URL('lib/tess/', location.href).href;
-  const worker = await T.createWorker(['kor', 'eng'], 1, { workerPath: base + 'worker.min.js', corePath: base, langPath: base.replace(/\/$/, ''), gzip: true });
+  const wOpt = { workerPath: base + 'worker.min.js', corePath: base, langPath: base.replace(/\/$/, ''), gzip: true };
+  const worker = await T.createWorker(['kor', 'eng'], 1, wOpt);
+  // 한국어만 읽는 도구 (사용자: 텀블러1을 BED, 무드등을 PES로 읽음 — 한국어+영어로 읽으면 깨끗한 한글도 영어로 맞히는 때가 있음). 필요할 때만 만듦
+  let korW = null; const kor = async () => { if (!korW) { korW = await T.createWorker(['kor'], 1, wOpt); await korW.setParameters({ tessedit_pageseg_mode: '7' }); } return korW; };
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
   const groups = [];
   // 네모 하나(도면 좌표)를 잘라서 글자 인식 → 줄들 · 점수
   const clean = t => String(t || '').split('\n').map(l => l.replace(/[|\\`~^_=“”"'‘’]/g, '').replace(/\s+/g, ' ').trim()).filter(l => /[가-힣A-Za-z0-9]/.test(l));
-  const readBox = async b => {
+  const readBox = async (b, wk = worker) => {
     const X0 = Math.max(0, Math.floor(b.x0 * SC) - 2), Y0 = Math.max(0, Math.floor(b.y0 * SC) - 2), X1 = Math.min(cw, Math.ceil(b.x1 * SC) + 2), Y1 = Math.min(ch, Math.ceil(b.y1 * SC) + 2);
     const bw = X1 - X0, bh = Y1 - Y0, pad = 20;
     const t = document.createElement('canvas'), tg = t.getContext('2d'), im = tg.createImageData(bw, bh); t.width = bw; t.height = bh;
@@ -3921,17 +3924,17 @@ async function analyzePdf(file, say = () => { }, words = []) {
     }
     t.getContext('2d').putImageData(im, 0, 0);
     const mk = (Z, bl) => { const c = document.createElement('canvas'); c.width = Math.round(bw * Z) + pad * 2; c.height = Math.round(bh * Z) + pad * 2; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); if (bl) g.filter = `blur(${bl}px)`; g.drawImage(t, pad, pad, Math.round(bw * Z), Math.round(bh * Z)); return c; };
-    let c2 = mk(2, 0), data = (await worker.recognize(c2)).data;
+    let c2 = mk(2, 0), data = (await wk.recognize(c2)).data;
     let best = { lines: clean(data.text), conf: data.confidence };
     // 잘 안 읽히면 (빨간 글씨를 뽑아 낸 글자가 거칠어서 — 색 바탕 위 매대명) 부드럽게·작게도 읽어 보고 가장 잘 읽힌 것
     if (best.conf < 70) for (const [Z, bl] of [[2, 1.2], [1, 0.5]]) {
-      const c = mk(Z, bl), d = (await worker.recognize(c)).data, l = clean(d.text);
+      const c = mk(Z, bl), d = (await wk.recognize(c)).data, l = clean(d.text);
       if (l.length && (d.confidence > best.conf + 5 || !best.lines.length)) { best = { lines: l, conf: d.confidence }; c2 = c; }
     }
     if (bh > bw * 2.2) for (const a of [-90, 90]) { // 세로로 쓴 매대명 (사용자): 눕혀서도 읽어 보고 더 잘 읽힌 쪽
       const c3 = document.createElement('canvas'); c3.width = c2.height; c3.height = c2.width; const g3 = c3.getContext('2d');
       g3.fillStyle = '#fff'; g3.fillRect(0, 0, c3.width, c3.height); g3.translate(c3.width / 2, c3.height / 2); g3.rotate(a * Math.PI / 180); g3.drawImage(c2, -c2.width / 2, -c2.height / 2);
-      const r3 = (await worker.recognize(c3)).data, l3 = clean(r3.text);
+      const r3 = (await wk.recognize(c3)).data, l3 = clean(r3.text);
       if (l3.length && r3.confidence > best.conf + 5) best = { lines: l3, conf: r3.confidence };
     }
     return best;
@@ -3962,6 +3965,13 @@ async function analyzePdf(file, say = () => { }, words = []) {
         }
         await worker.setParameters({ tessedit_pageseg_mode: '6' });
       }
+      // 영어로만 읽혔거나 점수가 낮으면 한국어만으로 줄마다 다시 읽어 더 나은 쪽 (영어 매대명 PEN·USB는 점수가 높아 그대로)
+      const kscore = (ls, c) => c + lexHit(ls.map(l => fixMdLabel(l, lex)), lex) * 20 + (/[가-힣]/.test(ls.join('')) ? 15 : 0);
+      if (lr.length && lr.length <= 5 && !(hh > w * 2.2) && (conf < 80 || !/[가-힣]/.test(lines.join('')) || lexHit(lines.map(l => fixMdLabel(l, lex)), lex) < 0.5)) {
+        const kw = await kor(), rr = []; for (const r of lr) rr.push(await readBox(r, kw));
+        const rl = rr.map(z => z.lines.join(' ')).filter(Boolean), rc = rr.reduce((a, z) => a + z.conf, 0) / rr.length;
+        if (rl.length && kscore(rl, rc) > kscore(lines, conf)) { lines = rl; conf = rc; }
+      }
       // 나누기용 조각 (사용자: 붙은 매대명이 한 묶음이 되면 나눌 수 있게): 줄마다, 같은 줄에서도 글자 하나 넘게 떨어지면 따로 → 조각마다 따로 글자 인식
       const rows = [];
       for (const c of b.cs.slice().sort((p, q) => p.y0 - q.y0)) { // 줄 = 위아래로 겹치는 조각들 (받침·모음 조각 높이가 달라도 한 줄)
@@ -3991,7 +4001,7 @@ async function analyzePdf(file, say = () => { }, words = []) {
       groups.push({ id: 'g' + groups.length, ko, lines, parts, ...(raw !== ko ? { ocrKo: raw } : {}), x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
     }
-  } finally { await worker.terminate(); }
+  } finally { await worker.terminate(); if (korW) await korW.terminate(); }
   return { w: W, h: H, image, groups, dims: [], mods: [], lines: groups.length, darkKept: 0, skipped };
 }
 // 그 매장 POG 매대명 낱말 (도면 글자 인식 오타 고치기에 씀). POG가 없으면 빈 목록
