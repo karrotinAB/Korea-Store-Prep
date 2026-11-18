@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261118q';
+const APP_VER = '20261118r';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3746,8 +3746,21 @@ function splitParts(g) {
   const lines = (g.lines || []).length > 1 ? g.lines : [p.text || g.ko || ''];
   const ls = lines.map(l => String(l).trim()).filter(Boolean); if (!ls.length) return parts;
   const out = [], lh = p.h / ls.length;
+  // 한 줄이고 글자 사이 빈틈 자리를 알면(PDF·AI·JPG 도면) 가장 넓은 빈틈에서 자름 → 칸이 글자에 딱 맞음
+  const words = l => l.split(/\s+/).flatMap(w => w.split(/(?<=\d)(?=[가-힣A-Za-z])/)).filter(Boolean); // 띄어쓰기 + '사입랜덤5사입랜덤6'처럼 숫자 뒤에 글자가 오면 거기서
+  const ws1 = ls.length === 1 ? words(ls[0]) : [];
+  if (ws1.length > 1 && (p.gaps || []).length >= ws1.length - 1) {
+    // 글자 수 비율로 자를 자리를 어림한 뒤, 가장 가까운 실제 빈틈으로 옮김 (낱말 안 글자 사이가 더 넓을 때도 있어서 '가장 넓은 빈틈'만으로는 틀림)
+    const tot = ws1.reduce((a, w) => a + w.length, 0), used = new Set(), cuts = []; let acc = 0;
+    for (let i = 0; i < ws1.length - 1; i++) { acc += ws1[i].length; const est = p.x + p.w * acc / tot;
+      let best = null; for (const g of p.gaps) if (!used.has(g) && (!best || Math.abs(g.x - est) < Math.abs(best.x - est))) best = g;
+      if (best && Math.abs(best.x - est) < (p.lh || p.h) * 1.5) { used.add(best); cuts.push(best); } else cuts.push({ x: est, w: 0 }); }
+    cuts.sort((a, b) => a.x - b.x); const xs = [p.x, ...cuts.map(c => c.x), p.x + p.w];
+    return ws1.map((w, i) => { const x0 = xs[i] + (i ? cuts[i - 1].w / 2 : 0), x1 = xs[i + 1] - (i < cuts.length ? cuts[i].w / 2 : 0), inner = p.gaps.filter(g => g.x > x0 && g.x < x1);
+      return { text: w, x: +x0.toFixed(2), y: p.y, w: +(x1 - x0).toFixed(2), h: p.h, lh: p.lh || p.h, ...(inner.length ? { gaps: inner } : {}) }; });
+  }
   ls.forEach((l, i) => {
-    const ws = l.split(/\s+/).filter(Boolean), tot = ws.reduce((a, w) => a + w.length, 0) + (ws.length - 1) * 0.5; let cx = 0;
+    const ws = words(l), tot = ws.reduce((a, w) => a + w.length, 0) + (ws.length - 1) * 0.5; let cx = 0;
     for (const w of ws) { const ww = p.w * w.length / tot; out.push({ text: w, x: +(p.x + p.w * cx / tot).toFixed(2), y: +(p.y + lh * i).toFixed(2), w: +ww.toFixed(2), h: +lh.toFixed(2), lh: +(p.lh || lh).toFixed(2) }); cx += w.length + 0.5; }
   });
   return out.length > 1 ? out : parts;
@@ -3760,7 +3773,7 @@ function makeGroup(ls) {
   const texts = rows.map(r => r.parts.sort((a, b) => a.x - b.x).reduce((acc, p, i, arr) => !i ? p.text : acc + (p.x - (arr[i - 1].x + arr[i - 1].w) > p.lh * 0.25 ? ' ' : '') + p.text, ''));
   const x = Math.min(...ls.map(l => l.x)), y = Math.min(...ls.map(l => l.y));
   const fs = ls.map(l => l.lh).sort((a, b) => a - b)[Math.floor(ls.length / 2)];
-  const parts = ls.map(l => ({ text: l.text, x: +l.x.toFixed(2), y: +l.y.toFixed(2), w: +l.w.toFixed(2), h: +l.h.toFixed(2), lh: +(l.lh ?? l.h).toFixed(2) }));
+  const parts = ls.map(l => ({ text: l.text, x: +l.x.toFixed(2), y: +l.y.toFixed(2), w: +l.w.toFixed(2), h: +l.h.toFixed(2), lh: +(l.lh ?? l.h).toFixed(2), ...(l.gaps ? { gaps: l.gaps } : {}) }));
   return { ko: joinLabel(texts), lines: texts, parts, x: +x.toFixed(2), y: +y.toFixed(2), w: +(Math.max(...ls.map(l => l.x + l.w)) - x).toFixed(2), h: +(Math.max(...ls.map(l => l.y + l.h)) - y).toFixed(2), fs: +fs.toFixed(2) };
 }
 // 줄 잇기: '/'로 끝나거나 시작하면 붙이고, 아니면 띄어쓰기
@@ -3997,13 +4010,15 @@ async function analyzePdf(file, say = () => { }, words = []) {
       for (const r of rows) {
         let cur = null; const rh = Math.max(...r.cs.map(c => c.y1)) - Math.min(...r.cs.map(c => c.y0)), gapMax = Math.max(rh, b.fs * 1.5) * 0.8; // 글자 크기 = 줄 높이
         for (const c of r.cs.sort((p, q) => p.x0 - q.x0)) {
-          if (cur && c.x0 - cur.x1 <= gapMax) { cur.x1 = Math.max(cur.x1, c.x1); cur.y0 = Math.min(cur.y0, c.y0); cur.y1 = Math.max(cur.y1, c.y1); }
-          else segs.push(cur = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 });
+          if (cur && c.x0 - cur.x1 <= gapMax) { cur.x1 = Math.max(cur.x1, c.x1); cur.y0 = Math.min(cur.y0, c.y0); cur.y1 = Math.max(cur.y1, c.y1); cur.cs.push(c); }
+          else segs.push(cur = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, cs: [c], rh });
         }
       }
+      // 조각 안의 글자 사이 빈틈 자리 (사용자: 붙은 매대명을 나눌 때 글자 사이 애매한 곳에서 잘렸음 → 실제 빈틈에서 자르게). 넓은 순서로 15개
+      for (const sg of segs) { const gs2 = []; let mx = -Infinity; for (const c of sg.cs.slice().sort((p, q) => p.x0 - q.x0)) { if (mx > -Infinity && c.x0 - mx > sg.rh * 0.12) gs2.push({ x: r2((mx + c.x0) / 2), w: r2(c.x0 - mx) }); mx = Math.max(mx, c.x1); } sg.gaps = gs2.sort((p, q) => q.w - p.w).slice(0, 15); }
       let ps = [];
       if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '7' }); // 조각 = 한 줄
-      if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); if (tx.replace(/\s+/g, '')) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs) }); }
+      if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); if (tx.replace(/\s+/g, '')) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs), ...(sg.gaps.length ? { gaps: sg.gaps } : {}) }); }
       if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '6' });
       // 통째로는 못 읽었는데(사용자: 비스듬히 놓인 두 매대명이 표시선으로 붙어 통째 인식이 비었음) 조각으로 읽히면 조각 글자로
       if (!joinLabel(lines).replace(/\s+/g, '') && ps.length) { lines = ps.map(p => p.text); conf = 60; }
@@ -4012,7 +4027,7 @@ async function analyzePdf(file, say = () => { }, words = []) {
       if (lines.some(l => /[가-힣]/.test(l))) lines = lines.filter(l => /[가-힣]/.test(l) || lexHit([l], lex) > 0 || /^\/?[A-Za-z][A-Za-z0-9./&-]{2,}/.test(l) && l.length > 3); // 한글 줄이 있으면 'A'·'PES' 같은 짧은 부스러기 줄은 뺌 ps.forEach(q => { q.text = fixMdLabel(q.text, lex); }); // 오타 고치기
       const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
       if (!compact || (conf < 35 && compact.length <= 2 && b.n < 4) || Math.max(w, hh) < b.fs * 1.5) { skipped.push({ ko, conf: Math.round(conf), x, y, w, h: hh }); continue; } // 화살표·점 같은 빨간 표시는 뺌
-      const parts = ps.length > 1 ? ps : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs) }];
+      const parts = ps.length > 1 ? ps : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs), ...(segs.length === 1 && segs[0].gaps.length ? { gaps: segs[0].gaps } : {}) }];
       groups.push({ id: 'g' + groups.length, ko, lines, parts, ...(raw !== ko ? { ocrKo: raw } : {}), x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
     }
