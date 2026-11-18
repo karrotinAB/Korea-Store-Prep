@@ -1181,3 +1181,7 @@ nav button { padding: 7px 10px; }
 .brand-logo { height: 24px; width: auto; display: block; pointer-events: none; user-select: none; -webkit-user-drag: none; } /* 한 줄 로고 (사용자) */
 .link-brand > .brand-logo + b { margin-left: 10px; }
 @media (max-width: 760px) { .brand-logo { height: 19px; } .link-brand > .brand-logo + b { margin-left: 7px; } }
+/* 로고·국내 POG·우주선 크기 맞춤 (사용자: ARTBOX 로고 크기·굵기 기준) */
+.link-brand > .brand-logo + b { font-size: 27px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
+.link-brand .brand-panda { height: 32px; }
+@media (max-width: 760px) { .brand-logo { height: 16px; } .link-brand > .brand-logo + b { font-size: 18px; margin-left: 6px; } .link-brand .brand-panda { height: 21px; margin-left: 5px; } }
