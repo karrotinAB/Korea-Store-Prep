@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123q';
+const APP_VER = '20261123r';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -5163,9 +5163,20 @@ function dwIslands(an, gs) {
     const nm = nameOf.get(find(i)); if (!nm) continue;
     if (!by.has(nm)) by.set(nm, []); by.get(nm).push(g);
   }
-  const names = [...by.keys()].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-  const order = names.flatMap(n => by.get(n));
-  return { order, names, has: new Set(order.map(g => g.id)) };
+  // 모듈 끝에 붙은 매대명(사용자: 컬렉트카드·추억의게임1·미니게임·산리오1이 벽 매대로 잡혔음): 모듈 칸 범위 밖이라도 바깥 벽보다 모듈에 더 가깝고, 글자 높이 4배 안이면 그 모듈
+  const boxes = [...nameOf].map(([r, n]) => ({ n, ...box.get(r) })), took = new Set([...by.values()].flat().map(g => g.id));
+  const X0 = Math.min(...gs.map(g => g.x)), Y0 = Math.min(...gs.map(g => g.y)), X1 = Math.max(...gs.map(g => g.x + g.w)), Y1 = Math.max(...gs.map(g => g.y + g.h));
+  for (const g of gs) {
+    if (took.has(g.id)) continue;
+    let best = null, bd = Infinity;
+    for (const b of boxes) { const d = Math.hypot(Math.max(0, b.x0 - (g.x + g.w), g.x - b.x1), Math.max(0, b.y0 - (g.y + g.h), g.y - b.y1)); if (d < bd) { bd = d; best = b; } }
+    const edge = Math.min(g.x - X0, X1 - (g.x + g.w), g.y - Y0, Y1 - (g.y + g.h));
+    if (best && bd < edge && bd <= Math.max(g.h, g.fs || 0) * 4) { if (!by.has(best.n)) by.set(best.n, []); by.get(best.n).push(g); took.add(g.id); }
+  }
+  const idx = new Map(gs.map((g, i) => [g.id, i])); // 모듈 안은 원래 순서(위 → 아래·왼 → 오른)대로
+  const names2 = [...by.keys()].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  const order = names2.flatMap(n => by.get(n).sort((a, b) => idx.get(a.id) - idx.get(b.id)));
+  return { order, names: names2, has: new Set(order.map(g => g.id)) };
 }
 // 매대명 글씨에서 가장 가까운 칸
 function nearMod(mods, g) {
