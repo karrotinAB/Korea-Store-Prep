@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123a';
+const APP_VER = '20261123b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1132,7 +1132,7 @@ function renderHooks(block) {
     });
     qty.addEventListener('input', () => { x.qty = qty.value === '' ? '' : Number(qty.value); save(); });
     return h('div', { class: 'hook-row' }, sel, h('span', { class: 'x' }, '×'), qty,
-      ed && list.length > 1 ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { block._hooks = list.filter(y => y !== x); save(); renderHooks(block); } }, '×') : null);
+      ed && list.length > 1 ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { list.splice(list.indexOf(x), 1); save(); renderHooks(block); } }, '×') : null);
   }), ...(ed ? [h('button', { class: 'ex-add no-print', onclick: () => { list.push({ id: uid(), name: '', qty: '' }); save(); renderHooks(block); } }, '+ 고리 추가')] : []));
   roFill(block);
 }
@@ -1148,7 +1148,7 @@ const autoSp = (sh, pi) => [...(sh ? [{ id: 'p0', name: '선반', qty: sh }] : [
 // 맨 아래 선반은 빼고, 파이프는 POG 사이트 옵션(Y)으로. 선반 이름이 있는 데이터만 (없으면 저장된 그대로)
 function spRows(fx) {
   const raw = spRowsRaw(fx);
-  if (fx.kind === 'free' || JSON.stringify(raw) !== JSON.stringify(autoSp(fx.shelfCount, fx.pipeCount))) return raw;
+  if (fx.kind === 'free' || fx.spManual || JSON.stringify(raw) !== JSON.stringify(autoSp(fx.shelfCount, fx.pipeCount))) return raw; // 직접 고친(지운) 칸은 그대로 (사용자: 마지막 줄을 지우면 다시 채워졌음)
   const ps = fx.props || [], sh = ps.filter(isShelf).length; if (!sh) return raw;
   return autoSp(Math.max(0, sh - 1), ps.some(isPipe) ? ps.filter(isPipe).length : (fx.pipeCount || 0));
 }
@@ -1164,7 +1164,7 @@ const spText = rows => rows.filter(r => (r.name || '').trim()).map(r => `${r.nam
 function renderSp(block) {
   const box = block.querySelector('.page .sp-list'); if (!box) return;
   const ed = block._editable, list = block._sp;
-  const save = () => { const g = `${block._fx}|sp`; saveFx(block._pog, block._fx, 'sp', structuredClone(list), g); saveFx(block._pog, block._fx, 'shelfPipe', spText(list), g); };
+  const save = () => { const g = `${block._fx}|sp`; saveFx(block._pog, block._fx, 'sp', structuredClone(list), g); saveFx(block._pog, block._fx, 'shelfPipe', spText(list), g); saveFx(block._pog, block._fx, 'spManual', true, g); }; // 직접 고친 표시 → 그림으로 다시 세지 않음
   // 선택지 = 선반·파이프 + 사전 '선반/파이프' + 이 POG에서 직접 넣은 이름. 없으면 '+ 직접 입력…' (사용자: POG팀이 옵션에 없는 것도 넣게)
   const used = () => [...(state.fixtures?.values?.() || [])].flatMap(f => Array.isArray(f.sp) ? f.sp.map(r => r.name) : []).filter(Boolean);
   // 사전 이름과 이 POG에서만 쓴 이름을 나눠 보여줌. 띄어쓰기·대소문자만 다른 이름은 하나로 (사용자: 'BK 거는화일집기'가 두 번 보였음)
@@ -1202,7 +1202,7 @@ function renderSp(block) {
     });
     qty.addEventListener('input', () => { x.qty = qty.value === '' ? '' : Number(qty.value); save(); });
     return h('div', { class: 'ex-row' }, sel, h('span', { class: 'x' }, '×'), qty,
-      ed ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { block._sp = list.filter(y => y !== x); save(); renderSp(block); } }, '×') : null);
+      ed ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { list.splice(list.indexOf(x), 1); save(); renderSp(block); } }, '×') : null);
   }), ...(ed ? [h('button', { class: 'ex-add no-print', onclick: () => { list.push({ id: uid(), name: '', qty: '' }); save(); renderSp(block); } }, '+ 추가')] : []));
   roFill(block);
 }
@@ -1244,7 +1244,7 @@ function renderExtras(block) {
     });
     qty.addEventListener('input', () => { x.qty = qty.value === '' ? '' : Number(qty.value); save(); });
     return h('div', { class: 'ex-row' }, col, name, h('span', { class: 'x' }, '×'), qty,
-      ed ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { block._extras = list.filter(y => y !== x); save(); renderExtras(block); } }, '×') : null);
+      ed ? h('button', { class: 'ex-del no-print', title: '삭제', onclick: () => { list.splice(list.indexOf(x), 1); save(); renderExtras(block); } }, '×') : null);
   }), ...(ed ? [h('button', { class: 'ex-add no-print', onclick: () => { list.push({ id: uid(), name: '', qty: '' }); save(); renderExtras(block); block.querySelector('.page .ex-row:last-of-type .ex-name')?.focus(); } }, '+ 집기 추가')] : []));
   roFill(block);
 }
@@ -3306,7 +3306,7 @@ async function replaceWithGrab(pog, o, pg) {
     itemCount: pg.itemCount, shelfCount: pg.shelfCount, pipeCount: pg.pipeCount,
     itemZ: {}, blocks: [], base: null, frame: null, cut: null,
   };
-  if (JSON.stringify(spRowsRaw(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRowsRaw(o).length) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; }
+  if (!o.spManual && (JSON.stringify(spRowsRaw(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRowsRaw(o).length)) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; } // 직접 고친(지운) 선반/파이프는 그대로
   track(pog.id, o.id, Object.keys(patch), undoGroup());
   await updateDoc(doc(db, 'pogs', pog.id, 'fixtures', o.id), { ...patch, regrabbedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: me() });
   const t = catName(pg.teamName); if (t && !(pog.teams || []).includes(t)) updateDoc(doc(db, 'pogs', pog.id), { teams: arrayUnion(t) }).catch(() => { });
@@ -3406,7 +3406,7 @@ async function applyRegrab(pog, plan) {
       regrabbedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: me(),
     };
     // 선반/파이프: 손대지 않았을 때만 새 수로
-    if (JSON.stringify(spRowsRaw(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRowsRaw(o).length) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; }
+    if (!o.spManual && (JSON.stringify(spRowsRaw(o)) === JSON.stringify(autoSp(o.shelfCount, o.pipeCount)) || !spRowsRaw(o).length)) { patch.shelfPipe = pg.shelfPipe; patch.sp = pg.sp; } // 직접 고친(지운) 선반/파이프는 그대로
     await put(() => b.update(doc(db, 'pogs', pog.id, 'fixtures', o.id), patch));
   }
   // 칸이 늘어난 매대: 그 매대 마지막 페이지 바로 뒤에 끼워 넣기
