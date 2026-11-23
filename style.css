@@ -1198,4 +1198,4 @@ nav button { padding: 7px 10px; }
 .ft-split { display: flex; gap: 4px; }
 .ft-split .ft-kind { flex: 1 1 auto; min-width: 0; }
 .ft-split .ft-size { flex: 0 0 4.8em; min-width: 0; padding-left: 4px; padding-right: 4px; }
-.ft-split .ro-v { flex: 1 1 0; }
+.ft-split .ro-v { flex: 0 1 auto; white-space: nowrap; overflow-wrap: normal; padding-right: 0; } /* 보기 전용(최종·PDF)에서 '중앙'이 세로로 한 글자씩 나오던 것 → 가로로 '중앙 800' (사용자) */
