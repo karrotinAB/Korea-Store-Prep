@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123d';
+const APP_VER = '20261123e';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1492,6 +1492,12 @@ function renderNotes(block) {
       // 회전(n.rot = 0·90·180·270, 사용자): 상자(x·y·w·h)는 보이는 모양 그대로, 안의 사진만 돌림 (90·270이면 가로·세로를 바꿔서)
       const rot = ((n.rot || 0) % 360 + 360) % 360, sw = rot === 90 || rot === 270;
       const inner = h('img', { src: n.url, alt: '', draggable: 'false', style: pos });
+      // 사진이 안 열리면 파일 자리(path)로 주소를 다시 받아 봄 → 그래도 없으면 안내 글 (사용자: 다른 POG에서 가져온 사진이 안 보였음)
+      inner.addEventListener('error', async () => {
+        if (!inner.dataset.re && n.path) { inner.dataset.re = '1'; try { const u = await getDownloadURL(sRef(st, n.path)); if (u && u !== inner.src) { inner.src = u; return; } } catch { } }
+        if (inner.dataset.gone) return; inner.dataset.gone = '1';
+        inner.replaceWith(h('div', { class: 'nt-img-gone' }, '사진을 찾을 수 없어요', h('br'), h('small', {}, '원본 사진 파일이 지워졌을 수 있어요 · 다시 첨부해 주세요')));
+      });
       el = h('div', { class: 'nt nt-img' + (cropping ? ' cropping' : ''), style: st },
         cropping && c ? h('img', { class: 'nt-ghost', src: n.url, alt: '', draggable: 'false', style: pos }) : '',
         h('div', { class: 'nt-clip' }, rot ? h('div', { class: 'nt-rot', style: `position:absolute;left:50%;top:50%;width:${sw ? n.h : n.w}px;height:${sw ? n.w : n.h}px;transform:translate(-50%,-50%) rotate(${rot}deg);overflow:hidden` }, inner) : inner));
@@ -2600,7 +2606,7 @@ async function deleteDocs(refs) {
 // POG 통째로: 페이지(사진·메모 사진 파일 포함)·POG 문서
 async function deletePogAll(pogId) {
   const fxs = await getDocs(collection(db, 'pogs', pogId, 'fixtures'));
-  for (const d of fxs.docs) for (const ph of [...(d.data().photos || []), ...(d.data().notes || []).filter(n => n.path)]) { if (ph.path) try { await deleteObject(sRef(st, ph.path)); } catch { } }
+  for (const d of fxs.docs) for (const ph of [...(d.data().photos || []), ...(d.data().notes || []).filter(n => n.path && !n.shared)]) { if (ph.path) try { await deleteObject(sRef(st, ph.path)); } catch { } } // 다른 POG와 같이 쓰는 사진(shared)은 남김 (사용자: 메모 가져오기 한 사진이 사라졌음)
   await deleteDocs(fxs.docs.map(d => d.ref));
   try { const f = await getDocs(collection(db, 'pogs', pogId, 'feedback')); await deleteDocs(f.docs.map(d => d.ref)); } catch { } // 피드백 (관리자만 지울 수 있음)
   await dropLogs(['pogs', pogId]);
@@ -3437,7 +3443,7 @@ async function applyRegrab(pog, plan) {
     await put(() => b.set(doc(db, 'pogs', pog.id, 'fixtures', freeId(id)), { order: ++end, ...rest, ...blank }));
   }
   for (const o of plan.deletes) {
-    for (const ph of [...(o.photos || []), ...(o.notes || []).filter(x => x.path)]) { try { await deleteObject(sRef(st, ph.path)); } catch { } }
+    for (const ph of [...(o.photos || []), ...(o.notes || []).filter(x => x.path && !x.shared)]) { try { await deleteObject(sRef(st, ph.path)); } catch { } } // 같이 쓰는 사진은 남김
     await put(() => b.delete(doc(db, 'pogs', pog.id, 'fixtures', o.id)));
   }
   await flush();
