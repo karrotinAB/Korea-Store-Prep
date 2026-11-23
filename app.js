@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123c';
+const APP_VER = '20261123d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2448,7 +2448,15 @@ function renderSidePanel() {
     nodes.push(sec('매장명', h('label', { class: 'se-lab' }, '표지 가운데 큰 글씨'), inp('coverTitle', autoCoverTitle(pog) || '매장명'),
       h('label', { class: 'se-lab' }, '표지·모든 페이지 아래'), inp('branchName', pog.storeName || '매장명'),
       h('p', { class: 'se-help' }, '비우면 POG 사이트 매장명이 들어가요.')));
-    if (!narrow) nodes.push(sec('대표 POG 담당자', h('p', { class: 'se-help' }, '모든 페이지 아래 \'POG 담당자\'에 들어가요. 페이지마다 다르면 그 페이지 아래 칸에서 따로 고를 수 있어요.'), mgrBox));
+    // 오른쪽 패널 담당자 칸은 매번 새로 만듦 (사용자: 위 막대 칸을 옮겨 쓰다가 칸이 사라져 지정이 안 됐음)
+    if (!narrow) {
+      const names = [...new Set([...state.managers.map(m => m.name), pog.manager].filter(Boolean))];
+      const ms = h('select', { class: 'se-input', disabled: !ed }, h('option', { value: '' }, '선택'), ...names.map(n => h('option', { value: n }, n)));
+      ms.value = pog.manager || '';
+      ms.addEventListener('change', () => setPogManager(ms.value));
+      nodes.push(sec('대표 POG 담당자', h('p', { class: 'se-help' }, '모든 페이지 아래 \'POG 담당자\'에 들어가요. 페이지마다 다르면 그 페이지 아래 칸에서 따로 고를 수 있어요.'), ms,
+        names.length ? null : h('p', { class: 'se-help' }, '담당자 목록이 비어 있어요. 관리자가 계정 관리에서 POG 담당자를 넣어야 해요.')));
+    }
     const emp = emptyPages();
     if (ed) nodes.push(sec('페이지', h('div', { class: 'se-btns' }, btn('+ 표지 뒤에 빈 페이지 추가', () => addFreePage(pog.id, (sortedFx()[0]?.order ?? 0) - 1)),
       emp.length ? btn(`🧹 제품 없는 매대 페이지 지우기 (${emp.length}장)`, () => deleteEmptyPages(pog.id), 'danger') : null)));
@@ -2551,14 +2559,16 @@ function refreshManagerSelect() {
   sel.append(h('option', { value: '' }, '선택'), ...names.map(n => h('option', { value: n }, n)));
   sel.value = cur;
   state.pageEls?.forEach((blk, id) => { const ms = $('.pf-mgr-sel', blk), fx = state.fixtures.get(id); if (ms && fx && state.currentPog) fillMgrSelect(ms, fx, state.currentPog); });
+  if (state.view === 'pog-make' && (state.edActive || '__cover') === '__cover') renderSidePanel(); // 담당자 목록이 늦게 오면 오른쪽 칸도 다시
 }
-$('#ed-manager').addEventListener('change', async e => {
+async function setPogManager(v) {
   const p = state.currentPog; if (!p) return;
-  const v = e.target.value;
   track(p.id, '__pog', ['manager']);
-  p.manager = v;
-  await updateDoc(doc(db, 'pogs', p.id), { manager: v, updatedAt: serverTimestamp() });
-});
+  p.manager = v; const top = $('#ed-manager'); if (top) top.value = v;
+  try { await updateDoc(doc(db, 'pogs', p.id), { manager: v, updatedAt: serverTimestamp() }); toast(v ? `대표 POG 담당자: ${v}` : '대표 POG 담당자를 비웠어요'); }
+  catch (e) { alert('담당자를 저장하지 못했어요: ' + (e.code || e.message)); }
+}
+$('#ed-manager').addEventListener('change', e => setPogManager(e.target.value));
 $('#ed-final').onclick = async () => {
   const p = state.currentPog; if (!p) return;
   if (p.status === 'final') {
