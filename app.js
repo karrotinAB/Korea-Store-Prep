@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123b';
+const APP_VER = '20261123c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -590,9 +590,11 @@ function applyItemZ(block, fx) {
 }
 /* 제품 사진 (img.artbox.kr): 가끔 늦거나 실패함 → 자동으로 다시 불러오기 (조금 기다렸다가 2번, 그다음 referrer를 바꿔서 1번).
    그래도 안 되면 깨진 아이콘 대신 제품명 글자 (PDF에도 글자로 나옴) */
-function prodImg(src, name = '', { lazy = false, fallback = true } = {}) {
+// 사진이 없는 제품 칸 = 제품명 + 아래 흰 글상자에 제품코드 (사용자)
+const noImgBox = (name, code) => h('span', { class: 'cv-noimg' }, h('span', { class: 'cv-ni-name' }, name || ''), code ? h('span', { class: 'cv-ni-code' }, code) : '');
+function prodImg(src, name = '', { lazy = false, fallback = true, code = '' } = {}) {
   const img = h('img', { src, alt: '', referrerpolicy: 'no-referrer', loading: lazy ? 'lazy' : null });
-  img.dataset.src0 = src; img.dataset.name = name; img.dataset.fb = fallback ? '1' : '';
+  img.dataset.src0 = src; img.dataset.name = name; img.dataset.code = code; img.dataset.fb = fallback ? '1' : '';
   img.addEventListener('error', () => imgRetry(img));
   return img;
 }
@@ -604,8 +606,8 @@ function imgRetry(img) {
   img.dataset.failed = '1';
   if (img.dataset.fb) {
     // 글자 칸에 사진 주소를 남겨서 나중에 다시 불러올 수 있게 (사용자: 한번 깨진 사진도 복구)
-    const sp = h('span', { class: 'cv-noimg', title: '사진을 불러오지 못했어요 · 잠시 뒤 다시 불러와요' }, img.dataset.name || '');
-    sp.dataset.src0 = img.dataset.src0; sp.dataset.name = img.dataset.name || ''; sp.dataset.round = String(+(img.dataset.round || 0) + 1);
+    const sp = noImgBox(img.dataset.name, img.dataset.code); sp.title = '사진을 불러오지 못했어요 · 잠시 뒤 다시 불러와요';
+    sp.dataset.src0 = img.dataset.src0; sp.dataset.name = img.dataset.name || ''; sp.dataset.code = img.dataset.code || ''; sp.dataset.round = String(+(img.dataset.round || 0) + 1);
     img.replaceWith(sp);
   } else img.style.visibility = 'hidden';
   img.dispatchEvent(new Event('gaveup'));
@@ -614,7 +616,7 @@ function imgRetry(img) {
 function retryBroken(root = document, force = false) {
   const spans = $$('.cv-noimg', root).filter(s => s.dataset.src0 && s.isConnected && (force || +(s.dataset.round || 0) < 6));
   spans.forEach(s => {
-    const img = prodImg(s.dataset.src0 + (s.dataset.src0.includes('?') ? '&' : '?') + 'k=' + Date.now(), s.dataset.name || '');
+    const img = prodImg(s.dataset.src0 + (s.dataset.src0.includes('?') ? '&' : '?') + 'k=' + Date.now(), s.dataset.name || '', { code: s.dataset.code || '' });
     img.dataset.src0 = s.dataset.src0; img.dataset.round = s.dataset.round || '1';
     s.replaceWith(img);
   });
@@ -724,7 +726,7 @@ function buildCanvas(fx, W, H, onItem, { lazy = false, blockUI = false, noCut = 
   for (const it of items) {
     const el = h('div', { class: 'cv-item' + (onItem ? ' click' : ''), 'data-code': it.code, 'data-id': it.id, title: `[${it.code}] ${it.name}`,
       style: `left:${it.x - x0 + pad}px;top:${it.y - y0 + pad}px;width:${it.w}px;height:${it.h}px;z-index:${itemZ(fx, it)}` },
-      it.img ? prodImg(it.img, it.name, { lazy }) : h('span', {}, it.name));
+      it.img ? prodImg(it.img, it.name, { lazy, code: code8(String(it.code || '').trim()) }) : noImgBox(it.name, code8(String(it.code || '').trim())));
     if (onItem) el.onclick = () => onItem(it, fx);
     if (it._b) el.dataset.b = it._b;
     layer(it).append(el);
