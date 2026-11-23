@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123n';
+const APP_VER = '20261123o';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3745,6 +3745,22 @@ async function analyzeSvg(text) {
       }
     });
   });
+  // 윤곽선 매대명 (사용자: 대구신매점 SVG — 매대명 절반쯤이 글자가 아니라 빨간 모양(윤곽선)이라 못 읽었음)
+  // → 빨간 모양만 남긴 SVG(outline)를 돌려주면 uploadDrawing이 그림으로 바꿔 글자 인식(analyzePdf)으로 읽음
+  const SHAPES = 'path,polygon,polyline,rect,circle,ellipse,line', redIdx = new Set(); let glyphN = 0;
+  live.querySelectorAll(SHAPES).forEach((el, i) => {
+    const fl = getComputedStyle(el).fill, m = fl.match(/(\d+)[ ,]+(\d+)[ ,]+(\d+)/);
+    if (!isRedFill(fl) || (m && +m[2] > +m[1] * 0.5 && +m[2] > +m[3] + 50)) return; // 주황(상단이미지 띠)은 빼고
+    redIdx.add(i); const r = el.getBoundingClientRect();
+    if (r.height * k > 1 && r.height * k < vh * 0.04 && r.width * k < vw * 0.2) glyphN++;
+  });
+  let outline = null;
+  if (glyphN >= 8) {
+    const o = svg.cloneNode(true);
+    o.querySelectorAll('text, image, use').forEach(e => e.remove());
+    o.querySelectorAll(SHAPES).forEach((e, i) => { if (!redIdx.has(i) && !e.closest('clipPath, mask, defs, pattern, symbol, marker')) e.remove(); }); // 잘라내기 틀(clipPath)은 남겨야 그 안 그림이 보임
+    outline = new XMLSerializer().serializeToString(o);
+  }
   // 매대 칸 네모 (사용자: 도면 매대 타입·사이즈) — 화면 좌표를 도면 좌표로
   const rects = [];
   live.querySelectorAll('rect').forEach(el => { const r = el.getBoundingClientRect(); if (r.width > 0 && r.height > 0) rects.push({ x: (r.left - root.left) * k, y: (r.top - root.top) * k, w: r.width * k, h: r.height * k }); });
@@ -3755,7 +3771,8 @@ async function analyzeSvg(text) {
     const ls = leaves(t), keep = ls.filter((_, li) => dark.has(ti + ':' + li));
     if (!keep.length) t.remove(); else if (keep.length < ls.length) ls.forEach((el, li) => { if (!dark.has(ti + ':' + li)) el.remove(); });
   });
-  return { w: vw, h: vh, clean, base: new XMLSerializer().serializeToString(base), lines: lines.length, darkKept: dark.size, groups: groupLines(lines.some(l => l.red) ? lines.filter(l => l.red) : lines), dims, mods: dwModules(rects, dims) };
+  const gl = lines.some(l => l.red) ? lines.filter(l => l.red) : lines;
+  return { w: vw, h: vh, clean, base: new XMLSerializer().serializeToString(base), lines: lines.length, darkKept: dark.size, groups: groupLines(gl), glines: gl, outline, outlineN: glyphN, dims, mods: dwModules(rects, dims) };
 }
 // 빨간 글씨인지 (매대명)
 function isRedFill(f) {
@@ -3829,7 +3846,7 @@ function repSplit(w) {
 }
 function splitParts(g) {
   const parts = g.parts || [];
-  if (parts.length > 1) return parts;
+  if (parts.length > 1) { const cols = partCols(parts); return cols.length > 1 && cols.length < parts.length ? cols : parts; }
   const p = parts[0] || { x: g.x, y: g.y, w: g.w, h: g.h, lh: g.fs || g.h };
   const lines = (g.lines || []).length > 1 ? g.lines : [p.text || g.ko || ''];
   const ls = lines.map(l => String(l).trim()).filter(Boolean); if (!ls.length) return parts;
@@ -3857,6 +3874,19 @@ function splitParts(g) {
   const o2 = noTiny(out, p.lh || lh);
   return o2.length > 1 ? o2 : parts;
 }
+// 조각을 세로 칸(매대)으로 묶음: 가로로 많이 겹치고 위아래로 붙은 줄끼리 한 칸. 칸마다 원래 조각(_sub)을 가지고 있어 한 번 더 나누면 줄마다
+function partCols(parts) {
+  const par = parts.map((_, i) => i), f = i => par[i] === i ? i : (par[i] = f(par[i]));
+  for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) {
+    const p = parts[a], q = parts[b], lh = Math.max(p.lh || p.h, q.lh || q.h);
+    const ov = Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x), vg = Math.max(p.y, q.y) - Math.min(p.y + p.h, q.y + q.h);
+    if (ov > Math.min(p.w, q.w) * 0.5 && vg < lh * 0.8) par[f(a)] = f(b);
+  }
+  const m = new Map(); parts.forEach((q, i) => { const r = f(i); if (!m.has(r)) m.set(r, []); m.get(r).push(q); });
+  return [...m.values()].map(ps => { ps.sort((a, b) => a.y - b.y || a.x - b.x); const x = Math.min(...ps.map(q => q.x)), y = Math.min(...ps.map(q => q.y));
+    return { text: joinLabel(ps.map(q => q.text)), x, y, w: Math.max(...ps.map(q => q.x + q.w)) - x, h: Math.max(...ps.map(q => q.y + q.h)) - y, lh: ps[0].lh || ps[0].h, _sub: ps }; })
+    .sort((a, b) => a.x - b.x);
+}
 // 글자 하나 폭도 안 되는 아주 좁은 칸(사용자: '왜 이렇게까지 쪼개?' — 잘못 읽은 부스러기 글자)은 같은 줄 옆 칸에 붙임
 function noTiny(ps, LH) {
   const out = [];
@@ -3883,7 +3913,7 @@ const joinLabel = ts => ts.reduce((acc, t) => !acc ? t : (acc.endsWith('/') || t
 
 // 매대명 글자 인식 오타 고치기 (사용자: 오타가 많음). 자주 쓰는 매대명 낱말(전남대점 도면 등) + 그 매장 POG 매대명 낱말과 자모가 거의 같으면 그 낱말로.
 // 예: 아통완구 → 아동완구, 필봉3 → 필통3, 문구] → 문구1. 처음 읽은 글자는 groups[].ocrKo에 남김
-const MD_WORDS = '미니게임 상단 마리모 데코덴 ACC ART ART페인팅 BT마이크 BT스피커 BT이어폰 PEN RC카 TALE USB 가계부 가습기 가정용 건전지 게이밍 게임 게임굿즈 겨울 계산기 고데기 고데기집기 공병 공유기 구강 구슬꿰기 금고 기획매대 나노블럭 노트 노트북 다마고치 단어장 단우산 담곰이 델가드 드라이기 드론 디바이스 디제 디지털 딘토 레고 렌케 롤리폴리 롬앤 리락쿠마 리필심 릴렉싱 립밤 마니또 마라 마사지 마스크팩 마우스 말랑이 말하는인형 맥세이프 머그컵 머니건 멀티탭 메모수첩 메신저백 모나미 모카돌 목쿠션 몬치치 몬콜레 무드등 문구 문답카드 미니가방 미니게임류 미니청소기 미니카 미니편지지 미쓰비시 미피 민트 밍싱 바스볼 반프레스토 방송용 배터리 백팩 밴드 뱃지 보드게임 보석 보석자수 보조 봉투 부시로드 뷰티 브러쉬 사입랜덤 산리오 삼각대 생잡 생잡미니카 생잡인형 샥즈 섬유향수 세주인형 세트펜 셀카봉 소니엔젤 손거울 쇼핑백 수능시계 수면안대 수비니어 술게임 술잔 스마트 스마트홀더 스미스키 스케쥴러 스퀴시 스타킹 스타핑 스탑워치 스탠드 스터디플래너 스테들러 스티커 스티커북 스프링노트 슬라임 슬리퍼 식품 실바니안 심쿵펫 십자수 쌀알피규어 씰스티커 아동 아동노트 아동문구 아동수저 아동완구 아이러브 아크릴 애견 애니굿즈 애플존 앨범 양말 에어팟 에코백 여행 여행용 연인문답 오락실 오타마톤 온수팩 와와일공구 와펜 용지 우비 웹툰 위너스 이어폰 인솔 인형 인형소품 자동차블럭 자동차완구 자물쇠 자바라거치대 장우산 저금통 전자노트 점착메모 정리함 제브라 제작게임 지갑 지함 짱구 차량용 참류 추억의 카드 카드게임 카드지갑 카드케이스 카메라 캐릭터 캐릭터문구 캐릭터인형 캔디머신 컬렉션카드 케이블 케이스 케이팝 쿠모모 키덜트 키덜트키링 키링 키보드 키캡 키캡키링 타공판 타포린 탁상거울 탁상시계 탱글엔젤 텀블러 토미카 파버 파우치 파우치키링 파이롯트 파티 팔찌 패치 퍼글러 퍼즐 페인팅 펜텔 편지지 포맥스 포장지 포카 포켓몬 포켓몬카드 폰케이스 품수입 품스티커 프라임 프래그런스 플레잉 피규어 필통 하비굿즈 하비랜덤 한정 핫팩 핸드워시 핸드크림 향수 향수공병 허브리더기 헤드셋 헤드폰 헤어 헤어밴드 헬로굿스마일 형태펜 홀더 홈플레잉 화일 화장소품 화장품 화투'.split(' ');
+const MD_WORDS = '미니게임 상단 마리모 데코덴 ACC ART ART페인팅 BT마이크 BT스피커 BT이어폰 PEN RC카 TALE USB 가계부 가습기 가정용 건전지 게이밍 게임 게임굿즈 겨울 계산기 고데기 고데기집기 공병 공유기 구강 구슬꿰기 금고 기획매대 나노블럭 노트 노트북 다마고치 단어장 단우산 담곰이 델가드 드라이기 드론 디바이스 디제 디지털 딘토 레고 렌케 롤리폴리 롬앤 리락쿠마 리필심 릴렉싱 립밤 마니또 마라 마사지 마스크팩 마우스 말랑이 말하는인형 맥세이프 머그컵 머니건 멀티탭 메모수첩 메신저백 모나미 모카돌 목쿠션 몬치치 몬콜레 무드등 문구 문답카드 미니가방 미니게임류 미니청소기 미니카 미니편지지 미쓰비시 미피 민트 밍싱 바스볼 반프레스토 방송용 배터리 백팩 밴드 뱃지 보드게임 보석 보석자수 보조 봉투 부시로드 뷰티 브러쉬 사입랜덤 산리오 삼각대 생잡 생잡미니카 생잡인형 샥즈 섬유향수 세주인형 세트펜 셀카봉 소니엔젤 손거울 쇼핑백 수능시계 수면안대 수비니어 술게임 술잔 스마트 스마트홀더 스미스키 스케쥴러 스퀴시 스타킹 스타핑 스탑워치 스탠드 스터디플래너 스테들러 스티커 스티커북 스프링노트 슬라임 슬리퍼 식품 실바니안 심쿵펫 십자수 쌀알피규어 씰스티커 아동 아동노트 아동문구 아동수저 아동완구 아이러브 아크릴 애견 애니굿즈 애플존 앨범 양말 에어팟 에코백 여행 여행용 연인문답 오락실 오타마톤 온수팩 와와일공구 와펜 용지 우비 웹툰 위너스 이어폰 인솔 인형 인형소품 자동차블럭 자동차완구 자물쇠 자바라거치대 장우산 저금통 전자노트 점착메모 정리함 제브라 제작게임 지갑 지함 짱구 차량용 참류 추억의 카드 카드게임 카드지갑 카드케이스 카메라 캐릭터 캐릭터문구 캐릭터인형 캔디머신 컬렉션카드 케이블 케이스 케이팝 쿠모모 키덜트 키덜트키링 키링 키보드 키캡 키캡키링 타공판 타포린 탁상거울 탁상시계 탱글엔젤 텀블러 토미카 파버 파우치 파우치키링 파이롯트 파티 팔찌 패치 퍼글러 퍼즐 페인팅 펜텔 편지지 포맥스 포장지 포카 포켓몬 포켓몬카드 폰케이스 품수입 품스티커 프라임 프래그런스 플레잉 피규어 필통 하비굿즈 하비랜덤 한정 핫팩 핸드워시 핸드크림 향수 향수공병 허브리더기 헤드셋 헤드폰 헤어 헤어롤 헤어밴드 레인보우 탱글엔젤 헬로굿스마일 형태펜 홀더 홈플레잉 화일 화장소품 화장품 화투'.split(' ');
 const JAMO_C = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ', JAMO_V = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ', JAMO_T = ' ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ';
 const jamo = s => { let o = ''; for (const ch of s) { const c = ch.charCodeAt(0) - 0xAC00; if (c >= 0 && c < 11172) o += JAMO_C[Math.floor(c / 588)] + JAMO_V[Math.floor(c % 588 / 28)] + (c % 28 ? JAMO_T[c % 28] : ''); else o += ch.toLowerCase(); } return o; };
 const editDist = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, i) => i); for (let i = 1; i <= a.length; i++) { let p = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; } } return d[b.length]; };
@@ -4221,12 +4251,30 @@ async function storeMdWords(st) {
   for (const f of lists.flat()) for (const n of [f.headerName, f.mdName]) for (const m of String(n || '').matchAll(/([가-힣A-Za-z]+)\d*\s*\/\s*([가-힣A-Za-z]+)/g)) out.add(m[1] + '/' + m[2]); // 'A/B' 묶음
   return [...out];
 }
+// SVG 안의 윤곽선 매대명(빨간 모양) → 그림으로 바꿔 글자 인식 → SVG 글자 매대명과 합쳐 다시 묶음 (사용자: 대구신매점 SVG)
+async function svgOutlined(an, store) {
+  toast(`글자가 아닌(윤곽선) 매대명도 읽는 중… 몇 분 걸릴 수 있어요`);
+  const sc = 4000 / Math.max(an.w, an.h), cw = Math.round(an.w * sc), ch = Math.round(an.h * sc);
+  const x = new DOMParser().parseFromString(an.outline, 'image/svg+xml').documentElement; x.setAttribute('width', cw); x.setAttribute('height', ch);
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(x)], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image(); await new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error('윤곽선 매대명을 그림으로 못 바꿨어요')); img.src = url; });
+    const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch); cx.drawImage(img, 0, 0, cw, ch);
+    const blob = await new Promise(ok => cv.toBlob(ok, 'image/png'));
+    const pa = await analyzePdf(new File([blob], 'outline.png', { type: 'image/png' }), toast, await storeMdWords(store));
+    const k = an.w / pa.w, r2 = n => +(n * k).toFixed(2);
+    const ocr = pa.groups.flatMap(g => g.parts.map(q => ({ text: q.text, x: q.x * k, y: q.y * k, w: q.w * k, h: q.h * k, lh: (q.lh || q.h) * k, red: true, ...(q.gaps ? { gaps: q.gaps.map(z => ({ x: r2(z.x), w: r2(z.w) })) } : {}) }))).filter(q => String(q.text || '').trim());
+    if (!ocr.length) return an;
+    return { ...an, groups: groupLines([...an.glines, ...ocr]), ocrN: ocr.length };
+  } catch (e) { toast('윤곽선 매대명은 못 읽었어요: ' + e.message); return an; }
+  finally { URL.revokeObjectURL(url); }
+}
 async function uploadDrawing(file) {
   const isPdf = /\.(pdf|ai)$/i.test(file.name) || file.type === 'application/pdf' || isImgFile(file); // JPG·PNG도 같은 방법(그림에서 빨간 글씨 읽기)
   if (!isPdf && !/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') { alert('SVG·PDF·AI·JPG 파일만 올릴 수 있어요.\n(Illustrator: 파일 → 내보내기 → 다른 이름으로 내보내기 → SVG. 글씨는 윤곽선 만들기 하지 말아주세요)'); return; }
   const id = dw.id, store = state.stores.find(x => x.id === id);
   let an;
-  try { toast('도면을 읽는 중…'); an = isPdf ? await analyzePdf(file, toast, await storeMdWords(store)) : await analyzeSvg(await file.text()); }
+  try { toast('도면을 읽는 중…'); an = isPdf ? await analyzePdf(file, toast, await storeMdWords(store)) : await analyzeSvg(await file.text()); if (!isPdf && an.outline) an = await svgOutlined(an, store); }
   catch (e) { alert('도면을 읽지 못했어요: ' + e.message); return; }
   if (!an.groups.length && !confirm('도면에서 글자를 하나도 못 읽었어요.\n매대명을 윤곽선 만들기 했다면 POG에서 매대를 고를 수 없어요.\n그래도 올릴까요?')) return;
   const latest = dw.versions.at(-1), redo = latest && !latest.exported; // 아직 안 내보낸 버전이면 그 버전을 바꿈
@@ -4893,7 +4941,7 @@ function groupEditor(v) {
   };
   const split = () => {
     const g = sel[0], parts = splitParts(g);
-    const pieces = parts.map((p, i) => ({ id: i ? nextId() : g.id, ...makeGroup([{ ...p }]) }));
+    const pieces = parts.map((p, i) => ({ id: i ? nextId() : g.id, ...makeGroup((p._sub || [p]).map(q => ({ ...q }))) }));
     save(groups.flatMap(x => x.id === g.id ? pieces : [x]), `'${g.ko}'를 ${pieces.length}개로 나눴어요`);
   };
   const merge = () => {
