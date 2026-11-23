@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123k';
+const APP_VER = '20261123l';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3818,7 +3818,7 @@ function groupLines(lines) {
    세 글자 넘게 똑같은 곳(터인형)이 두 번 나오면 그 차이만큼 앞에서 자름 */
 function repSplit(w) {
   const hs = w.replace(/\d+$/, '');
-  if (hs.length < 6 || hs.includes('/') || !/[가-힣]{6}/.test(hs)) return [w];
+  if (hs.length < 6 || hs.includes('/') || (hs.match(/[가-힣]/g) || []).length < 6) return [w]; // ']'·'l'로 읽힌 1이 끼어 있어도 (하비굿즈]마비굿즈2)
   for (let L = Math.floor(hs.length / 2); L >= 3; L--) for (let i = 0; i + L <= hs.length; i++) {
     const sub = hs.slice(i, i + L); if (!/^[가-힣]+$/.test(sub)) continue;
     const j = hs.indexOf(sub, i + L); if (j < 0) continue;
@@ -3835,7 +3835,7 @@ function splitParts(g) {
   const ls = lines.map(l => String(l).trim()).filter(Boolean); if (!ls.length) return parts;
   const out = [], lh = p.h / ls.length;
   // 한 줄이고 글자 사이 빈틈 자리를 알면(PDF·AI·JPG 도면) 가장 넓은 빈틈에서 자름 → 칸이 글자에 딱 맞음
-  const words = l => l.split(/\s+/).flatMap(w => w.split(/(?<=\d)(?=\/?[가-힣A-Za-z])/)).flatMap(repSplit).filter(Boolean); // 띄어쓰기 + '사입랜덤5사입랜덤6'처럼 숫자 뒤에 글자가 오면 거기서 + 같은 이름 되풀이
+  const words = l => l.split(/\s+/).flatMap(w => w.split(/(?<=\d|[가-힣][\]|ㅣ])(?=\/?[가-힣A-Za-z])/)).flatMap(repSplit).map(w => w.replace(/(?<=[가-힣])[\]|ㅣ]$/, '1')).filter(Boolean); // 띄어쓰기 + '사입랜덤5사입랜덤6'처럼 숫자 뒤에 글자가 오면 거기서 + 같은 이름 되풀이
   const ws1 = ls.length === 1 ? words(ls[0]) : [];
   if (ws1.length > 1 && (p.gaps || []).length >= ws1.length - 1) {
     // 글자 수 비율로 자를 자리를 어림한 뒤, 가장 가까운 실제 빈틈으로 옮김 (낱말 안 글자 사이가 더 넓을 때도 있어서 '가장 넓은 빈틈'만으로는 틀림)
@@ -4109,7 +4109,7 @@ async function analyzePdf(file, say = () => { }, words = []) {
       for (const sg of segs) { const gs2 = []; let mx = -Infinity; for (const c of sg.cs.slice().sort((p, q) => p.x0 - q.x0)) { if (mx > -Infinity && c.x0 - mx > sg.rh * 0.12) gs2.push({ x: r2((mx + c.x0) / 2), w: r2(c.x0 - mx) }); mx = Math.max(mx, c.x1); } sg.gaps = gs2.sort((p, q) => q.w - p.w).slice(0, 15); }
       let ps = [];
       if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '7' }); // 조각 = 한 줄
-      if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); if (tx.replace(/\s+/g, '')) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs), ...(sg.gaps.length ? { gaps: sg.gaps } : {}) }); }
+      if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); const tc = tx.replace(/\s+/g, ''); if (tc && (tc.length > 1 || sg.x1 - sg.x0 > b.fs)) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs), ...(sg.gaps.length ? { gaps: sg.gaps } : {}) }); }
       if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '6' });
       // 통째로는 못 읽었는데(사용자: 비스듬히 놓인 두 매대명이 표시선으로 붙어 통째 인식이 비었음) 조각으로 읽히면 조각 글자로
       if (!joinLabel(lines).replace(/\s+/g, '') && ps.length) { lines = ps.map(p => p.text); conf = 60; }
