@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123i';
+const APP_VER = '20261123j';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3826,10 +3826,13 @@ function splitParts(g) {
   const ws1 = ls.length === 1 ? words(ls[0]) : [];
   if (ws1.length > 1 && (p.gaps || []).length >= ws1.length - 1) {
     // 글자 수 비율로 자를 자리를 어림한 뒤, 가장 가까운 실제 빈틈으로 옮김 (낱말 안 글자 사이가 더 넓을 때도 있어서 '가장 넓은 빈틈'만으로는 틀림)
-    const tot = ws1.reduce((a, w) => a + w.length, 0), used = new Set(), cuts = []; let acc = 0;
-    for (let i = 0; i < ws1.length - 1; i++) { acc += ws1[i].length; const est = p.x + p.w * acc / tot;
-      let best = null; for (const g of p.gaps) if (!used.has(g) && (!best || Math.abs(g.x - est) < Math.abs(best.x - est))) best = g;
-      if (best && Math.abs(best.x - est) < (p.lh || p.h) * 1.5) { used.add(best); cuts.push(best); } else cuts.push({ x: est, w: 0 }); }
+    // 글자 폭 어림: 한글 1, 영어·숫자 0.6, 기호 0.4, 낱말 사이 0.4 (사용자: 'ART'가 섞이면 자리가 밀렸음)
+    const cw = t => [...t].reduce((a, c) => a + (/[가-힣]/.test(c) ? 1 : /[A-Za-z0-9]/.test(c) ? 0.6 : 0.4), 0);
+    const tot = ws1.reduce((a, w) => a + cw(w), 0) + (ws1.length - 1) * 0.4, used = new Set(), cuts = []; let acc = 0; const LH = p.lh || p.h;
+    for (let i = 0; i < ws1.length - 1; i++) { acc += cw(ws1[i]) + 0.2; const est = p.x + p.w * acc / tot; acc += 0.2;
+      // 어림한 자리 근처(1.2줄 높이 안)에서 가장 넓은 빈틈 (낱말 사이가 보통 가장 넓음 · 사용자: 대구신매점 '보|석'에서 잘렸음). 멀수록 조금 덜 침
+      let best = null, bs = -1; for (const g of p.gaps) { const d = Math.abs(g.x - est); if (used.has(g) || d > LH * 1.2) continue; const sc = g.w / (1 + d / LH); if (sc > bs) { bs = sc; best = g; } }
+      if (best) { used.add(best); cuts.push(best); } else cuts.push({ x: est, w: 0 }); }
     cuts.sort((a, b) => a.x - b.x); const xs = [p.x, ...cuts.map(c => c.x), p.x + p.w];
     return ws1.map((w, i) => { const x0 = xs[i] + (i ? cuts[i - 1].w / 2 : 0), x1 = xs[i + 1] - (i < cuts.length ? cuts[i].w / 2 : 0), inner = p.gaps.filter(g => g.x > x0 && g.x < x1);
       return { text: w, x: +x0.toFixed(2), y: p.y, w: +(x1 - x0).toFixed(2), h: p.h, lh: p.lh || p.h, ...(inner.length ? { gaps: inner } : {}) }; });
