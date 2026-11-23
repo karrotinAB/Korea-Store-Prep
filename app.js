@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123s';
+const APP_VER = '20261123t';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -4705,7 +4705,7 @@ async function autoSeqByPos(v) {
   const an = await dwAnalysis(v), isl = an ? dwIslands(an, pos) : null;
   const sdir = $('#dw-seqdir')?.value || 'down';
   if (sdir === 'wall' || sdir === 'wallcw') { // 벽 먼저 (사용자): 벽 → A-1, A-2… 모듈 → 가운데 나머지(기획매대 등)
-    const rest = pos.filter(g => !isl?.has.has(g.id)), { wall, mid } = wallOrder(rest, gs, ent, sdir === 'wallcw');
+    const rest = pos.filter(g => !isl?.has.has(g.id)), { wall, mid } = wallOrder(rest, (v.groups || []).filter(g => g.w > 0 && g.h > 0 && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, '')) && !ENT_RE.test(String(g.ko || ''))), ent, sdir === 'wallcw'); // 벽 판단은 팀과 상관없이 도면의 모든 매대명으로 (팀을 고르면 다른 팀 매대가 빠져서 모듈 끝 매대가 벽으로 잡혔음)
     const spin = g => /회전/.test(String(g.ko || '').replace(/\s+/g, '')); // 회전매대는 맨 마지막 (사용자)
     const seq0 = [...wall, ...(isl?.order || []), ...mid];
     dw.seqDraft = [...seq0.filter(g => !spin(g)), ...seq0.filter(spin)].map(g => g.id);
