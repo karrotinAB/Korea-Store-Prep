@@ -353,7 +353,7 @@
       // 제품 팀구분 (사용자): '제품추가' 창(popItemAdd.aspx)에서 제품코드로 검색 → 목록의 '홈&라이프 - 슬리퍼 - …' 맨 앞이 팀구분.
       // 한 번에 400개씩, 재고 0 이하도 보이게(checkzero=N)
       const tmOf = new Map(), vm = 'N' + (targets.find(t => t.mdidx)?.mdidx || '');
-      // POG 사이트 '제품추가' 창은 한 페이지에 최대 300개 (사용자: 400개씩 찾아서 300개 넘는 제품은 팀이 비었음) → 250개씩, 못 찾은 것은 50개씩 한 번 더
+      // 팀이 빈 제품이 있었음 (사용자) → 250개씩 찾고, 못 찾은 것은 50개씩 한 번 더 ('제품추가' 창은 한 페이지 최대 500개)
       const readTeams = async (list, step) => {
         for (let k = 0; k < list.length; k += step) {
           $msg.textContent = `제품 팀구분 읽는 중… ${Math.min(list.length, k + step)} / ${list.length}`;
