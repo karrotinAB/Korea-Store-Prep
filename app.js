@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123t';
+const APP_VER = '20261123u';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -4705,9 +4705,23 @@ async function autoSeqByPos(v) {
   const an = await dwAnalysis(v), isl = an ? dwIslands(an, pos) : null;
   const sdir = $('#dw-seqdir')?.value || 'down';
   if (sdir === 'wall' || sdir === 'wallcw') { // 벽 먼저 (사용자): 벽 → A-1, A-2… 모듈 → 가운데 나머지(기획매대 등)
-    const rest = pos.filter(g => !isl?.has.has(g.id)), { wall, mid } = wallOrder(rest, (v.groups || []).filter(g => g.w > 0 && g.h > 0 && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, '')) && !ENT_RE.test(String(g.ko || ''))), ent, sdir === 'wallcw'); // 벽 판단은 팀과 상관없이 도면의 모든 매대명으로 (팀을 고르면 다른 팀 매대가 빠져서 모듈 끝 매대가 벽으로 잡혔음)
+    // 모듈 칸 밖에서 붙인 매대명은 벽 매대명이 모듈보다 더 가까우면 벽으로 (사용자: 대구신매점 추억의게임1·2는 벽, 컬렉트카드·산리오1은 모듈)
+    let modsL = (isl?.mods || []).map(a => a.slice()), toWall = new Set();
+    if (isl?.ext?.size) {
+      const allG = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, '')) && !ENT_RE.test(String(g.ko || '')));
+      const w0 = wallOrder(pos.filter(g => !isl.has.has(g.id)), allG, ent, false).wall;
+      const dist = (a, b) => Math.hypot(Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w)), Math.max(0, a.y - (b.y + b.h), b.y - (a.y + a.h)));
+      toWall = new Set([...isl.ext].filter(([id, bd]) => { const g = gs.find(x => x.id === id); return g && w0.some(w => dist(g, w) < bd); }).map(([id]) => id));
+      if (toWall.size) { modsL = modsL.map(a => a.filter(g => !toWall.has(g.id))); isl.has = new Set([...isl.has].filter(id => !toWall.has(id))); }
+    }
+    const rest = pos.filter(g => !isl?.has.has(g.id)), { wall, mid } = wallOrder(rest, (v.groups || []).filter(g => g.w > 0 && g.h > 0 && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, '')) && !ENT_RE.test(String(g.ko || ''))), ent, sdir === 'wallcw', toWall); // 벽 판단은 팀과 상관없이 도면의 모든 매대명으로 (팀을 고르면 다른 팀 매대가 빠져서 모듈 끝 매대가 벽으로 잡혔음)
     const spin = g => /회전/.test(String(g.ko || '').replace(/\s+/g, '')); // 회전매대는 맨 마지막 (사용자)
-    const seq0 = [...wall, ...(isl?.order || []), ...mid];
+    // 모듈 안 = 시계 방향 (사용자가 직접 매긴 대구신매점 번호): 위 줄 왼 → 오른, 오른쪽 끝 위 → 아래, 아래 줄 오른 → 왼, 왼쪽 끝 아래 → 위 (모듈 가운데를 도는 각도, 왼쪽 가운데보다 조금 위에서 시작)
+    const cwMod = arr => { const x0 = Math.min(...arr.map(g => g.x)), x1 = Math.max(...arr.map(g => g.x + g.w)), y0 = Math.min(...arr.map(g => g.y)), y1 = Math.max(...arr.map(g => g.y + g.h)), Cx = (x0 + x1) / 2, Cy = (y0 + y1) / 2;
+      const st = -Math.PI + 0.45; // 왼쪽 가운데보다 25°쯤 위에서 시작 → 왼쪽 끝 매대명은 맨 마지막 (사용자: A-2 컬렉트카드가 마지막)
+      const key = g => (Math.atan2((g.y + g.h / 2 - Cy) / ((y1 - y0) / 2 || 1), (g.x + g.w / 2 - Cx) / ((x1 - x0) / 2 || 1)) - st + 4 * Math.PI) % (2 * Math.PI);
+      return arr.slice().sort((a, b) => key(a) - key(b)); };
+    const seq0 = [...wall, ...modsL.filter(a => a.length).flatMap(cwMod), ...mid];
     dw.seqDraft = [...seq0.filter(g => !spin(g)), ...seq0.filter(spin)].map(g => g.id);
   } else if (isl?.order.length) dw.seqDraft = [...isl.order, ...pos.filter(g => !isl.has.has(g.id))].map(g => g.id);
   else dw.seqDraft = pos.map(g => g.id);
@@ -5130,7 +5144,7 @@ const dwMods = async v => (await dwAnalysis(v))?.mods || null;
 const MODULE_RE = /^[A-Za-z]{1,2}-\d{1,3}$/;
 /* 벽 매대 순서 (사용자: 벽부터 번호): 위·아래·왼쪽·오른쪽 중 한쪽이라도 바깥까지 다른 매대명이 없으면 벽(바깥) 매대.
    벽은 왼쪽 위 모서리에서 시작해 왼쪽 벽 ↓ → 아래 벽 → → 오른쪽 벽 ↑ → 위 벽 ← (도면 가운데를 도는 각도 순). 나머지(가운데)는 위 → 아래 */
-function wallOrder(rest, all, ent, cw) {
+function wallOrder(rest, all, ent, cw, force = new Set()) {
   const cx = g => g.x + g.w / 2, cy = g => g.y + g.h / 2;
   // 바깥쪽에 다른 매대명이 있으면 막힘. 옆 길은 글자 높이 1.5배만큼 넓게 봄 (사용자: 벽 매대 사이 높이에 있는 모듈 끝 매대명(컬렉트카드·추억의게임1)이 벽으로 잡혔음)
   const blocked = (g, dir) => all.some(o => { if (o === g) return false; const t = Math.max(g.h, o.h) * 1.5;
@@ -5138,7 +5152,7 @@ function wallOrder(rest, all, ent, cw) {
       ? Math.min(o.x + o.w, g.x + g.w + t) - Math.max(o.x, g.x - t) > 0 && (dir === 'u' ? cy(o) < g.y : cy(o) > g.y + g.h)
       : Math.min(o.y + o.h, g.y + g.h + t) - Math.max(o.y, g.y - t) > 0 && (dir === 'l' ? cx(o) < g.x : cx(o) > g.x + g.w); });
   const wall = [], mid = [];
-  for (const g of rest) (['u', 'd', 'l', 'r'].some(d => !blocked(g, d)) ? wall : mid).push(g);
+  for (const g of rest) (force.has(g.id) || ['u', 'd', 'l', 'r'].some(d => !blocked(g, d)) ? wall : mid).push(g); // force = 벽 매대명 옆이라 벽으로 정한 것
   const x0 = Math.min(...all.map(g => g.x)), y0 = Math.min(...all.map(g => g.y)), x1 = Math.max(...all.map(g => g.x + g.w)), y1 = Math.max(...all.map(g => g.y + g.h));
   const Cx = (x0 + x1) / 2, Cy = (y0 + y1) / 2, T = 2 * Math.PI; // 가로·세로 비율을 맞춘 각도
   const ang = (x, y) => Math.atan2((y - Cy) / (y1 - y0 || 1), (x - Cx) / (x1 - x0 || 1));
@@ -5168,19 +5182,19 @@ function dwIslands(an, gs) {
     if (!by.has(nm)) by.set(nm, []); by.get(nm).push(g);
   }
   // 모듈 끝에 붙은 매대명(사용자: 컬렉트카드·추억의게임1·미니게임·산리오1이 벽 매대로 잡혔음): 모듈 칸 범위 밖이라도 바깥 벽보다 모듈에 더 가깝고, 글자 높이 4배 안이면 그 모듈
-  const boxes = [...nameOf].map(([r, n]) => ({ n, ...box.get(r) })), took = new Set([...by.values()].flat().map(g => g.id));
+  const boxes = [...nameOf].map(([r, n]) => ({ n, ...box.get(r) })), took = new Set([...by.values()].flat().map(g => g.id)), ext = new Map(); // ext = 모듈 칸 밖에서 붙인 매대명 → 모듈까지 거리
   const X0 = Math.min(...gs.map(g => g.x)), Y0 = Math.min(...gs.map(g => g.y)), X1 = Math.max(...gs.map(g => g.x + g.w)), Y1 = Math.max(...gs.map(g => g.y + g.h));
   for (const g of gs) {
     if (took.has(g.id)) continue;
     let best = null, bd = Infinity;
     for (const b of boxes) { const d = Math.hypot(Math.max(0, b.x0 - (g.x + g.w), g.x - b.x1), Math.max(0, b.y0 - (g.y + g.h), g.y - b.y1)); if (d < bd) { bd = d; best = b; } }
     const edge = Math.min(g.x - X0, X1 - (g.x + g.w), g.y - Y0, Y1 - (g.y + g.h));
-    if (best && bd < edge && bd <= Math.max(g.h, g.fs || 0) * 4) { if (!by.has(best.n)) by.set(best.n, []); by.get(best.n).push(g); took.add(g.id); }
+    if (best && bd < edge && bd <= Math.max(g.h, g.fs || 0) * 4) { if (!by.has(best.n)) by.set(best.n, []); by.get(best.n).push(g); took.add(g.id); ext.set(g.id, bd); }
   }
   const idx = new Map(gs.map((g, i) => [g.id, i])); // 모듈 안은 원래 순서(위 → 아래·왼 → 오른)대로
   const names2 = [...by.keys()].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const order = names2.flatMap(n => by.get(n).sort((a, b) => idx.get(a.id) - idx.get(b.id)));
-  return { order, names: names2, has: new Set(order.map(g => g.id)) };
+  return { order, names: names2, mods: names2.map(n => by.get(n)), ext, has: new Set(order.map(g => g.id)) };
 }
 // 매대명 글씨에서 가장 가까운 칸
 function nearMod(mods, g) {
