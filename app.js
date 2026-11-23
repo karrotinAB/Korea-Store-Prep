@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123f';
+const APP_VER = '20261123g';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1054,8 +1054,9 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
     el.dataset.f = f; el.classList.add('f');
     if (!editable) el.disabled = true;
     else {
-      const fn = () => saveFx(pid, fx.id, f, el.value);
+      const fn = e => { if (e?.isComposing) return; saveFx(pid, fx.id, f, el.value); }; // 한글 조합 중엔 저장 안 함 → 조합이 끝나면 저장
       el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', fn);
+      if (el.tagName !== 'SELECT') el.addEventListener('compositionend', () => fn());
     }
     return el;
   };
@@ -1663,12 +1664,13 @@ function renderNoteBar(block) {
   if (n.t === 'text') {
     const ta = h('textarea', { class: 'nb-text', rows: 2 });
     ta.value = n.text || '';
-    ta.addEventListener('input', () => {
+    const onText = e => {
       n.text = ta.value; // 상자 크기는 그대로 (넘치면 글자가 작아짐)
       const tx = block.querySelector(`.anno .nt[data-id="${n.id}"] .nt-tx`); // 메모 전체를 다시 그리면 버벅여서 그 글만 바꿈 (사용자)
       if (tx) { tx.textContent = n.text; tx.style.fontSize = (n.fs || 14) + 'px'; fitText(tx, n.fs || 14); } else renderNotes(block);
-      saveNotes(block);
-    });
+      if (!e?.isComposing) saveNotes(block); // 한글 조합 중엔 화면만 바꾸고, 글자가 완성되면 저장
+    };
+    ta.addEventListener('input', onText); ta.addEventListener('compositionend', () => onText());
     box.append(ta,
       lab('배경'), swatches(n.bg, c => set({ bg: c }), { none: true }),
       lab('글자'), swatches(n.color, c => set({ color: c || '#222222' })),
@@ -1877,6 +1879,20 @@ function applyPogDoc() {
   }
   renderEditorPages();
 }
+/* 직접 입력 중에는 그 칸이 있는 페이지·패널을 다시 그리지 않음 (사용자: 일부 PC에서 치는 중에 커서가 사라지거나 입력이 끝난 것처럼 넘어감 — 한글 조합 중에 다시 그려져서).
+   글 쓰기를 끝내면(Enter·다른 곳 누르기) 밀린 것을 한 번에 맞춤 */
+const typingEl = () => { const a = document.activeElement; if (!a) return null; if (a.isContentEditable) return a; if (a.tagName === 'TEXTAREA') return a; if (a.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|color|range|file)$/.test(a.type)) return a; return null; };
+const edLater = new Set(); let edLaterAll = false, glLater = false;
+document.addEventListener('focusout', () => setTimeout(() => {
+  if (typingEl()) return;
+  if (glLater) { glLater = false; refreshGlossaryLists(); }
+  if (state.view === 'pog-make' && (edLaterAll || edLater.size)) { const o = edLaterAll ? null : new Set(edLater); edLater.clear(); edLaterAll = false; renderEditorPages(o); }
+}, 0));
+// 한 줄 입력 칸은 Enter = 입력 끝 (사용자: Enter 전까지는 커서 유지)
+document.addEventListener('keydown', e => {
+  const a = e.target; if (e.key !== 'Enter' || e.isComposing || e.shiftKey || e.ctrlKey || e.altKey) return;
+  if (a?.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|file)$/.test(a.type) && a.closest('#ed-pages, #ed-side, .pdl, #fb-side')) { if (a.closest('form')) return; e.preventDefault(); a.blur(); }
+}, true);
 function renderEditorPages(only = null) { // only = 내용만 바뀐 페이지 id들 (그 페이지만 다시 맞춤)
   const pog = state.currentPog;
   if (!pog || pog.status === undefined) return; // 문서 본체가 아직 안 왔으면 대기
@@ -1890,9 +1906,13 @@ function renderEditorPages(only = null) { // only = 내용만 바뀐 페이지 i
   for (const [id, el] of state.pageEls) if (!shown.has(id)) { el.remove(); state.pageEls.delete(id); }
   state.edComposed = new Map(order.map(f => [f.id, f]));
   const hit = fx => !only || only.has(fx.id) || (fx.merged || []).some(k => only.has(k));
-  const done = [];
+  const done = [], tEl = typingEl();
   order.forEach((fx, i) => {
     let el = state.pageEls.get(fx.id);
+    if (el && hit(fx) && tEl && el.contains(tEl)) { // 이 페이지에서 글 쓰는 중 → 끝난 뒤에 맞춤
+      if (only) edLater.add(fx.id); else edLaterAll = true;
+      if (wrap.children[i + 1] !== el) wrap.insertBefore(el, wrap.children[i + 1] || null); return;
+    }
     if (el && !hit(fx)) { if (wrap.children[i + 1] !== el) wrap.insertBefore(el, wrap.children[i + 1] || null); return; }
     if (el && el._itemSig !== itemSig(fx)) { el.remove(); el = null; }
     if (!el) { el = buildPage(fx, pog, { editable: state.edEditable }); state.pageEls.set(fx.id, el); }
@@ -5886,6 +5906,7 @@ const fieldLabel = f => ({ ko: '이름', cat: '분류', code: '제품코드', ma
 
 let glDirty = false;
 function refreshGlossaryLists() {
+  if (typingEl()?.closest?.('#ed-pages, #ed-side')) { glLater = true; return; } // 입력 중이면 끝난 뒤에
   const dl = $('#dl-fixtureType'); dl.innerHTML = '';
   glossaryOf('매대타입').forEach(g => dl.append(h('option', { value: g.ko })));
   const dx = $('#dl-extras'); dx.innerHTML = '';
