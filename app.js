@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123r';
+const APP_VER = '20261123s';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -4706,7 +4706,9 @@ async function autoSeqByPos(v) {
   const sdir = $('#dw-seqdir')?.value || 'down';
   if (sdir === 'wall' || sdir === 'wallcw') { // 벽 먼저 (사용자): 벽 → A-1, A-2… 모듈 → 가운데 나머지(기획매대 등)
     const rest = pos.filter(g => !isl?.has.has(g.id)), { wall, mid } = wallOrder(rest, gs, ent, sdir === 'wallcw');
-    dw.seqDraft = [...wall, ...(isl?.order || []), ...mid].map(g => g.id);
+    const spin = g => /회전/.test(String(g.ko || '').replace(/\s+/g, '')); // 회전매대는 맨 마지막 (사용자)
+    const seq0 = [...wall, ...(isl?.order || []), ...mid];
+    dw.seqDraft = [...seq0.filter(g => !spin(g)), ...seq0.filter(spin)].map(g => g.id);
   } else if (isl?.order.length) dw.seqDraft = [...isl.order, ...pos.filter(g => !isl.has.has(g.id))].map(g => g.id);
   else dw.seqDraft = pos.map(g => g.id);
   paintSeq();
@@ -5130,9 +5132,11 @@ const MODULE_RE = /^[A-Za-z]{1,2}-\d{1,3}$/;
    벽은 왼쪽 위 모서리에서 시작해 왼쪽 벽 ↓ → 아래 벽 → → 오른쪽 벽 ↑ → 위 벽 ← (도면 가운데를 도는 각도 순). 나머지(가운데)는 위 → 아래 */
 function wallOrder(rest, all, ent, cw) {
   const cx = g => g.x + g.w / 2, cy = g => g.y + g.h / 2;
-  const blocked = (g, dir) => all.some(o => o !== g && (dir === 'u' || dir === 'd'
-    ? Math.min(o.x + o.w, g.x + g.w) - Math.max(o.x, g.x) > Math.min(o.w, g.w) * 0.3 && (dir === 'u' ? cy(o) < g.y : cy(o) > g.y + g.h)
-    : Math.min(o.y + o.h, g.y + g.h) - Math.max(o.y, g.y) > Math.min(o.h, g.h) * 0.3 && (dir === 'l' ? cx(o) < g.x : cx(o) > g.x + g.w)));
+  // 바깥쪽에 다른 매대명이 있으면 막힘. 옆 길은 글자 높이 1.5배만큼 넓게 봄 (사용자: 벽 매대 사이 높이에 있는 모듈 끝 매대명(컬렉트카드·추억의게임1)이 벽으로 잡혔음)
+  const blocked = (g, dir) => all.some(o => { if (o === g) return false; const t = Math.max(g.h, o.h) * 1.5;
+    return dir === 'u' || dir === 'd'
+      ? Math.min(o.x + o.w, g.x + g.w + t) - Math.max(o.x, g.x - t) > 0 && (dir === 'u' ? cy(o) < g.y : cy(o) > g.y + g.h)
+      : Math.min(o.y + o.h, g.y + g.h + t) - Math.max(o.y, g.y - t) > 0 && (dir === 'l' ? cx(o) < g.x : cx(o) > g.x + g.w); });
   const wall = [], mid = [];
   for (const g of rest) (['u', 'd', 'l', 'r'].some(d => !blocked(g, d)) ? wall : mid).push(g);
   const x0 = Math.min(...all.map(g => g.x)), y0 = Math.min(...all.map(g => g.y)), x1 = Math.max(...all.map(g => g.x + g.w)), y1 = Math.max(...all.map(g => g.y + g.h));
