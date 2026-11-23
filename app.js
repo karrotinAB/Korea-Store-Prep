@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123g';
+const APP_VER = '20261123h';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1077,9 +1077,25 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
 
   return initInfo(finishBlock(fx, pog, page, editable), fx);
 }
+/* 매대 타입 = [매대] [사이즈] 두 칸 (사용자: 매대·사이즈를 따로). 저장은 예전처럼 한 글자(fixtureType, 예: 벽800·중앙 800·슬림/연장 800)
+   → 숨은 칸(data-f="fixtureType")이 저장·불러오기를 그대로 하고, 보이는 두 칸은 그 값을 나눠 보여주고 합쳐서 넣음 */
+const FT_KINDS = ['벽', '타공', '중앙', '중앙/연장', '슬림', '슬림/연장', '줄줄'];
+const ftParse = v => { const t = String(v || '').trim(), m = t.match(/^(.*?)\s*(\d[\d,]*)\s*$/); return m ? { k: m[1].trim(), z: m[2].replace(/,/g, '') } : { k: t, z: '' }; };
+const ftJoin = (k, z) => { k = String(k || '').trim(); z = String(z || '').trim(); return !z ? k : !k ? z : k + (/(벽|타공)$/.test(k) ? '' : ' ') + z; }; // 벽800·타공450 / 중앙 800
+function ftSplit(hid, editable) {
+  hid.classList.remove('f'); // 보기 전용 글자 칸은 보이는 두 칸으로
+  const kind = h('input', { class: 'f ft-kind', list: 'dl-ftKind', placeholder: editable ? '매대 (예: 벽)' : '', title: '매대 종류 · 목록에서 고르거나 직접 써도 돼요', disabled: !editable });
+  const size = h('input', { class: 'f ft-size', list: 'dl-ftSize', inputmode: 'numeric', placeholder: editable ? '사이즈' : '', title: '사이즈 (예: 800)', disabled: !editable });
+  const put = e => { if (e?.isComposing) return; hid.value = ftJoin(kind.value, size.value); hid.dispatchEvent(new Event('input')); };
+  for (const el of [kind, size]) { el.addEventListener('input', put); el.addEventListener('compositionend', () => put()); el.addEventListener('change', () => { if (editable && hid.value) addTypeGlossary(hid.value); }); }
+  const wrap = h('div', { class: 'ft-split' }, hid, kind, size);
+  wrap._show = () => { const { k, z } = ftParse(hid.value); if (kind !== document.activeElement) kind.value = k; if (size !== document.activeElement) size.value = z; };
+  return wrap;
+}
+const ftShow = block => block?.querySelector('.ft-split')?._show?.();
 // 오른쪽 집기 정보 칸 (매대 타입·고리·선반/파이프·이외집기)
 const infoSide = (box, field, L, editable) => h('div', { class: 'pside' },
-  box(L.type, field('fixtureType', h('input', { list: 'dl-fixtureType', placeholder: editable ? '고르거나 직접 입력 (예: 벽매대1000)' : '', title: '목록에서 고르거나 직접 써도 돼요. 새 이름은 집기·고리·매대 등록 매대타입에도 들어가요', onchange: e => { if (editable) addTypeGlossary(e.target.value); } }))),
+  box(L.type, ftSplit(field('fixtureType', h('input', { type: 'hidden' })), editable)),
   box(L.hook, h('div', { class: 'hook-list' })),
   box(L.sp, h('div', { class: 'sp-list' })),
   box(L.other, h('div', { class: 'ex-list' }), field('otherFixtures', h('textarea', { rows: 2, class: 'ex-memo', placeholder: editable ? '기타 메모 (선택)' : '' }))));
@@ -1739,6 +1755,7 @@ function syncPage(block, fx, pog) {
     else if (el.tagName === 'SELECT') fillHookSelect(el, v);
     else if (el !== document.activeElement && el.value !== String(v)) el.value = v;
   });
+  ftShow(block); // 매대 타입 → [매대] [사이즈]
   $('.pf-mgr', block).textContent = fx.manager || pog.manager || ''; // 페이지마다 다른 담당자를 정할 수 있음 (비우면 POG 담당자)
   const ms = $('.pf-mgr-sel', block); if (ms) fillMgrSelect(ms, fx, pog);
   $('.pf-branch', block).textContent = footStore(pog);
@@ -5048,7 +5065,7 @@ function setFxType(pog, fx, ty, ug, over) {
   if (!ty || (fx.fixtureType && !fx._autoType && !over) || (fx.fixtureType === ty && !fx._autoType)) return;
   delete fx._autoType;
   saveFx(pog.id, fx.id, 'fixtureType', ty, ug); fx.fixtureType = ty;
-  const si = state.pageEls.get(fx.id)?.querySelector('[data-f="fixtureType"]'); if (si) si.value = ty;
+  const si = state.pageEls.get(fx.id)?.querySelector('[data-f="fixtureType"]'); if (si) { si.value = ty; ftShow(state.pageEls.get(fx.id)); }
 }
 // 이 POG 매장의 ★최종본(없으면 마지막으로 내보낸) 도면 버전
 async function pogDrawing(pog) {
@@ -5909,6 +5926,10 @@ function refreshGlossaryLists() {
   if (typingEl()?.closest?.('#ed-pages, #ed-side')) { glLater = true; return; } // 입력 중이면 끝난 뒤에
   const dl = $('#dl-fixtureType'); dl.innerHTML = '';
   glossaryOf('매대타입').forEach(g => dl.append(h('option', { value: g.ko })));
+  { const ks = new Set(FT_KINDS), zs = new Set(['450', '600', '700', '800', '900', '1000', '1200', '1500']);
+    glossaryOf('매대타입').forEach(g => { const { k, z } = ftParse(g.ko); if (k) ks.add(k); if (z) zs.add(z); });
+    $('#dl-ftKind').replaceChildren(...[...ks].map(v => h('option', { value: v })));
+    $('#dl-ftSize').replaceChildren(...[...zs].sort((a, b) => a - b).map(v => h('option', { value: v }))); }
   const dx = $('#dl-extras'); dx.innerHTML = '';
   glossaryOf('집기').forEach(g => dx.append(h('option', { value: g.ko })));
   $$('select.hook-sel').forEach(sel => fillHookSelect(sel, sel.value));
