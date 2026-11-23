@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123v';
+const APP_VER = '20261123w';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -4706,18 +4706,19 @@ async function autoSeqByPos(v) {
   const sdir = $('#dw-seqdir')?.value || 'down';
   if (sdir === 'wall' || sdir === 'wallcw') { // 벽 먼저 (사용자): 벽 → A-1, A-2… 모듈 → 가운데 나머지(기획매대 등)
     // 모듈 칸 밖에서 붙인 매대명은 벽 매대명이 모듈보다 더 가까우면 벽으로 (사용자: 대구신매점 추억의게임1·2는 벽, 컬렉트카드·산리오1은 모듈)
-    let modsL = (isl?.mods || []).map(a => a.slice()), toWall = new Set();
+    let modsL = (isl?.mods || []).map((a, i) => Object.assign(a.slice(), { box: isl.mbox?.[i] })), toWall = new Set();
     if (isl?.ext?.size) {
       const allG = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, '')) && !ENT_RE.test(String(g.ko || '')));
       const w0 = wallOrder(pos.filter(g => !isl.has.has(g.id)), allG, ent, false).wall;
       const dist = (a, b) => Math.hypot(Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w)), Math.max(0, a.y - (b.y + b.h), b.y - (a.y + a.h)));
       toWall = new Set([...isl.ext].filter(([id, bd]) => { const g = gs.find(x => x.id === id); return g && w0.some(w => dist(g, w) < bd); }).map(([id]) => id));
-      if (toWall.size) { modsL = modsL.map(a => a.filter(g => !toWall.has(g.id))); isl.has = new Set([...isl.has].filter(id => !toWall.has(id))); }
+      if (toWall.size) { modsL = modsL.map(a => Object.assign(a.filter(g => !toWall.has(g.id)), { box: a.box })); isl.has = new Set([...isl.has].filter(id => !toWall.has(id))); }
     }
     const rest = pos.filter(g => !isl?.has.has(g.id)), { wall, mid } = wallOrder(rest, (v.groups || []).filter(g => g.w > 0 && g.h > 0 && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, '')) && !ENT_RE.test(String(g.ko || ''))), ent, sdir === 'wallcw', toWall); // 벽 판단은 팀과 상관없이 도면의 모든 매대명으로 (팀을 고르면 다른 팀 매대가 빠져서 모듈 끝 매대가 벽으로 잡혔음)
     const spin = g => /회전/.test(String(g.ko || '').replace(/\s+/g, '')); // 회전매대는 맨 마지막 (사용자)
     // 모듈 안 = 시계 방향 (사용자가 직접 매긴 대구신매점 번호): 위 줄 왼 → 오른, 오른쪽 끝 위 → 아래, 아래 줄 오른 → 왼, 왼쪽 끝 아래 → 위 (모듈 가운데를 도는 각도, 왼쪽 가운데보다 조금 위에서 시작)
-    const cwMod = arr => { const x0 = Math.min(...arr.map(g => g.x)), x1 = Math.max(...arr.map(g => g.x + g.w)), y0 = Math.min(...arr.map(g => g.y)), y1 = Math.max(...arr.map(g => g.y + g.h)), Cx = (x0 + x1) / 2, Cy = (y0 + y1) / 2;
+    // 가운데·크기 = 모듈 칸(막대) 범위 (사용자: 매대명 범위로 잡으면 멀리 떨어진 매대명 하나 때문에 A-1 위·아래 줄이 섞였음)
+    const cwMod = arr => { const b = arr.box, x0 = b ? b.x0 : Math.min(...arr.map(g => g.x)), x1 = b ? b.x1 : Math.max(...arr.map(g => g.x + g.w)), y0 = b ? b.y0 : Math.min(...arr.map(g => g.y)), y1 = b ? b.y1 : Math.max(...arr.map(g => g.y + g.h)), Cx = (x0 + x1) / 2, Cy = (y0 + y1) / 2;
       const st = Math.PI - 0.45; // 왼쪽 가운데보다 25°쯤 아래에서 시작 → 왼쪽 끝 매대명이 맨 처음 (사용자: 왼쪽 끝 매대를 기준으로 시작)
       const key = g => (Math.atan2((g.y + g.h / 2 - Cy) / ((y1 - y0) / 2 || 1), (g.x + g.w / 2 - Cx) / ((x1 - x0) / 2 || 1)) - st + 4 * Math.PI) % (2 * Math.PI);
       return arr.slice().sort((a, b) => key(a) - key(b)); };
@@ -5194,7 +5195,9 @@ function dwIslands(an, gs) {
   const idx = new Map(gs.map((g, i) => [g.id, i])); // 모듈 안은 원래 순서(위 → 아래·왼 → 오른)대로
   const names2 = [...by.keys()].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const order = names2.flatMap(n => by.get(n).sort((a, b) => idx.get(a.id) - idx.get(b.id)));
-  return { order, names: names2, mods: names2.map(n => by.get(n)), ext, has: new Set(order.map(g => g.id)) };
+  // 모듈마다 칸(막대) 범위 = 시계 방향 순서의 가운데 (같은 이름이 둘이면 합침)
+  const mbox = names2.map(n => { const bs = boxes.filter(b => b.n === n); return bs.length ? { x0: Math.min(...bs.map(b => b.x0)), y0: Math.min(...bs.map(b => b.y0)), x1: Math.max(...bs.map(b => b.x1)), y1: Math.max(...bs.map(b => b.y1)) } : null; });
+  return { order, names: names2, mods: names2.map(n => by.get(n)), mbox, ext, has: new Set(order.map(g => g.id)) };
 }
 // 매대명 글씨에서 가장 가까운 칸
 function nearMod(mods, g) {
