@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123o';
+const APP_VER = '20261123q';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3757,8 +3757,7 @@ async function analyzeSvg(text) {
   let outline = null;
   if (glyphN >= 8) {
     const o = svg.cloneNode(true);
-    o.querySelectorAll('text, image, use').forEach(e => e.remove());
-    o.querySelectorAll(SHAPES).forEach((e, i) => { if (!redIdx.has(i) && !e.closest('clipPath, mask, defs, pattern, symbol, marker')) e.remove(); }); // 잘라내기 틀(clipPath)은 남겨야 그 안 그림이 보임
+    o.querySelectorAll('text, image').forEach(e => e.remove()); // 글자 매대명은 SVG에서 바로 읽으니 빼고, 나머지(윤곽선 매대명·'A-1' 표시·매대 선)는 그대로
     outline = new XMLSerializer().serializeToString(o);
   }
   // 매대 칸 네모 (사용자: 도면 매대 타입·사이즈) — 화면 좌표를 도면 좌표로
@@ -4208,16 +4207,21 @@ async function analyzePdf(file, say = () => { }, words = []) {
     // ③ 동그라미 윗줄('A-5')만 잘라 영어만 읽는 도구로 (큰 글자만 남김: 곡선·끊긴 '-'는 뺌)
     if (!engW) { engW = await T.createWorker(['eng'], 1, wOpt); await engW.setParameters({ tessedit_pageseg_mode: '7' }); }
     const marks = [];
+    // 동그라미를 가로지르는 선만 지움 (동그라미 폭의 60% 넘게 곧게 이어진 선). 글자 획(4의 가로줄 등)은 남김 (사용자: 대구신매점 A-4가 A-1로 읽힘)
+    const crossLine = (x, y, rw, rh) => { let a = x, b = x; while (a > 0 && dk[y * cw + a - 1]) a--; while (b < cw - 1 && dk[y * cw + b + 1]) b++; if (b - a > rw * 0.6) return true;
+      a = y; b = y; while (a > 0 && dk[(a - 1) * cw + x]) a--; while (b < ch - 1 && dk[(b + 1) * cw + x]) b++; return b - a > rh * 0.9; };
     for (const rg of rings) {
       const rw = rg.x1 - rg.x0, rh = rg.y1 - rg.y0, X0 = Math.round(rg.x0 + rw * 0.03), X1 = Math.round(rg.x1 - rw * 0.03), Y0 = Math.round(rg.y0 + rh * 0.04), Y1 = Math.round(rg.y0 + rh * 0.58);
       const cw3 = X1 - X0, ch3 = Y1 - Y0, c3 = document.createElement('canvas'); c3.width = cw3 + 40; c3.height = ch3 + 40; const g3 = c3.getContext('2d'), im3 = g3.createImageData(c3.width, c3.height);
       for (let y = 0; y < c3.height; y++) for (let x = 0; x < c3.width; x++) { const lx = X0 + x - 20, ly = Y0 + y - 20, o = (y * c3.width + x) * 4, ex = (lx - (rg.x0 + rg.x1) / 2) / (rw / 2), ey = (ly - (rg.y0 + rg.y1) / 2) / (rh / 2);
-        const v = lx >= X0 && ly >= Y0 && lx < X1 && ly < Y1 && keep[ly * cw + lx] && ex * ex + ey * ey < 0.72 ? 0 : 255; im3.data[o] = im3.data[o + 1] = im3.data[o + 2] = v; im3.data[o + 3] = 255; }
-      { const seen3 = new Uint8Array(c3.width * c3.height);
-        for (let i = 0; i < seen3.length; i++) { if (im3.data[i * 4] || seen3[i]) continue; const pts = [i]; seen3[i] = 1; let y0 = c3.height, y1 = 0;
-          for (let q = 0; q < pts.length; q++) { const k = pts[q], x = k % c3.width, y = (k - x) / c3.width; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        const v = lx >= X0 && ly >= Y0 && lx < X1 && ly < Y1 && dk[ly * cw + lx] && !crossLine(lx, ly, rw, rh) && ex * ex + ey * ey < 0.85 ? 0 : 255; im3.data[o] = im3.data[o + 1] = im3.data[o + 2] = v; im3.data[o + 3] = 255; }
+      { const seen3 = new Uint8Array(c3.width * c3.height), comps3 = [];
+        for (let i = 0; i < seen3.length; i++) { if (im3.data[i * 4] || seen3[i]) continue; const pts = [i]; seen3[i] = 1; let y0 = c3.height, y1 = 0, x0 = c3.width, x1 = 0;
+          for (let q = 0; q < pts.length; q++) { const k = pts[q], x = k % c3.width, y = (k - x) / c3.width; if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < x0) x0 = x; if (x > x1) x1 = x;
             for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= c3.width || ny >= c3.height) continue; const r = ny * c3.width + nx; if (!im3.data[r * 4] && !seen3[r]) { seen3[r] = 1; pts.push(r); } } }
-          if (y1 - y0 < ch3 * 0.45) for (const k of pts) im3.data[k * 4] = im3.data[k * 4 + 1] = im3.data[k * 4 + 2] = 255; } }
+          comps3.push({ pts, x0, x1, tall: y1 - y0 >= ch3 * 0.45 }); }
+        // 작은 조각('-'·곡선)은 지움. 단 큰 글자와 위아래로 겹치는 조각은 남김 (사용자: 대구신매점 'A-4'는 글꼴이 끊어져 있어 4의 왼쪽이 떨어져 나가 'A-1'로 읽혔음)
+        for (const c of comps3) if (!c.tall && !comps3.some(t => t.tall && Math.min(t.x1, c.x1) - Math.max(t.x0, c.x0) > 0)) for (const k of c.pts) im3.data[k * 4] = im3.data[k * 4 + 1] = im3.data[k * 4 + 2] = 255; }
       g3.putImageData(im3, 0, 0);
       const raw3 = String((await engW.recognize(c3)).data.text || '').replace(/[\s\-–—.]+/g, ''), mm = raw3.match(/^([A-Za-z]{1,2}?)([0-9lIiT|OoSsZzgqB]{1,3})$/);
       const dig = mm ? mm[2].replace(/[lIiT|]/g, '1').replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Zz]/g, '2').replace(/[gq]/g, '9').replace(/B/g, '8') : '';
@@ -4264,8 +4268,13 @@ async function svgOutlined(an, store) {
     const pa = await analyzePdf(new File([blob], 'outline.png', { type: 'image/png' }), toast, await storeMdWords(store));
     const k = an.w / pa.w, r2 = n => +(n * k).toFixed(2);
     const ocr = pa.groups.flatMap(g => g.parts.map(q => ({ text: q.text, x: q.x * k, y: q.y * k, w: q.w * k, h: q.h * k, lh: (q.lh || q.h) * k, red: true, ...(q.gaps ? { gaps: q.gaps.map(z => ({ x: r2(z.x), w: r2(z.w) })) } : {}) }))).filter(q => String(q.text || '').trim());
-    if (!ocr.length) return an;
-    return { ...an, groups: groupLines([...an.glines, ...ocr]), ocrN: ocr.length };
+    const out = { ...an };
+    if (ocr.length) { out.groups = groupLines([...an.glines, ...ocr]); out.ocrN = ocr.length; }
+    if (!(an.dims || []).some(d => MODULE_RE.test(String(d.text || '').replace(/\s+/g, ''))) && (pa.mods || []).length) { // 'A-1'이 윤곽선이라 SVG에서 못 찾았으면 그림에서 찾은 것
+      const sc2 = o => ({ ...o, x: r2(o.x), y: r2(o.y), w: r2(o.w), h: r2(o.h), ...(o.lim != null ? { lim: r2(o.lim) } : {}) });
+      out.mods = [...(an.mods || []), ...pa.mods.map(sc2)]; out.dims = [...(an.dims || []), ...(pa.dims || []).map(sc2)];
+    }
+    return out;
   } catch (e) { toast('윤곽선 매대명은 못 읽었어요: ' + e.message); return an; }
   finally { URL.revokeObjectURL(url); }
 }
@@ -4418,7 +4427,7 @@ function renderDwStage() {
   const seq = seqOn && dw.seqMode ? { order: order || [], only: teamSel?.mine, onToggle: dw.seqMode ? g => toggleSeq(g) : null } : null;
   if (teamSel) legend.append(h('span', { class: 'dw-team-bar' }, ` · 팀 '${teamSel.team}' 매대 ${teamSel.mine.size}개만 진하게 (다른 팀은 흐리게)`));
   if (seq && dw.seqMode) legend.append(h('span', { class: 'dw-seq-bar' }, ` · 🔢 ${dw.team ? dw.team + ' 팀 ' : ''}번호 매기는 중: 매대를 누르는 순서대로 1, 2, 3… 번호가 있는 매대를 누르면 번호를 바꾸거나 뺄 수 있어요. `,
-    (() => { const sd = h('select', { id: 'dw-seqdir', class: 'nb-sel', title: '번호를 매길 방향 (사용자: 아래에서 위로도)' }, h('option', { value: 'down' }, '위 → 아래'), h('option', { value: 'up' }, '아래 → 위'));
+    (() => { const sd = h('select', { id: 'dw-seqdir', class: 'nb-sel', title: '번호를 매길 방향 (사용자: 아래에서 위로도)' }, h('option', { value: 'down' }, '위 → 아래'), h('option', { value: 'up' }, '아래 → 위'), h('option', { value: 'wall' }, '벽(ENT부터 ↺) → A-1 모듈'), h('option', { value: 'wallcw' }, '벽(ENT부터 ↻) → A-1 모듈'));
       try { sd.value = localStorage.getItem('seqDir') || 'down'; } catch { } sd.onchange = () => { try { localStorage.setItem('seqDir', sd.value); } catch { } }; return sd; })(), ' ',
     h('button', { class: 'btn small', title: 'A-1 모듈부터 모듈 번호 순서로(모듈 안은 위에서 아래, 왼쪽에서 오른쪽), 그다음 벽매대 등 나머지를 위에서 아래로 번호를 한 번에 매겨요', onclick: () => autoSeqByPos(v) }, '📐 도면 순서로 자동'), ' ',
     h('span', { id: 'dw-seq-n' }), ' ',
@@ -4676,9 +4685,13 @@ function toggleSeq(g) {
 // 도면 순서로 자동 번호 (사용자): 도면의 매대(파란 칸)를 위에서 아래로 줄을 나눠, 같은 줄은 왼쪽에서 오른쪽으로 1, 2, 3…
 // 줄 = 칸 가운데 높이가 비슷한 것끼리 (칸 높이의 절반 안). 안 맞는 매대는 눌러서 번호를 바꾸고 저장
 const NOT_MD_RE = /^([\d,.]+|H\d{3,4})+$/;
+const ENT_RE = /(^|[^A-Za-z])ENT\.?($|[^A-Za-z])|출입구/i; // 출입구 표시 (MAIN ENT.·SUB ENT·ENT)
+const NOT_MD_WORD_RE = /(^|[^A-Za-z])ENT\.?($|[^A-Za-z])|^(AUTO ?DOOR|WINDOW|GRAPHIC)$|수신기|소화전|분전함|화장실|휴게실|출입구/i; // 매대가 아닌 표시 (사용자: ENT·수신기·소화전에 번호가 붙었음)
 async function autoSeqByPos(v) {
   const mine = dw.team ? teamGids(v, dw.team) : null;
-  const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && (!mine || mine.has(g.id)) && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, ''))); // 숫자만(1,245)·H1700은 매대 아님 (사용자)
+  const gs = (v.groups || []).filter(g => g.w > 0 && g.h > 0 && (!mine || mine.has(g.id)) && !NOT_MD_RE.test(String(g.ko || '').replace(/\s+/g, '')) && !NOT_MD_WORD_RE.test(String(g.ko || '').trim()) && !/수신기|소화전|분전함|화장실|휴게실|출입구/.test(String(g.ko || '').replace(/\s+/g, ''))); // 숫자만(1,245)·H1700·ENT·수신기는 매대 아님 (사용자)
+  // 출입구(ENT) 자리 = 벽 번호 시작점 (사용자: ENT 기준으로 사입랜덤 벽 쪽으로). MAIN ENT > ENT > SUB ENT
+  const ents = (v.groups || []).filter(g => ENT_RE.test(String(g.ko || ''))), ent = ents.find(g => /MAIN/i.test(g.ko)) || ents.find(g => !/SUB/i.test(g.ko)) || ents[0];
   if (!gs.length) { alert(dw.team ? `'${dw.team}' 팀 매대가 없어요.` : '도면에 매대가 없어요.'); return; }
   if ((dw.seqDraft || []).length && !confirm(`지금 매긴 번호 ${dw.seqDraft.length}개를 지우고, 도면 순서로 새로 매길까요?\n(저장을 눌러야 반영돼요)`)) return;
   const cy = g => g.y + g.h / 2, hs = gs.map(g => g.h).sort((a, b) => a - b), mh = hs[Math.floor(hs.length / 2)];
@@ -4690,7 +4703,11 @@ async function autoSeqByPos(v) {
   const pos = rows.flatMap(r => r.gs.sort((a, b) => a.x - b.x)); // 위에서 아래(또는 아래에서 위), 같은 줄은 왼쪽부터
   // A-1 모듈부터 (사용자): 도면의 'A-1'·'A-2'… 표시가 있는 중앙 매대 덩어리마다 그 매대들을 모듈 번호 순서로 먼저, 벽매대 등 나머지는 그 뒤에 위 순서대로
   const an = await dwAnalysis(v), isl = an ? dwIslands(an, pos) : null;
-  if (isl?.order.length) dw.seqDraft = [...isl.order, ...pos.filter(g => !isl.has.has(g.id))].map(g => g.id);
+  const sdir = $('#dw-seqdir')?.value || 'down';
+  if (sdir === 'wall' || sdir === 'wallcw') { // 벽 먼저 (사용자): 벽 → A-1, A-2… 모듈 → 가운데 나머지(기획매대 등)
+    const rest = pos.filter(g => !isl?.has.has(g.id)), { wall, mid } = wallOrder(rest, gs, ent, sdir === 'wallcw');
+    dw.seqDraft = [...wall, ...(isl?.order || []), ...mid].map(g => g.id);
+  } else if (isl?.order.length) dw.seqDraft = [...isl.order, ...pos.filter(g => !isl.has.has(g.id))].map(g => g.id);
   else dw.seqDraft = pos.map(g => g.id);
   paintSeq();
   toast(`${dw.team ? dw.team + ' 팀 · ' : ''}도면 순서로 ${dw.seqDraft.length}개를 매겼어요${isl?.order.length ? ` (${isl.names[0]} 모듈부터)` : ''}. 안 맞는 매대는 눌러서 번호를 바꾸고 💾 저장하세요`);
@@ -5109,6 +5126,23 @@ const dwMods = async v => (await dwAnalysis(v))?.mods || null;
 /* 중앙 매대 덩어리(모듈): 벽매대가 아닌 칸끼리 붙어 있는 덩어리 + 그 안의 'A-11' 같은 검은 글씨.
    매대명 → 가장 가까운 칸 → 그 덩어리의 모듈 번호. 결과 order = 모듈 번호 순서(A-1, A-2…)대로, 모듈 안은 받은 순서(위→아래) */
 const MODULE_RE = /^[A-Za-z]{1,2}-\d{1,3}$/;
+/* 벽 매대 순서 (사용자: 벽부터 번호): 위·아래·왼쪽·오른쪽 중 한쪽이라도 바깥까지 다른 매대명이 없으면 벽(바깥) 매대.
+   벽은 왼쪽 위 모서리에서 시작해 왼쪽 벽 ↓ → 아래 벽 → → 오른쪽 벽 ↑ → 위 벽 ← (도면 가운데를 도는 각도 순). 나머지(가운데)는 위 → 아래 */
+function wallOrder(rest, all, ent, cw) {
+  const cx = g => g.x + g.w / 2, cy = g => g.y + g.h / 2;
+  const blocked = (g, dir) => all.some(o => o !== g && (dir === 'u' || dir === 'd'
+    ? Math.min(o.x + o.w, g.x + g.w) - Math.max(o.x, g.x) > Math.min(o.w, g.w) * 0.3 && (dir === 'u' ? cy(o) < g.y : cy(o) > g.y + g.h)
+    : Math.min(o.y + o.h, g.y + g.h) - Math.max(o.y, g.y) > Math.min(o.h, g.h) * 0.3 && (dir === 'l' ? cx(o) < g.x : cx(o) > g.x + g.w)));
+  const wall = [], mid = [];
+  for (const g of rest) (['u', 'd', 'l', 'r'].some(d => !blocked(g, d)) ? wall : mid).push(g);
+  const x0 = Math.min(...all.map(g => g.x)), y0 = Math.min(...all.map(g => g.y)), x1 = Math.max(...all.map(g => g.x + g.w)), y1 = Math.max(...all.map(g => g.y + g.h));
+  const Cx = (x0 + x1) / 2, Cy = (y0 + y1) / 2, T = 2 * Math.PI; // 가로·세로 비율을 맞춘 각도
+  const ang = (x, y) => Math.atan2((y - Cy) / (y1 - y0 || 1), (x - Cx) / (x1 - x0 || 1));
+  // 시작점 = 출입구(ENT) 자리, 없으면 왼쪽 위 모서리. ↺ = 왼쪽 벽 ↓ → 아래 벽 → …, ↻ = 반대
+  const k0 = ent ? ang(cx(ent), cy(ent)) : ang(x0, y0), key2 = g => (((cw ? -1 : 1) * (k0 - ang(cx(g), cy(g)))) % T + T) % T;
+  wall.sort((a, b) => key2(a) - key2(b));
+  return { wall, mid };
+}
 function dwIslands(an, gs) {
   const ms = (an.mods || []).filter(m => m.type !== '벽매대'), marks = (an.dims || []).filter(d => MODULE_RE.test(String(d.text || '').replace(/\s+/g, '')));
   if (!ms.length || !marks.length) return null;
