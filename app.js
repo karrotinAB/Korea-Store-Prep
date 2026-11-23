@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123h';
+const APP_VER = '20261123i';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1079,17 +1079,25 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
 }
 /* 매대 타입 = [매대] [사이즈] 두 칸 (사용자: 매대·사이즈를 따로). 저장은 예전처럼 한 글자(fixtureType, 예: 벽800·중앙 800·슬림/연장 800)
    → 숨은 칸(data-f="fixtureType")이 저장·불러오기를 그대로 하고, 보이는 두 칸은 그 값을 나눠 보여주고 합쳐서 넣음 */
-const FT_KINDS = ['벽', '타공', '중앙', '중앙/연장', '슬림', '슬림/연장', '줄줄'];
-const ftParse = v => { const t = String(v || '').trim(), m = t.match(/^(.*?)\s*(\d[\d,]*)\s*$/); return m ? { k: m[1].trim(), z: m[2].replace(/,/g, '') } : { k: t, z: '' }; };
+// 매대 = 7가지 중에서 고름 (사용자). 예전 이름은 새 이름으로 맞춤: 슬림/연장·슬림 연장 → 연장/슬림, 중앙/연장 → 연장/중앙, 벽매대 → 벽
+const FT_KINDS = ['슬림', '중앙', '벽', '타공', '스페이스월', '연장/슬림', '연장/중앙'];
+const ftKindNorm = k => { const t = String(k || '').replace(/\s+/g, ''); if (!t) return '';
+  if (/연장/.test(t)) return /슬림/.test(t) ? '연장/슬림' : /중앙/.test(t) || t === '연장' ? '연장/중앙' : k.trim();
+  if (/^벽(매대)?$/.test(t)) return '벽'; if (/^스페이스월$/.test(t)) return '스페이스월'; return k.trim(); };
+const ftParse = v => { const t = String(v || '').trim(), m = t.match(/^(.*?)\s*(\d[\d,]*)\s*$/); return m ? { k: ftKindNorm(m[1].trim()), z: m[2].replace(/,/g, '') } : { k: ftKindNorm(t), z: '' }; };
+const ftNorm = v => { const { k, z } = ftParse(v); return ftJoin(k, z) || String(v || '').trim(); }; // 'POG 사이트·도면에서 온 이름'도 같은 모양으로
 const ftJoin = (k, z) => { k = String(k || '').trim(); z = String(z || '').trim(); return !z ? k : !k ? z : k + (/(벽|타공)$/.test(k) ? '' : ' ') + z; }; // 벽800·타공450 / 중앙 800
 function ftSplit(hid, editable) {
   hid.classList.remove('f'); // 보기 전용 글자 칸은 보이는 두 칸으로
-  const kind = h('input', { class: 'f ft-kind', list: 'dl-ftKind', placeholder: editable ? '매대 (예: 벽)' : '', title: '매대 종류 · 목록에서 고르거나 직접 써도 돼요', disabled: !editable });
+  const kind = h('select', { class: 'f ft-kind', title: '매대 종류', disabled: !editable });
+  const fillKind = cur => kind.replaceChildren(h('option', { value: '' }, editable ? '매대 고르기' : ''), ...[...FT_KINDS, ...(cur && !FT_KINDS.includes(cur) ? [cur] : [])].map(v => h('option', { value: v }, v)));
+  fillKind('');
   const size = h('input', { class: 'f ft-size', list: 'dl-ftSize', inputmode: 'numeric', placeholder: editable ? '사이즈' : '', title: '사이즈 (예: 800)', disabled: !editable });
   const put = e => { if (e?.isComposing) return; hid.value = ftJoin(kind.value, size.value); hid.dispatchEvent(new Event('input')); };
-  for (const el of [kind, size]) { el.addEventListener('input', put); el.addEventListener('compositionend', () => put()); el.addEventListener('change', () => { if (editable && hid.value) addTypeGlossary(hid.value); }); }
+  kind.addEventListener('change', () => { put(); if (editable && hid.value) addTypeGlossary(hid.value); });
+  size.addEventListener('input', put); size.addEventListener('compositionend', () => put()); size.addEventListener('change', () => { if (editable && hid.value) addTypeGlossary(hid.value); });
   const wrap = h('div', { class: 'ft-split' }, hid, kind, size);
-  wrap._show = () => { const { k, z } = ftParse(hid.value); if (kind !== document.activeElement) kind.value = k; if (size !== document.activeElement) size.value = z; };
+  wrap._show = () => { const { k, z } = ftParse(hid.value); if (kind !== document.activeElement) { if (![...kind.options].some(o => o.value === k)) fillKind(k); kind.value = k; } if (size !== document.activeElement) size.value = z; };
   return wrap;
 }
 const ftShow = block => block?.querySelector('.ft-split')?._show?.();
@@ -2916,7 +2924,7 @@ function siteTypeOf(fx) {
   // 기본 매대: 비고에 '슬림'이 있으면 슬림, 없으면 중앙 · 높이 1630이면 뒤에 '/연장' (사용자) → 슬림 800 · 슬림/연장 800 · 중앙 800 · 중앙/연장 800
   // 높이 1850 이상 = 벽매대 → '벽800'·'벽1000' (사용자)
   // POG 사이트 매대 종류 B(타공) = 높이와 상관없이 '타공450'·'타공786' (사용자)
-  const t = src.mdtype === 'B' ? '타공' : hmm >= 1850 ? '벽' : src.mdtype === 'C' ? '줄줄' : (/슬림/.test(src.note || '') ? '슬림' : '중앙') + (hmm === 1630 ? '/연장' : '');
+  const t = src.mdtype === 'B' ? '타공' : hmm >= 1850 ? '벽' : src.mdtype === 'C' ? '줄줄' : (hmm === 1630 ? '연장/' : '') + (/슬림/.test(src.note || '') ? '슬림' : '중앙');
   const name = t === '벽' || t === '타공' ? `${t}${wmm}` : `${t} ${wmm}`, key = name.replace(/\s+/g, '');
   return glossaryOf('매대타입').map(x => x.ko).find(x => String(x || '').replace(/\s+/g, '') === key) || name;
 }
@@ -5064,7 +5072,7 @@ function dwTypeOf(mods, g) {
 function setFxType(pog, fx, ty, ug, over) {
   if (!ty || (fx.fixtureType && !fx._autoType && !over) || (fx.fixtureType === ty && !fx._autoType)) return;
   delete fx._autoType;
-  saveFx(pog.id, fx.id, 'fixtureType', ty, ug); fx.fixtureType = ty;
+  ty = ftNorm(ty); saveFx(pog.id, fx.id, 'fixtureType', ty, ug); fx.fixtureType = ty;
   const si = state.pageEls.get(fx.id)?.querySelector('[data-f="fixtureType"]'); if (si) { si.value = ty; ftShow(state.pageEls.get(fx.id)); }
 }
 // 이 POG 매장의 ★최종본(없으면 마지막으로 내보낸) 도면 버전
