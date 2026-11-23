@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123e';
+const APP_VER = '20261123f';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3161,6 +3161,13 @@ async function exportProducts(pog, fixtures) {
       }
     });
     if (!body.length) { toast('이 POG에 제품이 없어요'); return; }
+    // 팀구분이 빈 제품 (사용자: POG 사이트 '제품추가' 창에서 안 나오는 제품) → 같은 분류 제품의 팀 → 같은 큰 분류(괄호 앞) → 같은 페이지에 가장 많은 팀 → 이 POG에 가장 많은 팀
+    const cnt = () => new Map(), add = (m, k, t) => { if (!k || !t) return; const c = m.get(k) || new Map(); c.set(t, (c.get(t) || 0) + 1); m.set(k, c); };
+    const top = c => c ? [...c].sort((a, b) => b[1] - a[1])[0]?.[0] || '' : '';
+    const byCat = cnt(), byMain = cnt(), byPage = cnt(), all = cnt(), mainOf = c => String(c || '').split('(')[0].trim(); // 큰 분류 = 괄호 앞 ('피규어(스미스키)' → 피규어)
+    for (const r of body) { add(byCat, r[9], r[11]); add(byMain, mainOf(r[9]), r[11]); for (const pg of r._pages || [r[1]]) add(byPage, pg, r[11]); add(all, '_', r[11]); }
+    let guessN = 0;
+    for (const r of body) if (!r[11]) { const t = top(byCat.get(r[9])) || top(byMain.get(mainOf(r[9]))) || top(byPage.get((r._pages || [r[1]])[0])) || top(all.get('_')); if (t) { r[11] = t; guessN++; } }
     const dupN = body.filter(r => (r._pages || []).length > 1).length;
     body.forEach(r => { if ((r._pages || []).length > 1) r[1] = r._pages.join(', '); }); // 여러 페이지에 있는 제품 = 페이지 '3, 7'
     // 바코드 (바코드 등록에서 제품코드로 찾음, 한 제품에 여러 개면 쉼표로) → 제품코드 앞 열 (사용자)
@@ -3194,7 +3201,7 @@ async function exportProducts(pog, fixtures) {
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, ws, '제품리스트');
     X.writeFile(wb, `제품리스트_${pogTitle(pog)}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`.replace(/[\\/:*?"<>|]/g, ''));
-    toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (dupN ? ` · 여러 페이지에 있는 제품 ${dupN}개는 한 줄로 합쳤어요` : '') + (noMid ? ` · 팀이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
+    toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (dupN ? ` · 여러 페이지에 있는 제품 ${dupN}개는 한 줄로 합쳤어요` : '') + (guessN ? ` · 팀구분이 빈 제품 ${guessN}개는 같은 분류·페이지 제품의 팀으로 채웠어요` : '') + (noMid ? ` · 팀이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
   } catch (e) { toast(e.message); }
 }
 $('#ed-products').onclick = () => { if (state.currentPog?.status !== 'final') { alert('제품리스트 엑셀은 최종 POG 내보내기를 한 뒤에 받을 수 있어요.'); return; } exportProducts(state.currentPog, [...state.fixtures.values()]); };
