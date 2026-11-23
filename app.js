@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123j';
+const APP_VER = '20261123k';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3814,6 +3814,19 @@ function groupLines(lines) {
 }
 // 나누기 조각: 조각이 2개 이상이면 그것, 하나뿐이면 글자로 나눔 (사용자: 붙어 있는 매대명이 더 안 나뉨)
 // → 줄마다, 줄 안에서는 띄어쓰기마다. 칸은 글자 수 비율로 나눔(대략). 한 번 더 누르면 더 잘게
+/* 한 낱말 안에 같은 이름이 두 번 (사용자: 대구신매점 '캐릭터인형캐릭터인형2'처럼 글자 간격이 좁아 붙은 매대명). 글자 인식이 한두 글자 틀려도(캐틱터인형케릭터인형2)
+   세 글자 넘게 똑같은 곳(터인형)이 두 번 나오면 그 차이만큼 앞에서 자름 */
+function repSplit(w) {
+  const hs = w.replace(/\d+$/, '');
+  if (hs.length < 6 || hs.includes('/') || !/[가-힣]{6}/.test(hs)) return [w];
+  for (let L = Math.floor(hs.length / 2); L >= 3; L--) for (let i = 0; i + L <= hs.length; i++) {
+    const sub = hs.slice(i, i + L); if (!/^[가-힣]+$/.test(sub)) continue;
+    const j = hs.indexOf(sub, i + L); if (j < 0) continue;
+    const cut = j - i; if (cut < 3 || Math.abs(hs.length - cut - cut) > 1 && hs.length - cut < cut) continue; // 앞 낱말 길이 = 뒤 낱말 길이쯤
+    return [w.slice(0, cut), ...repSplit(w.slice(cut))];
+  }
+  return [w];
+}
 function splitParts(g) {
   const parts = g.parts || [];
   if (parts.length > 1) return parts;
@@ -3822,7 +3835,7 @@ function splitParts(g) {
   const ls = lines.map(l => String(l).trim()).filter(Boolean); if (!ls.length) return parts;
   const out = [], lh = p.h / ls.length;
   // 한 줄이고 글자 사이 빈틈 자리를 알면(PDF·AI·JPG 도면) 가장 넓은 빈틈에서 자름 → 칸이 글자에 딱 맞음
-  const words = l => l.split(/\s+/).flatMap(w => w.split(/(?<=\d)(?=[가-힣A-Za-z])/)).filter(Boolean); // 띄어쓰기 + '사입랜덤5사입랜덤6'처럼 숫자 뒤에 글자가 오면 거기서
+  const words = l => l.split(/\s+/).flatMap(w => w.split(/(?<=\d)(?=\/?[가-힣A-Za-z])/)).flatMap(repSplit).filter(Boolean); // 띄어쓰기 + '사입랜덤5사입랜덤6'처럼 숫자 뒤에 글자가 오면 거기서 + 같은 이름 되풀이
   const ws1 = ls.length === 1 ? words(ls[0]) : [];
   if (ws1.length > 1 && (p.gaps || []).length >= ws1.length - 1) {
     // 글자 수 비율로 자를 자리를 어림한 뒤, 가장 가까운 실제 빈틈으로 옮김 (낱말 안 글자 사이가 더 넓을 때도 있어서 '가장 넓은 빈틈'만으로는 틀림)
@@ -4102,9 +4115,11 @@ async function analyzePdf(file, say = () => { }, words = []) {
       if (!joinLabel(lines).replace(/\s+/g, '') && ps.length) { lines = ps.map(p => p.text); conf = 60; }
       if (!joinLabel(lines).replace(/\s+/g, '') && b.n > 3) { await worker.setParameters({ tessedit_pageseg_mode: '11' }); const rd = await readBox(b); await worker.setParameters({ tessedit_pageseg_mode: '6' }); if (rd.lines.length) { lines = rd.lines; conf = Math.max(conf, rd.conf); } }
       const raw = joinLabel(lines); lines = lines.map(l => fixMdLabel(l, lex)).filter(Boolean);
-      if (lines.some(l => /[가-힣]/.test(l))) lines = lines.filter(l => /[가-힣]/.test(l) || lexHit([l], lex) > 0 || /^\/?[A-Za-z][A-Za-z0-9./&-]{2,}/.test(l) && l.length > 3); // 한글 줄이 있으면 'A'·'PES' 같은 짧은 부스러기 줄은 뺌 ps.forEach(q => { q.text = fixMdLabel(q.text, lex); }); // 오타 고치기
+      if (lines.some(l => /[가-힣]/.test(l))) lines = lines.filter(l => /[가-힣]/.test(l) || lexHit([l], lex) > 0 || /^\/?[A-Za-z][A-Za-z0-9./&-]{2,}/.test(l) && l.length > 3); // 한글 줄이 있으면 'A'·'PES' 같은 짧은 부스러기 줄은 뺌
+      ps.forEach(q => { q.text = fixMdLabel(q.text, lex); }); // 조각 글자도 오타 고치기
       const ko = joinLabel(lines), compact = ko.replace(/\s+/g, '');
-      if (!compact || (conf < 35 && compact.length <= 2 && b.n < 4) || Math.max(w, hh) < b.fs * 1.5) { skipped.push({ ko, conf: Math.round(conf), x, y, w, h: hh }); continue; } // 화살표·점 같은 빨간 표시는 뺌
+      const numOnly = /^[\d,.]{2,6}$/.test(compact) || (/^[\d,.OoCcIl]{2,5}$/.test(compact) && (compact.match(/\d/g) || []).length >= 2); // 빨간 치수 숫자 (사용자: 대구신매점 800·1,000)
+      if (!compact || numOnly || (conf < 35 && compact.length <= 2 && b.n < 4) || Math.max(w, hh) < b.fs * 1.5) { skipped.push({ ko, conf: Math.round(conf), x, y, w, h: hh }); continue; } // 화살표·점 같은 빨간 표시는 뺌
       const parts = ps.length > 1 ? ps : [{ text: ko, x, y, w, h: hh, lh: r2(b.fs), ...(segs.length === 1 && segs[0].gaps.length ? { gaps: segs[0].gaps } : {}) }];
       groups.push({ id: 'g' + groups.length, ko, lines, parts, ...(raw !== ko ? { ocrKo: raw } : {}), x, y, w, h: hh, fs: r2(b.fs), ocr: Math.round(conf) });
       if (i % 10 === 9) say(`매대명 글자 읽는 중… ${i + 1} / ${boxes.length}`);
