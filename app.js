@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123u';
+const APP_VER = '20261123v';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -4718,7 +4718,7 @@ async function autoSeqByPos(v) {
     const spin = g => /회전/.test(String(g.ko || '').replace(/\s+/g, '')); // 회전매대는 맨 마지막 (사용자)
     // 모듈 안 = 시계 방향 (사용자가 직접 매긴 대구신매점 번호): 위 줄 왼 → 오른, 오른쪽 끝 위 → 아래, 아래 줄 오른 → 왼, 왼쪽 끝 아래 → 위 (모듈 가운데를 도는 각도, 왼쪽 가운데보다 조금 위에서 시작)
     const cwMod = arr => { const x0 = Math.min(...arr.map(g => g.x)), x1 = Math.max(...arr.map(g => g.x + g.w)), y0 = Math.min(...arr.map(g => g.y)), y1 = Math.max(...arr.map(g => g.y + g.h)), Cx = (x0 + x1) / 2, Cy = (y0 + y1) / 2;
-      const st = -Math.PI + 0.45; // 왼쪽 가운데보다 25°쯤 위에서 시작 → 왼쪽 끝 매대명은 맨 마지막 (사용자: A-2 컬렉트카드가 마지막)
+      const st = Math.PI - 0.45; // 왼쪽 가운데보다 25°쯤 아래에서 시작 → 왼쪽 끝 매대명이 맨 처음 (사용자: 왼쪽 끝 매대를 기준으로 시작)
       const key = g => (Math.atan2((g.y + g.h / 2 - Cy) / ((y1 - y0) / 2 || 1), (g.x + g.w / 2 - Cx) / ((x1 - x0) / 2 || 1)) - st + 4 * Math.PI) % (2 * Math.PI);
       return arr.slice().sort((a, b) => key(a) - key(b)); };
     const seq0 = [...wall, ...modsL.filter(a => a.length).flatMap(cwMod), ...mid];
