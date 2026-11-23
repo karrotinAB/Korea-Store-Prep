@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123w';
+const APP_VER = '20261123x';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -4206,7 +4206,7 @@ async function analyzePdf(file, say = () => { }, words = []) {
     if (!rings.length) return null;
     // ③ 동그라미 윗줄('A-5')만 잘라 영어만 읽는 도구로 (큰 글자만 남김: 곡선·끊긴 '-'는 뺌)
     if (!engW) { engW = await T.createWorker(['eng'], 1, wOpt); await engW.setParameters({ tessedit_pageseg_mode: '7' }); }
-    const marks = [];
+    const marks = [], unread = [];
     // 동그라미를 가로지르는 선만 지움 (동그라미 폭의 60% 넘게 곧게 이어진 선). 글자 획(4의 가로줄 등)은 남김 (사용자: 대구신매점 A-4가 A-1로 읽힘)
     const crossLine = (x, y, rw, rh) => { let a = x, b = x; while (a > 0 && dk[y * cw + a - 1]) a--; while (b < cw - 1 && dk[y * cw + b + 1]) b++; if (b - a > rw * 0.6) return true;
       a = y; b = y; while (a > 0 && dk[(a - 1) * cw + x]) a--; while (b < ch - 1 && dk[(b + 1) * cw + x]) b++; return b - a > rh * 0.9; };
@@ -4225,7 +4225,13 @@ async function analyzePdf(file, say = () => { }, words = []) {
       g3.putImageData(im3, 0, 0);
       const raw3 = String((await engW.recognize(c3)).data.text || '').replace(/[\s\-–—.]+/g, ''), mm = raw3.match(/^([A-Za-z]{1,2}?)([0-9lIiT|OoSsZzgqB]{1,3})$/);
       const dig = mm ? mm[2].replace(/[lIiT|]/g, '1').replace(/[Oo]/g, '0').replace(/[Ss]/g, '5').replace(/[Zz]/g, '2').replace(/[gq]/g, '9').replace(/B/g, '8') : '';
-      if (mm && /^[1-9]\d*$/.test(dig) && mm[1].toUpperCase() !== 'O') marks.push({ t: mm[1].toUpperCase() + '-' + dig, rg });
+      if (mm && /^[1-9]\d*$/.test(dig) && mm[1].toUpperCase() !== 'O') marks.push({ t: mm[1].toUpperCase() + '-' + dig, rg }); else unread.push(rg);
+    }
+    // 못 읽은 동그라미가 하나이고 빠진 번호도 하나면 그 번호 (사용자: 대구신매점 A-7은 검은 기둥이 글자를 가려 못 읽어 A-7 매대가 흩어졌음)
+    if (unread.length === 1 && marks.length >= 3) {
+      const L = marks[0].t.split('-')[0], nums = new Set(marks.filter(m => m.t.startsWith(L + '-')).map(m => +m.t.split('-')[1])), mx = Math.max(...nums);
+      const miss = []; for (let n = 1; n <= mx; n++) if (!nums.has(n)) miss.push(n);
+      if (miss.length === 1) marks.push({ t: L + '-' + miss[0], rg: unread[0] });
     }
     if (!marks.length) return null;
     // ④ 모듈 범위: 동그라미가 들어 있는 검은 선 덩어리. 없으면(선이 회색) 동그라미에서 위아래·좌우로 막대를 따라가 길이를 잼
