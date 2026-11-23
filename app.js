@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123m';
+const APP_VER = '20261123n';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -3847,14 +3847,25 @@ function splitParts(g) {
       let best = null, bs = -1; for (const g of p.gaps) { const d = Math.abs(g.x - est); if (used.has(g) || d > LH * 1.2) continue; const sc = g.w / (1 + d / LH); if (sc > bs) { bs = sc; best = g; } }
       if (best) { used.add(best); cuts.push(best); } else cuts.push({ x: est, w: 0 }); }
     cuts.sort((a, b) => a.x - b.x); const xs = [p.x, ...cuts.map(c => c.x), p.x + p.w];
-    return ws1.map((w, i) => { const x0 = xs[i] + (i ? cuts[i - 1].w / 2 : 0), x1 = xs[i + 1] - (i < cuts.length ? cuts[i].w / 2 : 0), inner = p.gaps.filter(g => g.x > x0 && g.x < x1);
-      return { text: w, x: +x0.toFixed(2), y: p.y, w: +(x1 - x0).toFixed(2), h: p.h, lh: p.lh || p.h, ...(inner.length ? { gaps: inner } : {}) }; });
+    return noTiny(ws1.map((w, i) => { const x0 = xs[i] + (i ? cuts[i - 1].w / 2 : 0), x1 = xs[i + 1] - (i < cuts.length ? cuts[i].w / 2 : 0), inner = p.gaps.filter(g => g.x > x0 && g.x < x1);
+      return { text: w, x: +x0.toFixed(2), y: p.y, w: +(x1 - x0).toFixed(2), h: p.h, lh: p.lh || p.h, ...(inner.length ? { gaps: inner } : {}) }; }), LH);
   }
   ls.forEach((l, i) => {
     const ws = words(l), tot = ws.reduce((a, w) => a + w.length, 0) + (ws.length - 1) * 0.5; let cx = 0;
     for (const w of ws) { const ww = p.w * w.length / tot; out.push({ text: w, x: +(p.x + p.w * cx / tot).toFixed(2), y: +(p.y + lh * i).toFixed(2), w: +ww.toFixed(2), h: +lh.toFixed(2), lh: +(p.lh || lh).toFixed(2) }); cx += w.length + 0.5; }
   });
-  return out.length > 1 ? out : parts;
+  const o2 = noTiny(out, p.lh || lh);
+  return o2.length > 1 ? o2 : parts;
+}
+// 글자 하나 폭도 안 되는 아주 좁은 칸(사용자: '왜 이렇게까지 쪼개?' — 잘못 읽은 부스러기 글자)은 같은 줄 옆 칸에 붙임
+function noTiny(ps, LH) {
+  const out = [];
+  for (const q of ps) {
+    const prev = out.at(-1), same = prev && Math.abs(prev.y - q.y) < LH * 0.5;
+    if (same && (q.w < LH * 0.7 || prev.w < LH * 0.7)) { const x1 = Math.max(prev.x + prev.w, q.x + q.w); prev.text = (prev.text + ' ' + q.text).trim(); prev.x = Math.min(prev.x, q.x); prev.w = +(x1 - prev.x).toFixed(2); if (q.gaps || prev.gaps) prev.gaps = [...(prev.gaps || []), ...(q.gaps || [])]; }
+    else out.push({ ...q });
+  }
+  return out;
 }
 // 글자 조각들 → 매대명 묶음 하나 (parts = 나누기·합치기용 조각)
 function makeGroup(ls) {
@@ -4093,13 +4104,17 @@ async function analyzePdf(file, say = () => { }, words = []) {
       }
       // 나누기용 조각 (사용자: 붙은 매대명이 한 묶음이 되면 나눌 수 있게): 줄마다, 같은 줄에서도 글자 하나 넘게 떨어지면 따로 → 조각마다 따로 글자 인식
       const rows = [];
-      for (const c of b.cs.slice().sort((p, q) => p.y0 - q.y0)) { // 줄 = 위아래로 겹치는 조각들 (받침·모음 조각 높이가 달라도 한 줄)
-        const r = rows.find(r => Math.min(r.y1, c.y1) - Math.max(r.y0, c.y0) > Math.min(r.y1 - r.y0, c.y1 - c.y0) * 0.3);
-        if (r) { r.cs.push(c); r.y0 = Math.min(r.y0, c.y0); r.y1 = Math.max(r.y1, c.y1); } else rows.push({ y0: c.y0, y1: c.y1, cs: [c] });
+      // 줄 = 위아래로 겹치는 조각들 (받침·모음 조각 높이가 달라도 한 줄). 큰 조각부터 줄을 만들고, 줄 높이는 처음 조각 그대로 둠
+      // (사용자: 대구신매점 '브러쉬·뷰티/마사지·화장소품1…'처럼 높이가 조금씩 다른 매대명이 사슬처럼 한 줄로 이어져 이상하게 쪼개졌음)
+      for (const c of b.cs.slice().sort((p, q) => (q.y1 - q.y0) - (p.y1 - p.y0) || p.y0 - q.y0)) {
+        let r = null, bo = 0;
+        for (const z of rows) { const o = Math.min(z.b1, c.y1) - Math.max(z.b0, c.y0); if (o > Math.min(z.b1 - z.b0, c.y1 - c.y0) * 0.3 && o > bo) { bo = o; r = z; } }
+        if (r) { r.cs.push(c); r.y0 = Math.min(r.y0, c.y0); r.y1 = Math.max(r.y1, c.y1); } else rows.push({ y0: c.y0, y1: c.y1, b0: c.y0, b1: c.y1, cs: [c] });
       }
+      rows.sort((p, q) => p.y0 - q.y0);
       const segs = [];
       for (const r of rows) {
-        let cur = null; const rh = Math.max(...r.cs.map(c => c.y1)) - Math.min(...r.cs.map(c => c.y0)), gapMax = Math.max(rh, b.fs * 1.5) * 0.8; // 글자 크기 = 줄 높이
+        let cur = null; const rh = r.b1 - r.b0, gapMax = Math.max(rh, b.fs * 1.5) * 0.8; // 글자 크기 = 줄 높이
         for (const c of r.cs.sort((p, q) => p.x0 - q.x0)) {
           if (cur && c.x0 - cur.x1 <= gapMax) { cur.x1 = Math.max(cur.x1, c.x1); cur.y0 = Math.min(cur.y0, c.y0); cur.y1 = Math.max(cur.y1, c.y1); cur.cs.push(c); }
           else segs.push(cur = { x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, cs: [c], rh });
@@ -4109,7 +4124,7 @@ async function analyzePdf(file, say = () => { }, words = []) {
       for (const sg of segs) { const gs2 = []; let mx = -Infinity; for (const c of sg.cs.slice().sort((p, q) => p.x0 - q.x0)) { if (mx > -Infinity && c.x0 - mx > sg.rh * 0.12) gs2.push({ x: r2((mx + c.x0) / 2), w: r2(c.x0 - mx) }); mx = Math.max(mx, c.x1); } sg.gaps = gs2.sort((p, q) => q.w - p.w).slice(0, 15); }
       let ps = [];
       if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '7' }); // 조각 = 한 줄
-      if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); const tc = tx.replace(/\s+/g, ''); if (tc && (tc.length > 1 || sg.x1 - sg.x0 > b.fs)) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs), ...(sg.gaps.length ? { gaps: sg.gaps } : {}) }); }
+      if (segs.length > 1) for (const sg of segs) { const rd = await readBox(sg), tx = joinLabel(rd.lines); const tc = tx.replace(/\s+/g, ''); if (tc && sg.x1 - sg.x0 > b.fs * 0.5 && (tc.length > 1 || sg.x1 - sg.x0 > b.fs)) ps.push({ text: tx, x: r2(sg.x0), y: r2(sg.y0), w: r2(sg.x1 - sg.x0), h: r2(sg.y1 - sg.y0), lh: r2(b.fs), ...(sg.gaps.length ? { gaps: sg.gaps } : {}) }); }
       if (segs.length > 1) await worker.setParameters({ tessedit_pageseg_mode: '6' });
       // 통째로는 못 읽었는데(사용자: 비스듬히 놓인 두 매대명이 표시선으로 붙어 통째 인식이 비었음) 조각으로 읽히면 조각 글자로
       if (!joinLabel(lines).replace(/\s+/g, '') && ps.length) { lines = ps.map(p => p.text); conf = 60; }
