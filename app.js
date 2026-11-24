@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261124a';
+const APP_VER = '20261124b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -134,9 +134,12 @@ function pageMgrs(fx, team) {
   return { rs, part, part2, lead };
 }
 // 머리줄 오른쪽: 팀명 + 담당자 최대 3명 (담당자 1·2 + 팀장 · 사용자)
+const phCatEl = fx => { const t = teamLine(fx, fx._cat ?? fx.teamName); return h('div', { class: 'ph-cat' + (t.length > 34 ? ' many' : '') }, t); }; // 담당자가 많으면(키덜트) 글자를 작게
 function teamLine(fx, team) {
   const t = catName(team), { part, part2, lead } = pageMgrs(fx, team);
-  const ppl = [...new Set([part, part2].filter(x => x && x !== lead))].slice(0, 2); // 팀장은 맨 뒤
+  let ppl = [...new Set([part, part2].filter(x => x && x !== lead))].slice(0, 2); // 팀장은 맨 뒤
+  // 키덜트팀은 팀원 모두 (사용자). 목록 순서대로, 팀장은 맨 뒤. 직접 '팀장만'(__none)을 고른 페이지는 그대로
+  if (/키덜트/.test(tmNorm(t)) && fx.mdMgr !== '__none') ppl = [...new Set(teamRowsOf(team).map(r => r[2]).filter(x => x && x !== lead))];
   return [t, ...[...ppl, lead].filter(Boolean).map(mgrFmt)].filter(Boolean).join(' ');
 }
 const fmtDate = ts => {
@@ -1070,7 +1073,7 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
       field('headerName', h('input', { class: 'ph-name', placeholder: origName(fx) || '매대명',
         onclick: e => { if (editable && !e.target.value) openHeaderPicker(pog, fx); } })), // 비어 있으면 누를 때 도면이 뜸
       editable ? h('button', { class: 'ph-dw no-print', type: 'button', title: '도면에서 매대를 골라 헤더에 넣어요', onclick: () => openHeaderPicker(pog, fx) }, '📐 도면에서 고르기') : null,
-      h('div', { class: 'ph-cat' }, teamLine(fx, fx._cat ?? fx.teamName))),
+      phCatEl(fx)),
     h('div', { class: 'pb' + (fx.infoH ? ' info-h' : '') },
       h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.infoH ? CANVAS_HW : CANVAS_W, fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable && !(fx._parts), noCut: state.crop?.id === fx.id && !state.crop.bid, noBlockCut: state.crop?.id === fx.id ? state.crop.bid || null : null })),
       infoSide(box, field, L, editable)),
@@ -1334,7 +1337,7 @@ function buildFreePage(fx, pog, { editable, field, L = LABELS_KO, box, onItem })
       editable ? h('button', { class: 'ph-dw no-print', type: 'button', title: '도면에서 매대를 골라 제목에 넣어요', onclick: () => openHeaderPicker(pog, fx) }, '📐 도면에서 고르기') : null,
       // 팀명(카테고리): 있는 것 중에서만 고름 (사용자) — 사전 '팀명' + 이 POG에 있는 팀명
       editable ? field('teamName', h('select', { class: 'ph-cat ph-cat-sel', title: '팀명(카테고리) 고르기' }, ...teamOptions(fx.teamName).map(t => h('option', { value: t }, t || '팀명 고르기'))))
-        : h('div', { class: 'ph-cat' }, teamLine(fx, fx._cat ?? fx.teamName))),
+        : phCatEl(fx)),
     body,
     h('div', { class: 'pf1' }, L.mgr + ' ', h('span', { class: 'pf-mgr' }), editable ? mgrSelect(fx, pog) : null),
     h('div', { class: 'pf2' }, h('span', { class: 'pf-branch' })));
@@ -1769,7 +1772,7 @@ function syncPage(block, fx, pog) {
   $('.pf-mgr', block).textContent = fx.manager || pog.manager || ''; // 페이지마다 다른 담당자를 정할 수 있음 (비우면 POG 담당자)
   const ms = $('.pf-mgr-sel', block); if (ms) fillMgrSelect(ms, fx, pog);
   $('.pf-branch', block).textContent = footStore(pog);
-  { const pc = $('.ph > div.ph-cat', block); if (pc) pc.textContent = teamLine(fx, fx._cat ?? fx.teamName); } // 팀별 담당자
+  { const pc = $('.ph > div.ph-cat', block); if (pc) { pc.textContent = teamLine(fx, fx._cat ?? fx.teamName); pc.classList.toggle('many', pc.textContent.length > 34); } } // 팀별 담당자
   if (!pendingKey(`${fx.id}|itemZ`)) applyItemZ(block, fx);
   const spBox = block.querySelector('.page .sp-list'), spNow = spRows(fx);
   if (spBox && !spBox.contains(document.activeElement) && !pendingKey(`${fx.id}|sp`) && JSON.stringify(spNow) !== JSON.stringify(block._sp)) {
