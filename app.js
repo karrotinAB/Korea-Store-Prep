@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261123x';
+const APP_VER = '20261124a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -121,7 +121,9 @@ const mgrFmt = m => String(m || '').trim().replace(/^(\S+)\s+(.+)$/, '$1($2)'); 
 // 이 페이지 담당자: 직접 고른 사람(fx.mdMgr) → 없으면 매대명·품목군과 가장 비슷한 담당파트의 담당자, 그리고 팀장
 function pageMgrs(fx, team) {
   const rs = teamRowsOf(team); if (!rs.length) return { rs, part: '', lead: '' };
-  const lead = (rs.find(r => /팀장/.test(r[2])) || [])[2] || '';
+  let lead = (rs.find(r => /팀장/.test(r[2])) || [])[2] || '';
+  // 뷰티&라이프(생잡/뷰티&라이프)는 따로 팀장이 없고 생활잡화 팀장이 같이 맡음 (사용자) → 생활잡화 팀장 (목록에서 생활잡화 팀장이 바뀌면 같이 바뀜)
+  if (!lead && /뷰티/.test(tmNorm(catName(team)) + rs.map(r => tmNorm(r[0])).join(''))) lead = (tmRows().find(r => tmNorm(r[0]) === '생활잡화' && /팀장/.test(r[2])) || [])[2] || '';
   let part = fx.mdMgr && rs.some(r => r[2] === fx.mdMgr) ? fx.mdMgr : '', auto2 = '';
   if (!part && !fx.mdMgr) {
     let best = null; for (const r of rs) { if (!r[1]) continue; const sc = nameScore(fx, r[1]); if (!best || sc > best.s) best = { s: sc, m: r[2], p: r[1] }; }
