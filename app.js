@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261124c';
+const APP_VER = '20261124d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -887,6 +887,16 @@ function makeThumbs(box, scroller, onActive, tools = null) { // tools = { can(),
       tools.place(moving, ids.slice(i).find(k => !moving.includes(k)) ?? null);
     });
   }
+  // 키보드 방향키로 페이지 넘기기 (사용자): ↓ → PageDown = 다음, ↑ ← PageUp = 앞. 글 쓰는 중·고르기 칸·매대 자르는 중에는 안 함
+  document.addEventListener('keydown', ev => {
+    if (!box.isConnected || !box.offsetParent || ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey || ev.isComposing) return;
+    const d = { ArrowDown: 1, ArrowRight: 1, PageDown: 1, ArrowUp: -1, ArrowLeft: -1, PageUp: -1 }[ev.key]; if (!d) return;
+    const a = document.activeElement; if (typingEl() || a?.tagName === 'SELECT' || state.crop || $('#modal-root .modal-bg')) return;
+    const list = [...els.entries()].filter(([, t]) => t.isConnected).sort(([, x], [, y]) => x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+    const i = list.findIndex(([k]) => k === active), nx = list[Math.max(0, Math.min(list.length - 1, (i < 0 ? 0 : i + d)))];
+    if (!nx || nx[0] === active) return;
+    ev.preventDefault(); nx[1]._block?.scrollIntoView({ block: 'start' }); setActive(nx[0]);
+  });
   // 스크롤하면 지금 보고 있는 페이지를 표시
   let raf = 0;
   scroller.addEventListener('scroll', () => {
