@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261124b';
+const APP_VER = '20261124c';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -148,6 +148,8 @@ const fmtDate = ts => {
 };
 // POG 원본 이름. 칸이 여러 개인 매대는 '(1/2)'처럼 몇 번째 칸인지 붙임
 const origName = fx => (fx.mdName || '') + (fx.bayCount > 1 ? ` (${fx.bayNo}/${fx.bayCount})` : '');
+// 카운터 매대 (사용자: 매대명에 '카운터'가 있으면 집기 입력 칸을 없앰 → 그림이 페이지 폭에 꽉, 고리·집기 수량 엑셀에서도 뺌)
+const isCounter = fx => fx.kind !== 'free' && /카운터/.test(String(fx.headerName || fx.mdName || ''));
 const displayName = fx => fx.kind === 'free' ? (fx.headerName || '추가 페이지') : (fx.headerName || origName(fx));
 const LABELS_KO = { type: '매대 타입', hook: '고리타입/갯수', sp: '선반/파이프여부', other: '이외집기(8코드포함)', mgr: 'POG 담당자', team: 'POG 팀' }; // 페이지 고정 문구
 const glossaryOf = cat => state.glossary.filter(g => g.cat === cat).sort((a, b) => (a.ko || '').localeCompare(b.ko || '', 'ko'));
@@ -952,7 +954,7 @@ function makeThumbs(box, scroller, onActive, tools = null) { // tools = { can(),
 const itemSig = fx => {
   const str = [...(fx.items || []).map(i => `${i.code}@${i.x},${i.y},${i.w},${i.h}`), ...(fx.props || []).map(p => `${p.x},${p.y},${p.w}`), ...(fx.panels || []).map(p => `${p.x},${p.y},${p.w},${p.h}`)].join('|');
   let hh = 0; for (let i = 0; i < str.length; i++) hh = (hh * 31 + str.charCodeAt(i)) | 0;
-  return `${(fx.items || []).length}:${(fx.props || []).length}:${hh}:${JSON.stringify(fx.blocks || [])}:${JSON.stringify(fx.base || null)}:${fx.info ? 1 : 0}:${fx.infoH ? 1 : 0}:${JSON.stringify(fx.cut || null)}:${state.crop?.id === fx.id ? 1 : 0}`;
+  return `${(fx.items || []).length}:${(fx.props || []).length}:${hh}:${JSON.stringify(fx.blocks || [])}:${JSON.stringify(fx.base || null)}:${fx.info ? 1 : 0}:${fx.infoH ? 1 : 0}:${isCounter(fx) ? 1 : 0}:${JSON.stringify(fx.cut || null)}:${state.crop?.id === fx.id ? 1 : 0}`;
 };
 /* 매대 붙이기: 얇은 매대(스페이스월 등) 두 개를 한 페이지에. 붙인 쪽 fixture.merged = [id…], 붙여진 쪽 .mergedInto = id.
    붙여진 페이지는 따로 안 나오고, 붙인 페이지 그림 오른쪽에 나란히 그린다 (입력칸·번역은 붙인 페이지 것) */
@@ -1074,7 +1076,8 @@ function buildPage(fx, pog, { editable, onItem, L = LABELS_KO }) {
         onclick: e => { if (editable && !e.target.value) openHeaderPicker(pog, fx); } })), // 비어 있으면 누를 때 도면이 뜸
       editable ? h('button', { class: 'ph-dw no-print', type: 'button', title: '도면에서 매대를 골라 헤더에 넣어요', onclick: () => openHeaderPicker(pog, fx) }, '📐 도면에서 고르기') : null,
       phCatEl(fx)),
-    h('div', { class: 'pb' + (fx.infoH ? ' info-h' : '') },
+    isCounter(fx) ? h('div', { class: 'pb' }, h('div', { class: 'pcanvas' }, buildCanvas(fx, CANVAS_W + 208, CANVAS_H, onItem, { blockUI: editable && !(fx._parts), noCut: state.crop?.id === fx.id && !state.crop.bid, noBlockCut: state.crop?.id === fx.id ? state.crop.bid || null : null })))
+    : h('div', { class: 'pb' + (fx.infoH ? ' info-h' : '') },
       h('div', { class: 'pcanvas' }, buildCanvas(fx, fx.infoH ? CANVAS_HW : CANVAS_W, fx.infoH ? CANVAS_HH : CANVAS_H, onItem, { blockUI: editable && !(fx._parts), noCut: state.crop?.id === fx.id && !state.crop.bid, noBlockCut: state.crop?.id === fx.id ? state.crop.bid || null : null })),
       infoSide(box, field, L, editable)),
     h('div', { class: 'pf1' }, L.mgr + ' ', h('span', { class: 'pf-mgr' }), editable ? mgrSelect(fx, pog) : null),
@@ -2393,7 +2396,7 @@ function pasteBlock(pogId, to) {
   // 자르기한 페이지는 네모를 넓혀서 보이게, 아니면 그림 칸 오른쪽 빈자리에 들어갈 때만 바깥 (안 들어가면 예전처럼 매대 오른쪽 끝 안쪽)
   let outside = false;
   if (fr) {
-    const pd = to.cut ? 0 : 16, W = to.infoH ? CANVAS_HW : CANVAS_W, H = to.infoH ? CANVAS_HH : CANVAS_H, bw0 = fr.x1 - fr.x0 + pd, bh0 = fr.y1 - fr.y0 + pd, sc = Math.min(W / bw0, H / bh0);
+    const pd = to.cut ? 0 : 16, W = isCounter(to) ? CANVAS_W + 208 : to.infoH ? CANVAS_HW : CANVAS_W, H = to.infoH ? CANVAS_HH : CANVAS_H, bw0 = fr.x1 - fr.x0 + pd, bh0 = fr.y1 - fr.y0 + pd, sc = Math.min(W / bw0, H / bh0);
     outside = (W - bw0 * sc) / 2 / sc >= bw + 14;
   }
   const shift = fr ? (outside ? fr.x1 + 10 : Math.max(fr.x0, fr.x1 - bw)) - left : -left;
@@ -3108,7 +3111,7 @@ async function exportCounts(pog, fixtures) {
     const codeOf = (kind, name) => CODE_CATS.includes(CAT[kind]) ? glOf(CAT[kind], name)?.code || '' : '';
     const sum = new Map();
     pages.forEach((f, i) => {
-      if (f.kind === 'free' && !f.info) return;
+      if ((f.kind === 'free' && !f.info) || isCounter(f)) return; // 카운터 매대는 집기 칸이 없음
       const no = i + 2; // 1번은 표지
       const add = (kind, name, qty) => {
         name = (name || '').trim(); if (!name) return;
