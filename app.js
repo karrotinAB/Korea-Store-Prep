@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261125g';
+const APP_VER = '20261125h';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -150,7 +150,8 @@ const fmtDate = ts => {
 // POG 원본 이름. 칸이 여러 개인 매대는 '(1/2)'처럼 몇 번째 칸인지 붙임
 const origName = fx => (fx.mdName || '') + (fx.bayCount > 1 ? ` (${fx.bayNo}/${fx.bayCount})` : '');
 // 카운터 매대 (사용자: 매대명에 '카운터'가 있으면 집기 입력 칸을 없앰 → 그림이 페이지 폭에 꽉, 고리·집기 수량 엑셀에서도 뺌)
-const isCounter = fx => fx.kind !== 'free' && /카운터/.test(String(fx.headerName || fx.mdName || ''));
+// 줄줄 매대도 같음 (사용자): 매대 타입이 '줄줄'(직접 넣었거나 POG 사이트 매대 종류 C로 자동)이면 집기 칸 없음
+const isCounter = fx => fx.kind !== 'free' && (/카운터/.test(String(fx.headerName || fx.mdName || '')) || /줄줄/.test(String(fx.fixtureType || '')));
 const displayName = fx => fx.kind === 'free' ? (fx.headerName || '추가 페이지') : (fx.headerName || origName(fx));
 const LABELS_KO = { type: '매대 타입', hook: '고리타입/갯수', sp: '선반/파이프여부', other: '이외집기(8코드포함)', mgr: 'POG 담당자', team: 'POG 팀' }; // 페이지 고정 문구
 const glossaryOf = cat => state.glossary.filter(g => g.cat === cat).sort((a, b) => (a.ko || '').localeCompare(b.ko || '', 'ko'));
