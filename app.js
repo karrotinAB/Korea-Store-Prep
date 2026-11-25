@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261125a';
+const APP_VER = '20261125b';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1833,11 +1833,11 @@ $('#pog-search').addEventListener('input', renderPogList);
 // 이 POG의 팀 (국내: POG 하나 = 매장 하나의 팀 하나)
 const pogTeam = p => (p?.team ?? (Array.isArray(p?.teams) && p.teams.length === 1 ? p.teams[0] : '')) || '';
 const pogStore = p => p ? (p.branchName || p.storeName || p.storeCode || '') : '';
-// 저장 파일 이름 (사용자: '키덜트-강남점 POG(오픈일)' 모양으로 맞춤). 팀 이름의 &는 '앤'(홈앤라이프), 오픈일 = 매장 등록의 오픈 예정일(없으면 괄호 없음)
+// 저장 파일 이름 (사용자): POG = '키덜트-강남점 POG(26.11.25)', 엑셀 = '키덜트-강남점_제품리스트(26.11.25)'. 날짜 = 저장하는 날(작성일자, 연.월.일 두 자리씩). 팀 이름의 &는 '앤'(홈앤라이프)
 const fileName = (p, kind, ext) => {
-  const st = (state.stores || []).find(s => String(s.code || '') === String(p?.storeCode || '')), od = String(st?.openDate || '').replace(/-/g, '.');
+  const d = new Date(), dt = [d.getFullYear() % 100, d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, '0')).join('.');
   const who = [String(pogTeam(p)).replace(/&/g, '앤'), pogStore(p)].filter(Boolean).join('-') || 'POG';
-  return `${who} ${kind}${od ? `(${od})` : ''}`.replace(/[\\/:*?"<>|]/g, '').trim() + (ext ? '.' + ext : '');
+  return `${who}${kind === 'POG' ? ' ' : '_'}${kind}(${dt})`.replace(/[\\/:*?"<>|]/g, '').trim() + (ext ? '.' + ext : '');
 };
 const pogTitle = p => [pogStore(p), pogTeam(p)].filter(Boolean).join(' · ');
 const teamNo = p => { const m = String(p.teamName || '').match(/^\s*(\d+)/); return m ? Number(m[1]) : 999; }; // POG 사이트 팀 번호 순서 (01 디자인지제 …)
