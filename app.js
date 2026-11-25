@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261124d';
+const APP_VER = '20261125a';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1833,6 +1833,12 @@ $('#pog-search').addEventListener('input', renderPogList);
 // 이 POG의 팀 (국내: POG 하나 = 매장 하나의 팀 하나)
 const pogTeam = p => (p?.team ?? (Array.isArray(p?.teams) && p.teams.length === 1 ? p.teams[0] : '')) || '';
 const pogStore = p => p ? (p.branchName || p.storeName || p.storeCode || '') : '';
+// 저장 파일 이름 (사용자: '키덜트-강남점 POG(오픈일)' 모양으로 맞춤). 팀 이름의 &는 '앤'(홈앤라이프), 오픈일 = 매장 등록의 오픈 예정일(없으면 괄호 없음)
+const fileName = (p, kind, ext) => {
+  const st = (state.stores || []).find(s => String(s.code || '') === String(p?.storeCode || '')), od = String(st?.openDate || '').replace(/-/g, '.');
+  const who = [String(pogTeam(p)).replace(/&/g, '앤'), pogStore(p)].filter(Boolean).join('-') || 'POG';
+  return `${who} ${kind}${od ? `(${od})` : ''}`.replace(/[\\/:*?"<>|]/g, '').trim() + (ext ? '.' + ext : '');
+};
 const pogTitle = p => [pogStore(p), pogTeam(p)].filter(Boolean).join(' · ');
 const teamNo = p => { const m = String(p.teamName || '').match(/^\s*(\d+)/); return m ? Number(m[1]) : 999; }; // POG 사이트 팀 번호 순서 (01 디자인지제 …)
 function pogListItem(p, active, onClick) {
@@ -2691,7 +2697,7 @@ $('#ed-pdf').onclick = () => printPages($('#ed-pages'), state.currentPog);
 /* ---------- PDF (인쇄) ---------- */
 async function printPages(container, pog) {
   const old = document.title;
-  document.title = `POG_${pogTitle(pog || {}).replace(/ · /g, '_')}_${fmtDate(new Date())}`.replace(/[\\/:*?"<>|]/g, '');
+  document.title = fileName(pog || {}, 'POG'); // PDF 저장 이름
   const done = () => { document.title = old; window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
   // 아직 안 불러온 사진·실패한 사진: 다시 불러오고, 끝날 때까지(최대 20초) 기다렸다가 인쇄
@@ -2783,7 +2789,7 @@ async function savePpt(container, pog) {
     document.documentElement.style.zoom = z0; z0 = null;
     restore(); restore = null;
     const blob = await ppt.write({ outputType: 'blob' });
-    const a = h('a', { href: URL.createObjectURL(blob), download: `POG_${pogTitle(pog).replace(/ · /g, '_')}_${fmtDate(new Date()).replace(/\./g, '')}.pptx`.replace(/[\\/:*?"<>|]/g, '') });
+    const a = h('a', { href: URL.createObjectURL(blob), download: fileName(pog, 'POG', 'pptx') });
     document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
     toast(`PPT를 저장했어요 · ${pages.length}쪽` + (inl.bad ? ` · 사진 ${inl.bad}장은 사진 서버가 막아서 빠졌을 수 있어요` : ''));
   } catch (e) { alert('PPT를 만들지 못했어요: ' + (e.message || e)); }
@@ -3148,7 +3154,7 @@ async function exportCounts(pog, fixtures) {
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, sheet(all.filter(r => r.make), false), '선반·파이프·제작비품');
     X.utils.book_append_sheet(wb, sheet(all.filter(r => !r.make), true), '관리부 비품·집기·고리');
-    X.writeFile(wb, `선반고리집기수량_${pogTitle(pog)}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`.replace(/[\\/:*?"<>|]/g, ''));
+    X.writeFile(wb, fileName(pog, '선반고리집기수량', 'xlsx'));
     const noCode = all.filter(r => !r.make && !r.code && CODE_CATS.includes(CAT[r.kind])).length;
     toast('엑셀을 저장했어요' + (noCode ? ` · 집기·고리·매대 등록에 제품코드가 없는 것 ${noCode}개` : ''));
   } catch (e) { toast(e.message); }
@@ -3263,7 +3269,7 @@ async function exportProducts(pog, fixtures) {
     ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: info.length, c: 0 }, e: { r: info.length + body.length, c: head.length - 1 } }) };
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, ws, '제품리스트');
-    X.writeFile(wb, `제품리스트_${pogTitle(pog)}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`.replace(/[\\/:*?"<>|]/g, ''));
+    X.writeFile(wb, fileName(pog, '제품리스트', 'xlsx'));
     toast(`엑셀을 저장했어요 · 제품 ${body.length}개` + (dupN ? ` · 여러 페이지에 있는 제품 ${dupN}개는 한 줄로 합쳤어요` : '') + (guessN ? ` · 팀구분이 빈 제품 ${guessN}개는 같은 분류·페이지 제품의 팀으로 채웠어요` : '') + (noMid ? ` · 팀이 빈 제품 ${noMid}개는 POG 사이트에서 ↻ 다시 가져오기를 하면 채워져요` : ''));
   } catch (e) { toast(e.message); }
 }
@@ -3290,7 +3296,7 @@ async function exportNoBarcode(pog, fixtures) {
     miss.forEach((_, i) => { const k = 'A' + (i + 2); if (ws[k]) ws[k].t = 's'; }); // 앞의 0이 안 빠지게 글자로
     ws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 36 }];
     const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, '바코드');
-    X.writeFile(wb, `바코드없음_${(pogTitle(pog) || pog.storeCode || 'POG').replace(/[\\/:*?"<>|]/g, '')}_${fmtDate(new Date()).replace(/\./g, '')}.xlsx`);
+    X.writeFile(wb, fileName(pog, '바코드없음', 'xlsx'));
     toast(`바코드 없는 제품 ${miss.length.toLocaleString()}종 (전체 ${codes.length.toLocaleString()}종 중). 바코드 칸을 채워서 바코드 등록에 올리면 돼요`);
   } catch (e) { alert('만들지 못했어요: ' + (e.code || e.message)); }
   finally { b.disabled = false; b.textContent = t0; }
