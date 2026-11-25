@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261125c';
+const APP_VER = '20261125d';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -140,6 +140,8 @@ function teamLine(fx, team) {
   let ppl = [...new Set([part, part2].filter(x => x && x !== lead))].slice(0, 2); // 팀장은 맨 뒤
   // 키덜트팀은 팀원 모두 (사용자). 목록 순서대로, 팀장은 맨 뒤. 직접 '팀장만'(__none)을 고른 페이지는 그대로
   if (/키덜트/.test(tmNorm(t)) && fx.mdMgr !== '__none') ppl = [...new Set(teamRowsOf(team).map(r => r[2]).filter(x => x && x !== lead))];
+  // 뷰티&라이프: 매대명으로 담당 파트를 못 찾으면(담당자 1·2를 안 고른 페이지) 팀장만 나왔음 (사용자) → 팀원 모두 (이윤경·임지민 + 팀장)
+  else if (/뷰티/.test(tmNorm(t)) && !ppl.length && !fx.mdMgr) ppl = [...new Set(teamRowsOf(team).map(r => r[2]).filter(x => x && x !== lead))];
   return [t, ...[...ppl, lead].filter(Boolean).map(mgrFmt)].filter(Boolean).join(' ');
 }
 const fmtDate = ts => {
