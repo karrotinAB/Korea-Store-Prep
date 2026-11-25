@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261125f';
+const APP_VER = '20261125g';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -2310,6 +2310,17 @@ function saveGroup(pogId, fx, bid, patch, keepSel = bid) {
   const ug = undoGroup();
   if (!fx.frame) { const fr = cvBox(fx); saveFx(pogId, fx.id, 'frame', fr, ug); fx.frame = fr; } // 처음 옮길 때의 매대 범위를 틀로
   const nb = { dx: 0, dy: 0, s: 1, ...(fx.base || {}), ...patch };
+  // 원래 매대를 잘라 둔 네모(fx.cut, 그림 좌표)도 매대와 같이 옮기고 키움 (사용자: 자른 매대를 옮기거나 크기를 바꾸면 메인 매대가 엉뚱하게 잘렸음)
+  if (okCut(fx.cut)) {
+    const inB = new Set([...(fx.blocks || []).flatMap(b => [...(b.items || []), ...(b.props || [])].map(String))]);
+    const raw = [...(fx.items || []), ...(fx.props || [])].filter(o => !inB.has(String(o.id))).concat(fx.panels || []);
+    if (raw.length) {
+      const ox = Math.min(...raw.map(o => o.x)), oy = Math.min(...raw.map(o => o.y)), og = groupOf(fx, BASE);
+      const k = (g, a) => g[a] ?? g.s ?? 1, mapX = v => ox + ((v - (og.dx || 0) - ox) / k(og, 'sx')) * k(nb, 'sx') + (nb.dx || 0), mapY = v => oy + ((v - (og.dy || 0) - oy) / k(og, 'sy')) * k(nb, 'sy') + (nb.dy || 0);
+      const rd = v => Math.round(v * 10) / 10, c = fx.cut, nc = { x0: rd(mapX(c.x0)), y0: rd(mapY(c.y0)), x1: rd(mapX(c.x1)), y1: rd(mapY(c.y1)) };
+      saveFx(pogId, fx.id, 'cut', nc, ug); fx.cut = nc;
+    }
+  }
   saveFx(pogId, fx.id, 'base', nb, ug); fx.base = nb;
   rebuildPage(fx.id, keepSel);
 }
