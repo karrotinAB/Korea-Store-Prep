@@ -2310,6 +2310,11 @@ function saveGroup(pogId, fx, bid, patch, keepSel = bid) {
   const ug = undoGroup();
   if (!fx.frame) { const fr = cvBox(fx); saveFx(pogId, fx.id, 'frame', fr, ug); fx.frame = fr; } // 처음 옮길 때의 매대 범위를 틀로
   const nb = { dx: 0, dy: 0, s: 1, ...(fx.base || {}), ...patch };
+  moveBaseCut(pogId, fx, nb, ug);
+  saveFx(pogId, fx.id, 'base', nb, ug); fx.base = nb;
+  rebuildPage(fx.id, keepSel);
+}
+function moveBaseCut(pogId, fx, nb, ug) {
   // 원래 매대를 잘라 둔 네모(fx.cut, 그림 좌표)도 매대와 같이 옮기고 키움 (사용자: 자른 매대를 옮기거나 크기를 바꾸면 메인 매대가 엉뚱하게 잘렸음)
   if (okCut(fx.cut)) {
     const inB = new Set([...(fx.blocks || []).flatMap(b => [...(b.items || []), ...(b.props || [])].map(String))]);
@@ -2321,12 +2326,11 @@ function saveGroup(pogId, fx, bid, patch, keepSel = bid) {
       saveFx(pogId, fx.id, 'cut', nc, ug); fx.cut = nc;
     }
   }
-  saveFx(pogId, fx.id, 'base', nb, ug); fx.base = nb;
-  rebuildPage(fx.id, keepSel);
 }
 // 원래 매대 처음 상태로 (위치·크기 조정 없애기)
 function resetBase(pogId, fx) {
   const ug = undoGroup();
+  moveBaseCut(pogId, fx, { dx: 0, dy: 0, s: 1 }, ug);
   saveFx(pogId, fx.id, 'base', null, ug); fx.base = null;
   if (!(fx.blocks || []).length) { saveFx(pogId, fx.id, 'frame', null, ug); fx.frame = null; }
   rebuildPage(fx.id, null);
