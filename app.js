@@ -6,7 +6,7 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField, getDocs, getDoc, getCountFromServer, startAfter, documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 // 지금 브라우저가 쓰는 app.js 버전: 화면 맨 아래 저작권 옆에 보임 (예전 파일을 쓰는지 확인용 · index.html의 ?v=와 같게)
-const APP_VER = '20261125e';
+const APP_VER = '20261125f';
 document.querySelector('.copyright')?.append(` · ver ${APP_VER}`);
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -1838,6 +1838,7 @@ const pogStore = p => p ? (p.branchName || p.storeName || p.storeCode || '') : '
 const fileName = (p, kind, ext) => {
   const d = new Date(), dt = [d.getFullYear() % 100, d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, '0')).join('.');
   const store = String(pogStore(p)).replace(/\s*\(\s*\d{2,4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}\s*\)/g, '').trim(); // 매장 이름에 붙은 오픈일 '(26.12.18)'은 뺌 (사용자)
+  if (p?._merged) return `${store || 'POG'} ${kind === 'POG' ? 'POG 취합본' : '전체_' + kind}(${dt})`.replace(/[\\/:*?"<>|]/g, '').trim() + (ext ? '.' + ext : ''); // 매장 전체 취합본
   const who = [String(pogTeam(p)).replace(/&/g, '앤'), store].filter(Boolean).join('-') || 'POG';
   return `${who}${kind === 'POG' ? ' ' : '_'}${kind}(${dt})`.replace(/[\\/:*?"<>|]/g, '').trim() + (ext ? '.' + ext : '');
 };
@@ -1850,14 +1851,15 @@ function pogListItem(p, active, onClick) {
     h('div', { class: 'pi-sub' }, `매대 ${p.fixtureCount || 0}개 · ${fmtDate(p.createdAt)}${p.manager ? ' · ' + p.manager : ''}`));
 }
 // 매장마다 머리줄 + 팀 POG들 (팀 번호 순)
-function groupedPogList(list, rows, activeId, onOpen) {
+function groupedPogList(list, rows, activeId, onOpen, onStore = null) {
   list.innerHTML = '';
   const groups = new Map();
   for (const p of rows) { const k = String(p.storeCode || p.id); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
   for (const ps of groups.values()) {
     ps.sort((a, b) => teamNo(a) - teamNo(b) || pogTeam(a).localeCompare(pogTeam(b), 'ko') || (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     const p0 = ps[0], st = storeForPog(p0);
-    list.append(h('div', { class: 'pstore' }, h('b', {}, (st && storeName(st)) || pogStore(p0) || '(이름 없음)'), h('span', { class: 'mut' }, ` ${p0.storeCode || ''} · 팀 ${ps.length}개`)));
+    list.append(h('div', { class: 'pstore' }, h('b', {}, (st && storeName(st)) || pogStore(p0) || '(이름 없음)'), h('span', { class: 'mut' }, ` ${p0.storeCode || ''} · 팀 ${ps.length}개`),
+      onStore ? h('button', { type: 'button', class: 'btn small ghost pstore-book' + (activeId === '__book_' + p0.storeCode ? ' on' : ''), title: '이 매장 팀별 최종 POG를 도면 매대 순서로 한 권에 (보기 전용)', onclick: () => onStore(p0.storeCode) }, '📚 매장 전체 취합본') : null));
     ps.forEach(p => list.append(pogListItem(p, activeId === p.id, () => onOpen(p.id))));
   }
 }
@@ -5411,12 +5413,12 @@ function renderOnlineList() {
   const q = $('#on-search').value.trim().toLowerCase();
   const list = $('#on-list');
   const rows = state.pogs.filter(p => p.status === 'final' && pogMatch(p, q));
-  groupedPogList(list, rows, state.viewer.pog?.id, openViewer);
+  groupedPogList(list, rows, state.viewer.pog?.id, openViewer, openStoreBook);
   if (!rows.length) list.append(h('div', { class: 'mut pad' }, '최종 POG가 없어요.'));
 }
 function closeViewer() {
   const v = state.viewer; v.unsubPog?.(); v.unsubFx?.();
-  v.unsubPog = v.unsubFx = null; v.pog = null; v.fixtures = [];
+  v.unsubPog = v.unsubFx = null; v.pog = null; v.fixtures = []; v.bookInfo = null;
   vwThumbs.clear();
   $('#viewer-body')?.classList.add('hidden'); $('#viewer-empty')?.classList.remove('hidden');
   $('#v-pog-online .split')?.classList.remove('list-off');
@@ -5432,16 +5434,48 @@ function openViewer(id) {
   v.unsubPog = onSnapshot(doc(db, 'pogs', id), d => { if (!d.exists()) { closeViewer(); return; } v.pog = { id: d.id, ...d.data() }; renderViewer(); });
   v.unsubFx = onSnapshot(query(collection(db, 'pogs', id, 'fixtures'), orderBy('order')), s => { v.fixtures = s.docs.map(d => autoType(dropOutside({ id: d.id, ...d.data() }))); renderViewer(); });
 }
+/* 매장 전체 취합본 (사용자): 그 매장 팀마다 가장 최근 최종 POG를 모두 읽어, 온라인 도면 번호(전체 번호) 순서로 한 권에. 보기 전용(저장하지 않음 — 열 때마다 최종본으로 새로 만듦)
+   도면과 연결 안 된 페이지는 같은 POG의 바로 앞 페이지 뒤에, 그 앞도 없으면 맨 뒤(팀 순서). PPT·PDF·제품리스트·수량 엑셀도 이 순서로 */
+async function openStoreBook(storeCode) {
+  closeViewer(); $('#vw-find').value = ''; $('#vw-ppt').classList.toggle('hidden', !canPpt());
+  const v = state.viewer, ms = t => t?.toMillis?.() || 0, latest = new Map();
+  for (const p of state.pogs) { if (p.status !== 'final' || String(p.storeCode) !== String(storeCode)) continue; const o = latest.get(pogTeam(p)); if (!o || ms(p.finalizedAt) > ms(o.finalizedAt)) latest.set(pogTeam(p), p); }
+  const ps = [...latest.values()].sort((a, b) => teamNo(a) - teamNo(b) || pogTeam(a).localeCompare(pogTeam(b), 'ko'));
+  if (!ps.length) { toast('이 매장에 최종 POG가 없어요'); return; }
+  const book = { ...ps[0], id: '__book_' + storeCode, team: '매장 전체', teams: [], teamName: '', manager: '', _merged: true, status: 'final', finalizedAt: ps.reduce((a, p) => ms(p.finalizedAt) > ms(a) ? p.finalizedAt : a, ps[0].finalizedAt) };
+  v.pog = book;
+  $('#viewer-empty').classList.add('hidden'); $('#viewer-body').classList.remove('hidden');
+  $('#v-pog-online .split').classList.add('list-off');
+  $('#vw-pages').innerHTML = '<div class="mut pad">팀별 최종 POG를 모으는 중…</div>';
+  renderOnlineList();
+  try {
+    const lists = await Promise.all(ps.map(p => getDocs(query(collection(db, 'pogs', p.id, 'fixtures'), orderBy('order'))).then(sn => composeFx(sn.docs.map(d => autoType(dropOutside({ id: d.id, ...d.data() })))))));
+    if (v.pog !== book) return; // 그 사이에 다른 POG를 열었음
+    // 도면 매대 순서 = 온라인 도면 전체 번호 (없으면 팀 순서 그대로)
+    const dwi = await pogDrawing(ps[0]), sq = dwi ? await readSeq(dwi.st0.id, dwi.v.id) : null;
+    const ord = sq?.order || [], rank = new Map(ord.map((gid, i) => [gid, i]));
+    const koOf = new Map((dwi?.v.groups || []).map(g => [g.id, norm(g.ko)])), koRank = new Map(); ord.forEach((gid, i) => { const k = koOf.get(gid); if (k && !koRank.has(k)) koRank.set(k, i); });
+    const rk = f => { const r = f.drawingRef; if (!r) return null; if (r.vId === dwi?.v.id && rank.has(r.gid)) return rank.get(r.gid); const k = koRank.get(norm(r.ko || '')); return k ?? null; };
+    const all = [];
+    lists.forEach((list, ti) => { let last = Infinity; list.forEach((f, pi) => { const r = rk(f); if (r != null) last = r; all.push({ ...f, _pog: ps[ti], _rank: r ?? last, _ti: ti, _pi: pi }); }); });
+    all.sort((a, b) => a._rank - b._rank || a._ti - b._ti || a._pi - b._pi);
+    all.forEach((f, i) => { f.order = i + 1; delete f.merged; delete f.mergedInto; });
+    v.fixtures = all; v.bookInfo = { teams: ps.length, linked: all.filter(f => rk(f) != null).length, hasSeq: !!ord.length };
+    renderViewer();
+  } catch (e) { if (v.pog === book) $('#vw-pages').innerHTML = `<div class="mut pad">취합본을 만들지 못했어요: ${e.code || e.message}</div>`; }
+}
 function renderViewer() {
   const v = state.viewer; if (!v.pog?.status) return;
-  $('#vw-title').textContent = `${pogTitle(v.pog)} · 최종 ${fmtDate(v.pog.finalizedAt)}${v.pog.manager ? ' · ' + v.pog.manager : ''}`;
+  const bk = v.pog._merged ? v.bookInfo : null;
+  $('#vw-title').textContent = bk ? `${pogStore(v.pog)} · 매장 전체 취합본 (팀 ${bk.teams}개 최종본 · 보기 전용)${bk.hasSeq ? '' : ' · 온라인 도면 번호가 없어 팀 순서'}`
+    : `${pogTitle(v.pog)} · 최종 ${fmtDate(v.pog.finalizedAt)}${v.pog.manager ? ' · ' + v.pog.manager : ''}`;
   const wrap = $('#vw-pages'); wrap.innerHTML = '';
   const pogV = v.pog;
   const cover = buildCover(pogV, { editable: false }); syncCover(cover, pogV); wrap.append(cover);
   const blocks = new Map();
   const shownFx = composeFx(v.fixtures);
   shownFx.forEach(f => {
-    const fx = f; const el = buildPage(fx, pogV, { editable: false, onItem: showItem }); syncPage(el, fx, pogV); wrap.append(el); blocks.set(fx.id, el);
+    const fx = f, pg = f._pog || pogV; const el = buildPage(fx, pg, { editable: false, onItem: showItem }); syncPage(el, fx, pg); wrap.append(el); blocks.set(fx.id, el); // 취합본: 페이지마다 원래 팀 POG
     // 헤더(매대명)를 누르면 도면에서 이 매대 위치 (사용자)
     const ph = el.querySelector('.ph'); if (ph && (f.kind !== 'free' || f.drawingRef)) { ph.classList.add('ph-dwlink'); ph.title = '누르면 도면에서 위치를 보여줘요'; ph.onclick = () => showFxDrawing(f, fx); }
   });

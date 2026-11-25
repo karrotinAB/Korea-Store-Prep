@@ -1200,3 +1200,6 @@ nav button { padding: 7px 10px; }
 .ft-split .ft-size { flex: 0 0 4.8em; min-width: 0; padding-left: 4px; padding-right: 4px; }
 .ft-split .ro-v { flex: 0 1 auto; white-space: nowrap; overflow-wrap: normal; padding-right: 0; } /* 보기 전용(최종·PDF)에서 '중앙'이 세로로 한 글자씩 나오던 것 → 가로로 '중앙 800' (사용자) */
 .ph-cat.many { font-size: 12.5px; } /* 키덜트처럼 담당자가 많을 때 (사용자) */
+.pstore { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.pstore .pstore-book { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+.pstore .pstore-book.on { background: var(--accent, #6c4cf1); color: #fff; }
